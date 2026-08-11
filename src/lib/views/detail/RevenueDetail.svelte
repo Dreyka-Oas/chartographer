@@ -42,6 +42,11 @@
   <StatRow
     stats={[
       {
+        label: "Gagné depuis l'origine",
+        value: money(overview.kpis.revenue_total),
+        hint: "retiré, retirable et en maturation",
+      },
+      {
         label: "Retirable maintenant",
         value: money(payout.available),
         hint: "solde disponible sur Modrinth",
@@ -80,7 +85,11 @@
   <div class="grid">
     <div class="panel">
       <h2>Revenus quotidiens sur la période</h2>
-      <p class="note">Total de la fenêtre : {money(String(periodTotal))}.</p>
+      <p class="note">
+        Total de la fenêtre : {money(String(periodTotal))}. Les relevés quotidiens de Modrinth ne
+        remontent pas jusqu'aux débuts d'un projet : ce total est toujours inférieur au cumul
+        ci-dessus, qui vient du solde de reversement.
+      </p>
       {#if overview.revenue.length === 0}
         <p class="empty">Aucun revenu enregistré sur cette période.</p>
       {:else}

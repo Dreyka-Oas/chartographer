@@ -22,7 +22,7 @@
     {
       label: "Revenus cumulés",
       value: formatMoney(kpis.revenue_total),
-      hint: `${formatMoney(kpis.revenue_pending)} en attente`,
+      hint: `${formatMoney(kpis.revenue_available)} retirables · ${formatMoney(kpis.revenue_pending)} en maturation`,
     },
     {
       label: "Followers",

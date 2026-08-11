@@ -4,8 +4,12 @@ export interface Kpis {
   downloads_curseforge: number;
   downloads_30d: number;
   downloads_prev_30d: number;
+  /** Tout ce que le reversement a rapporté : retiré, retirable et en maturation. */
   revenue_total: string;
+  revenue_available: string;
   revenue_pending: string;
+  /** Revenus relevés jour par jour sur la fenêtre affichée. */
+  revenue_window: string;
   followers: number;
   projects_active: number;
 }

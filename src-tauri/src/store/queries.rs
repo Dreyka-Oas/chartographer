@@ -436,14 +436,33 @@ pub fn kpis(conn: &Connection, today: &str, filter: PlatformFilter) -> Result<Kp
 
     // Les revenus sont un dispositif Modrinth : masquer cette plateforme les
     // retire de l'affichage plutôt que de laisser un total sans source visible.
-    let mut revenue_total = Decimal::ZERO;
+    let mut revenue_window = Decimal::ZERO;
     if filter.modrinth {
         let mut stmt =
             conn.prepare("SELECT revenue FROM metrics_daily WHERE revenue IS NOT NULL")?;
         for row in stmt.query_map([], |r| r.get::<_, String>(0))? {
-            revenue_total += Decimal::from_str(&row?).unwrap_or_default();
+            revenue_window += Decimal::from_str(&row?).unwrap_or_default();
         }
     }
+
+    // Le cumul réel vient du solde de reversement, pas des analytics : celles-ci
+    // ne remontent que sur une fenêtre récente et sous-estiment lourdement ce
+    // qu'un projet a rapporté depuis ses débuts.
+    let balance = if filter.modrinth {
+        payout(conn, today)?
+    } else {
+        crate::models::Payout::default()
+    };
+    let decimal = |raw: &str| Decimal::from_str(raw).unwrap_or_default();
+    let earned = decimal(&balance.withdrawn_lifetime)
+        + decimal(&balance.available)
+        + decimal(&balance.pending);
+    // Sans solde relevé, le cumul de la fenêtre reste la seule mesure connue.
+    let revenue_total = if earned.is_zero() {
+        revenue_window
+    } else {
+        earned
+    };
 
     let downloads_modrinth = per_platform(Platform::Modrinth)?;
     let downloads_curseforge = per_platform(Platform::CurseForge)?;
@@ -455,7 +474,9 @@ pub fn kpis(conn: &Connection, today: &str, filter: PlatformFilter) -> Result<Kp
         downloads_30d: sum_downloads(&window_start, today)?,
         downloads_prev_30d: sum_downloads(&previous_start, &window_start)?,
         revenue_total: revenue_total.normalize().to_string(),
-        revenue_pending: "0".into(),
+        revenue_available: balance.available.clone(),
+        revenue_pending: balance.pending.clone(),
+        revenue_window: revenue_window.normalize().to_string(),
         followers: conn.query_row(
             "SELECT COALESCE(SUM(followers), 0) FROM projects WHERE archived_at IS NULL",
             [],
@@ -642,18 +663,15 @@ pub fn overview(
     filter: PlatformFilter,
 ) -> Result<Overview> {
     let (from, to) = (from.to_string(), to.to_string());
-    let mut kpis = kpis(conn, today, filter)?;
-    // Origine, versions, revenus et reversements ne sont relevés que sur
-    // Modrinth : masquer cette plateforme les vide au lieu de les laisser
-    // afficher des chiffres dont la source n'est plus visible.
+    let kpis = kpis(conn, today, filter)?;
+    // Origine, revenus et reversements ne sont relevés que sur Modrinth :
+    // masquer cette plateforme les vide au lieu de laisser des chiffres dont la
+    // source n'est plus visible.
     let payout = if filter.modrinth {
         payout(conn, today)?
     } else {
         crate::models::Payout::default()
     };
-    if !payout.available.is_empty() {
-        kpis.revenue_pending = payout.available.clone();
-    }
 
     Ok(Overview {
         kpis,
@@ -980,6 +998,35 @@ mod tests {
         assert!(cells
             .iter()
             .any(|c| c.loader == "neoforge" && c.downloads == 10));
+    }
+
+    #[test]
+    fn revenue_total_follows_the_payout_balance_not_the_analytics() {
+        let (conn, m, _) = seed();
+        // Les analytics ne couvrent qu'une fenêtre récente.
+        upsert_daily(&conn, m, "2026-08-10", Some(10), None, Some("38.18")).unwrap();
+        crate::store::metrics::set_meta(
+            &conn,
+            "modrinth_payout",
+            r#"{"available":"12.63","pending":"4.84","withdrawn_lifetime":"70.42",
+                "withdrawn_ytd":"15.36","dates":{}}"#,
+        )
+        .unwrap();
+
+        let k = kpis(&conn, "2026-08-11", PlatformFilter::default()).unwrap();
+        // 70,42 déjà retirés + 12,63 retirables + 4,84 en maturation.
+        assert_eq!(k.revenue_total, "87.89");
+        assert_eq!(k.revenue_available, "12.63");
+        assert_eq!(k.revenue_pending, "4.84");
+        assert_eq!(k.revenue_window, "38.18");
+    }
+
+    #[test]
+    fn revenue_total_falls_back_on_the_window_without_a_balance() {
+        let (conn, m, _) = seed();
+        upsert_daily(&conn, m, "2026-08-10", Some(10), None, Some("2.5")).unwrap();
+        let k = kpis(&conn, "2026-08-11", PlatformFilter::default()).unwrap();
+        assert_eq!(k.revenue_total, "2.5");
     }
 
     #[test]

@@ -30,8 +30,16 @@ pub struct Kpis {
     pub downloads_curseforge: i64,
     pub downloads_30d: i64,
     pub downloads_prev_30d: i64,
+    /// Tout ce que le programme de reversement a rapporté depuis l'origine :
+    /// déjà retiré, retirable et encore en maturation.
     pub revenue_total: String,
+    /// Somme retirable immédiatement.
+    pub revenue_available: String,
+    /// Somme gagnée mais encore en maturation.
     pub revenue_pending: String,
+    /// Revenus relevés jour par jour sur la fenêtre affichée. Les analytics ne
+    /// remontent pas jusqu'à l'origine : ce total est inférieur au cumul.
+    pub revenue_window: String,
     pub followers: i64,
     pub projects_active: i64,
 }

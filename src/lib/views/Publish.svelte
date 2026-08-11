@@ -101,7 +101,7 @@
     running = true;
     outcomes = [];
     try {
-      const report = await api.publishVersion(
+      const sent = await api.publishVersion(
         {
           modrinth_project_id: onModrinth ? (project.modrinth_ext_id ?? null) : null,
           curseforge_project_id: onCurseforge ? (project.curseforge_ext_id ?? null) : null,
@@ -115,7 +115,7 @@
         },
         filePath,
       );
-      outcomes = report.outcomes;
+      outcomes = sent.outcomes;
       await dashboard.sync();
     } catch (e) {
       report(e);

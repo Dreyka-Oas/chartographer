@@ -60,6 +60,18 @@ fn resume_local_database() {
         count("SELECT COUNT(*) FROM events")
     );
 
+    let payout: Option<String> = conn
+        .query_row(
+            "SELECT value FROM meta WHERE key = 'modrinth_payout'",
+            [],
+            |r| r.get(0),
+        )
+        .ok();
+    match payout {
+        Some(raw) => println!("\npayout brut       : {}", &raw[..raw.len().min(220)]),
+        None => println!("\npayout            : jamais releve"),
+    }
+
     let mut stmt = conn
         .prepare("SELECT provider, status, detail FROM sync_runs ORDER BY id DESC LIMIT 6")
         .unwrap();

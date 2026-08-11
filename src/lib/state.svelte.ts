@@ -48,7 +48,11 @@ class Dashboard {
     await this.refreshAuth();
     if (!this.auth?.connected) return;
     await this.load();
-    if (this.overview && this.overview.per_project.length === 0) await this.sync();
+    if (!this.overview) return;
+    // Base vide, ou échéancier de reversement jamais relevé : on synchronise.
+    const stale =
+      this.overview.per_project.length === 0 || this.overview.payout.available === "";
+    if (stale) await this.sync();
   }
 
   /**

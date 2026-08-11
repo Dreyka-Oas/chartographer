@@ -5,7 +5,7 @@
   import { revenueOption } from "../charts/revenue";
   import { palette } from "../charts/theme";
   import Card from "../components/Card.svelte";
-  import CurseforgePoints from "../components/CurseforgePoints.svelte";
+  import CurseforgeSummary from "../components/CurseforgeSummary.svelte";
   import RangePicker from "../components/RangePicker.svelte";
   import StatRow from "../components/StatRow.svelte";
   import { formatMoney } from "../format";
@@ -154,9 +154,9 @@
   <div class="wide">
     <Card
       title="CurseForge — programme de points"
-      subtitle="Connexion à ton compte, puis lecture ou saisie du solde"
+      subtitle="Relevés depuis ton tableau de bord auteur · réglés dans les Réglages"
     >
-      <CurseforgePoints />
+      <CurseforgeSummary />
     </Card>
   </div>
 </div>

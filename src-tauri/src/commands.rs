@@ -284,6 +284,50 @@ pub fn curseforge_points(
 pub const CF_WINDOW: &str = "curseforge";
 pub const CF_AUTHOR_PAGE: &str = "https://authors.curseforge.com/";
 
+/// Enregistreur posé dans la page avant son chargement.
+///
+/// Le tableau de bord auteur n'a pas d'interface documentée, mais il en appelle
+/// une pour se remplir. Plutôt que de deviner la structure du HTML, on écoute
+/// les réponses que la page reçoit déjà : rien n'est demandé au serveur qui ne
+/// l'aurait été de toute façon, et tout reste dans la fenêtre de l'utilisateur.
+const CAPTURE_SCRIPT: &str = r#"(function () {
+  if (window.__chartographer) return;
+  const store = { captures: [] };
+  window.__chartographer = store;
+
+  const keep = (url, body) => {
+    if (typeof body !== 'string') return;
+    const trimmed = body.trim();
+    if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return;
+    store.captures.unshift({ url: String(url), body: trimmed.slice(0, 400000) });
+    store.captures = store.captures.slice(0, 40);
+  };
+
+  const nativeFetch = window.fetch;
+  if (nativeFetch) {
+    window.fetch = function (input, init) {
+      const url = typeof input === 'string' ? input : (input && input.url) || '';
+      return nativeFetch.apply(this, arguments).then((response) => {
+        response.clone().text().then((body) => keep(url, body)).catch(() => {});
+        return response;
+      });
+    };
+  }
+
+  const open = XMLHttpRequest.prototype.open;
+  const send = XMLHttpRequest.prototype.send;
+  XMLHttpRequest.prototype.open = function (method, url) {
+    this.__chartographerUrl = url;
+    return open.apply(this, arguments);
+  };
+  XMLHttpRequest.prototype.send = function () {
+    this.addEventListener('load', () => {
+      try { keep(this.__chartographerUrl || '', this.responseText); } catch (e) {}
+    });
+    return send.apply(this, arguments);
+  };
+})()"#;
+
 #[tauri::command]
 pub fn open_curseforge_window(app: tauri::AppHandle) -> Result<()> {
     if let Some(window) = app.get_webview_window(CF_WINDOW) {
@@ -294,8 +338,9 @@ pub fn open_curseforge_window(app: tauri::AppHandle) -> Result<()> {
     let url = tauri::Url::parse(CF_AUTHOR_PAGE)
         .map_err(|e| AppError::Config(format!("adresse CurseForge invalide : {e}")))?;
     tauri::WebviewWindowBuilder::new(&app, CF_WINDOW, tauri::WebviewUrl::External(url))
-        .title("CurseForge — connexion et solde de points")
-        .inner_size(1100.0, 820.0)
+        .title("CurseForge — connexion, solde et statistiques")
+        .inner_size(1180.0, 860.0)
+        .initialization_script(CAPTURE_SCRIPT)
         .build()
         .map_err(|e| AppError::Config(format!("ouverture de la fenêtre CurseForge : {e}")))?;
     Ok(())
@@ -309,15 +354,34 @@ pub struct CfScrape {
     pub title: String,
     pub points: Option<i64>,
     pub excerpt: String,
+    /// Réponses interceptées qui portent une série datée.
+    pub captures: Vec<CfCapture>,
 }
 
-/// Relève le texte affiché dans la fenêtre CurseForge. On ne lit que ce que
-/// l'utilisateur voit déjà à l'écran, sur son propre compte.
+/// Une réponse interceptée dans la fenêtre, résumée pour l'interface.
+#[derive(Debug, Serialize)]
+pub struct CfCapture {
+    pub url: String,
+    /// Nombre de points datés reconnus dans cette réponse.
+    pub points: usize,
+    /// Bornes de la série, si elle en porte une.
+    pub from: Option<String>,
+    pub to: Option<String>,
+    /// Total des valeurs de la série : un ordre de grandeur pour reconnaître
+    /// des téléchargements d'un solde de points.
+    pub total: i64,
+}
+
+/// Relève le texte affiché dans la fenêtre CurseForge et les réponses qu'elle a
+/// reçues. On ne lit que ce que l'utilisateur a déjà sous les yeux, sur son
+/// propre compte.
 const READ_SCRIPT: &str = r#"(function () {
+  const store = window.__chartographer || { captures: [] };
   return {
     url: location.href,
     title: document.title,
-    text: (document.body ? document.body.innerText : '').slice(0, 20000)
+    text: (document.body ? document.body.innerText : '').slice(0, 20000),
+    captures: store.captures
   };
 })()"#;
 
@@ -351,19 +415,49 @@ pub async fn read_curseforge_page(app: tauri::AppHandle) -> Result<CfScrape> {
         })?;
 
     #[derive(serde::Deserialize)]
+    struct RawCapture {
+        url: String,
+        body: String,
+    }
+    #[derive(serde::Deserialize)]
     struct Snapshot {
         url: String,
         title: String,
         text: String,
+        #[serde(default)]
+        captures: Vec<RawCapture>,
     }
     let snapshot: Snapshot = serde_json::from_str(&raw)
         .map_err(|e| AppError::Data(format!("réponse de la page illisible : {e}")))?;
+
+    // Les réponses interceptées sont résumées, jamais renvoyées entières :
+    // l'interface n'a besoin que de savoir laquelle porte un historique.
+    let mut captures: Vec<CfCapture> = snapshot
+        .captures
+        .iter()
+        .filter_map(|capture| {
+            let parsed: serde_json::Value = serde_json::from_str(&capture.body).ok()?;
+            let series = crate::scrape::find_daily_series(&parsed);
+            if series.is_empty() {
+                return None;
+            }
+            Some(CfCapture {
+                url: capture.url.clone(),
+                points: series.len(),
+                from: series.first().map(|p| p.day.clone()),
+                to: series.last().map(|p| p.day.clone()),
+                total: series.iter().map(|p| p.value).sum(),
+            })
+        })
+        .collect();
+    captures.sort_by_key(|c| std::cmp::Reverse(c.points));
 
     Ok(CfScrape {
         points: crate::scrape::extract_points(&snapshot.text),
         excerpt: crate::scrape::excerpt_around(&snapshot.text, "point", 90),
         url: snapshot.url,
         title: snapshot.title,
+        captures,
     })
 }
 

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { api } from "../api";
+  import CurseforgePoints from "../components/CurseforgePoints.svelte";
   import { formatAge, formatDayLong } from "../format";
   import { dashboard } from "../state.svelte";
   import { theme, type ThemeMode } from "../theme.svelte";
@@ -242,19 +243,11 @@
           />
         </div>
       </div>
-      <div class="row">
+      <div class="row column">
         <div class="text">
-          <span class="name">Compte CurseForge</span>
-          <span class="desc">
-            Aucune interface n'expose le solde du programme de points : il faut ouvrir ton tableau de
-            bord auteur. Connecte-toi dans la fenêtre, puis relève ton solde depuis l'onglet Revenus.
-          </span>
+          <span class="name">Compte CurseForge et solde de points</span>
         </div>
-        <div class="control">
-          <button onclick={() => api.openCurseforgeWindow().catch(report)}>
-            Ouvrir CurseForge et se connecter
-          </button>
-        </div>
+        <CurseforgePoints />
       </div>
     </section>
 

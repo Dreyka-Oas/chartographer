@@ -102,6 +102,31 @@
     <span class="source">Page lue : {scrape.title || scrape.url}</span>
     {#if scrape.excerpt}<span class="source">« {scrape.excerpt} »</span>{/if}
   </p>
+
+  {#if scrape.captures.length > 0}
+    <div class="captures">
+      <span class="legend-label">Historiques repérés sur cette page</span>
+      <table>
+        <thead>
+          <tr><th class="left">Source</th><th>Jours</th><th>Période</th><th>Total</th></tr>
+        </thead>
+        <tbody>
+          {#each scrape.captures as capture (capture.url)}
+            <tr>
+              <td class="left" title={capture.url}>{capture.url.split("?")[0].split("/").pop()}</td>
+              <td>{capture.points}</td>
+              <td>{capture.from} → {capture.to}</td>
+              <td>{capture.total.toLocaleString("fr-FR")}</td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+      <span class="source">
+        Ces séries proviennent des réponses que la page a elle-même reçues. Dis-moi laquelle
+        correspond à tes téléchargements et je l'importerai dans la base.
+      </span>
+    </div>
+  {/if}
 {/if}
 
 <form
@@ -189,6 +214,15 @@
     font-size: 0.74rem;
     color: var(--text-dim);
     overflow-wrap: anywhere;
+  }
+  .captures {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 14px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
   }
   form {
     display: flex;

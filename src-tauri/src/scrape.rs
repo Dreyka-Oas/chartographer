@@ -78,6 +78,99 @@ pub fn extract_points(text: &str) -> Option<i64> {
     None
 }
 
+/// Un point d'une série datée trouvée dans une réponse de l'API interne.
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+pub struct DailyPoint {
+    pub day: String,
+    pub value: i64,
+}
+
+/// Reconnaît une date `YYYY-MM-DD`, éventuellement suivie d'une heure.
+fn day_from_text(raw: &str) -> Option<String> {
+    let head: String = raw.chars().take(10).collect();
+    let bytes = head.as_bytes();
+    if head.len() == 10
+        && bytes[4] == b'-'
+        && bytes[7] == b'-'
+        && head
+            .chars()
+            .enumerate()
+            .all(|(i, c)| i == 4 || i == 7 || c.is_ascii_digit())
+    {
+        return Some(head);
+    }
+    None
+}
+
+/// Reconnaît un horodatage Unix, en secondes ou en millisecondes.
+fn day_from_epoch(value: i64) -> Option<String> {
+    // Bornes larges mais crédibles : 2010 à 2100.
+    let seconds = if (1_262_304_000..=4_102_444_800).contains(&value) {
+        value
+    } else if (1_262_304_000_000..=4_102_444_800_000).contains(&value) {
+        value / 1000
+    } else {
+        return None;
+    };
+    chrono::DateTime::from_timestamp(seconds, 0).map(|d| d.format("%Y-%m-%d").to_string())
+}
+
+fn day_of(value: &serde_json::Value) -> Option<String> {
+    match value {
+        serde_json::Value::String(text) => day_from_text(text),
+        serde_json::Value::Number(number) => number.as_i64().and_then(day_from_epoch),
+        _ => None,
+    }
+}
+
+/// Cherche, dans une réponse quelconque, la plus longue série de couples
+/// « date, nombre ».
+///
+/// Le tableau de bord CurseForge n'a pas d'interface documentée : plutôt que de
+/// deviner un nom de champ qui changera, on reconnaît la forme d'une série
+/// temporelle, quel que soit le nom des clés.
+pub fn find_daily_series(value: &serde_json::Value) -> Vec<DailyPoint> {
+    let mut best: Vec<DailyPoint> = Vec::new();
+    collect_series(value, &mut best);
+    best
+}
+
+fn collect_series(value: &serde_json::Value, best: &mut Vec<DailyPoint>) {
+    match value {
+        serde_json::Value::Array(items) => {
+            let mut series: Vec<DailyPoint> = Vec::new();
+            for item in items {
+                if let serde_json::Value::Object(fields) = item {
+                    let day = fields.values().find_map(day_of);
+                    // Le nombre retenu est le premier entier qui n'est pas la date.
+                    let number = fields.iter().find_map(|(_, v)| {
+                        let candidate = v.as_i64()?;
+                        if day_of(v).is_some() {
+                            return None;
+                        }
+                        Some(candidate)
+                    });
+                    if let (Some(day), Some(value)) = (day, number) {
+                        series.push(DailyPoint { day, value });
+                    }
+                }
+            }
+            if series.len() > best.len() {
+                *best = series;
+            }
+            for item in items {
+                collect_series(item, best);
+            }
+        }
+        serde_json::Value::Object(fields) => {
+            for item in fields.values() {
+                collect_series(item, best);
+            }
+        }
+        _ => {}
+    }
+}
+
 /// Court extrait autour du mot cherché, pour que l'utilisateur vérifie d'un
 /// coup d'œil ce que la lecture a retenu.
 pub fn excerpt_around(text: &str, needle: &str, radius: usize) -> String {
@@ -102,6 +195,59 @@ pub fn excerpt_around(text: &str, needle: &str, radius: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn json(raw: &str) -> serde_json::Value {
+        serde_json::from_str(raw).unwrap()
+    }
+
+    #[test]
+    fn finds_a_series_whatever_the_field_names() {
+        let series = find_daily_series(&json(
+            r#"[{"date":"2026-08-01","downloads":42},{"date":"2026-08-02","downloads":51}]"#,
+        ));
+        assert_eq!(series.len(), 2);
+        assert_eq!(series[0], DailyPoint { day: "2026-08-01".into(), value: 42 });
+        assert_eq!(series[1].value, 51);
+    }
+
+    #[test]
+    fn digs_through_the_envelope() {
+        let series = find_daily_series(&json(
+            r#"{"data":{"stats":{"points":[
+                {"day":"2026-07-30","count":7},
+                {"day":"2026-07-31","count":9},
+                {"day":"2026-08-01","count":11}]}}}"#,
+        ));
+        assert_eq!(series.len(), 3);
+        assert_eq!(series[2].value, 11);
+    }
+
+    #[test]
+    fn reads_unix_timestamps_in_seconds_and_milliseconds() {
+        // Même instant exprimé en secondes puis en millisecondes, à un jour d'écart.
+        let series = find_daily_series(&json(
+            r#"[{"t":1785888000,"v":3},{"t":1785974400000,"v":5}]"#,
+        ));
+        assert_eq!(series.len(), 2);
+        assert_eq!(series[0].day, "2026-08-05");
+        assert_eq!(series[1].day, "2026-08-06");
+    }
+
+    #[test]
+    fn keeps_the_longest_series_of_the_response() {
+        let series = find_daily_series(&json(
+            r#"{"short":[{"date":"2026-08-01","n":1}],
+                "long":[{"date":"2026-08-01","n":1},{"date":"2026-08-02","n":2},
+                        {"date":"2026-08-03","n":3}]}"#,
+        ));
+        assert_eq!(series.len(), 3);
+    }
+
+    #[test]
+    fn ignores_a_response_without_any_dated_series() {
+        assert!(find_daily_series(&json(r#"{"user":"DreykaOas","points":132}"#)).is_empty());
+        assert!(find_daily_series(&json("[1, 2, 3]")).is_empty());
+    }
 
     #[test]
     fn excerpt_centres_on_the_word() {

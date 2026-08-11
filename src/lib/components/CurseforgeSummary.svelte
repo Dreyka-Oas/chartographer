@@ -43,7 +43,9 @@
   <div class="value">
     <strong>{formatMoney(revenue.points_usd)}</strong>
     <span class="hint">
-      {revenue.points} points au {latest ? formatDayLong(latest.day) : "dernier relevé"}
+      retirables · {revenue.points} points au {latest
+        ? formatDayLong(latest.day)
+        : "dernier relevé"}
       {#if delta !== null}
         · {delta >= 0 ? "+" : ""}{delta} depuis le relevé précédent
       {/if}
@@ -76,8 +78,9 @@
   {/if}
 
   <p class="note">
-    CurseForge paie en points, à 0,05 $ l'unité, et n'annonce ses revenus que mois par mois. Les
-    montants ci-dessus sont ceux de ton tableau de bord auteur, relevés à chaque synchronisation.
+    CurseForge paie en points, à 0,05 $ l'unité, retirables dès qu'ils sont crédités : ce solde
+    entre donc dans « retirable maintenant » au même titre que celui de Modrinth. Les montants
+    mensuels viennent de ton tableau de bord auteur, relevés à chaque synchronisation.
   </p>
 
   {#if entries.length > 1}

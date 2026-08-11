@@ -63,8 +63,10 @@
       },
       {
         label: "Retirable maintenant",
-        value: money(payout.available),
-        hint: "solde disponible sur ton compte Modrinth",
+        value: money(overview.kpis.revenue_available),
+        hint: `Modrinth ${money(payout.available)} · CurseForge ${money(
+          overview.kpis.revenue_curseforge,
+        )}, retirables sans attente`,
       },
       {
         label: "En maturation",

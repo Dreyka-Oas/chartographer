@@ -528,14 +528,16 @@ pub fn kpis(conn: &Connection, today: &str, filter: PlatformFilter) -> Result<Kp
         earned
     };
 
-    // CurseForge paie en points, convertis au tarif qu'il publie. C'est de
-    // l'argent au même titre que le reversement Modrinth : les deux s'ajoutent.
+    // CurseForge paie en points, convertis au tarif qu'il publie. Ce solde est
+    // retirable immédiatement, sans maturation : il s'ajoute donc au cumul comme
+    // à la somme disponible.
     let revenue_curseforge = if filter.curseforge {
         cf_balance_usd(conn)?
     } else {
         Decimal::ZERO
     };
     let revenue_total = revenue_modrinth + revenue_curseforge;
+    let available = decimal(&balance.available) + revenue_curseforge;
 
     let downloads_modrinth = per_platform(Platform::Modrinth)?;
     let downloads_curseforge = per_platform(Platform::CurseForge)?;
@@ -549,7 +551,7 @@ pub fn kpis(conn: &Connection, today: &str, filter: PlatformFilter) -> Result<Kp
         revenue_total: revenue_total.normalize().to_string(),
         revenue_modrinth: revenue_modrinth.normalize().to_string(),
         revenue_curseforge: revenue_curseforge.normalize().to_string(),
-        revenue_available: balance.available.clone(),
+        revenue_available: available.normalize().to_string(),
         revenue_pending: balance.pending.clone(),
         revenue_window: revenue_window.normalize().to_string(),
         followers: conn.query_row(
@@ -1144,6 +1146,8 @@ mod tests {
         assert_eq!(k.revenue_modrinth, "87.89");
         assert_eq!(k.revenue_curseforge, "21.15");
         assert_eq!(k.revenue_total, "109.04");
+        // Les points CurseForge se retirent sans maturation : 12,63 + 21,15.
+        assert_eq!(k.revenue_available, "33.78");
     }
 
     #[test]

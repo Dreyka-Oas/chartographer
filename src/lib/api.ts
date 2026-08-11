@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   AuthStatus,
   CfAnalysis,
+  CfCollect,
   CfPointEntry,
   CfScrape,
   Overview,
@@ -41,6 +42,7 @@ export const api = {
   openCurseforgeSite: () => invoke<void>("open_curseforge_site"),
   openCurseforgeWindow: () => invoke<void>("open_curseforge_window"),
   armCurseforgeCapture: () => invoke<string>("arm_curseforge_capture"),
+  collectCurseforge: () => invoke<CfCollect>("collect_curseforge"),
   readCurseforgePage: () => invoke<CfScrape>("read_curseforge_page"),
   importCurseforgeCapture: (curseforgeId: number, url: string) =>
     invoke<number>("import_curseforge_capture", { curseforgeId, url }),

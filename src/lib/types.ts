@@ -177,6 +177,23 @@ export interface CfScrape {
   captures: CfCapture[];
 }
 
+/** Un historique rattaché à un mod lors de la collecte. */
+export interface CfImported {
+  title: string;
+  days: number;
+  from: string;
+  to: string;
+}
+
+/** Résultat d'une collecte automatique sur le tableau de bord CurseForge. */
+export interface CfCollect {
+  needs_login: boolean;
+  visited: string[];
+  imported: CfImported[];
+  points: number | null;
+  detail: string;
+}
+
 /** Ce que l'application reconnaît dans un contenu rapporté de CurseForge. */
 export interface CfAnalysis {
   /** Solde de points repéré dans du texte copié. */

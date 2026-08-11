@@ -300,21 +300,30 @@ pub fn open_curseforge_site(app: tauri::AppHandle) -> Result<()> {
 /// Rien n'est injecté au chargement : le site est une application web protégée
 /// par un filtre anti-robot, et modifier `fetch` avant son démarrage l'empêchait
 /// de s'afficher. L'écoute des requêtes est posée après coup, à la demande.
-#[tauri::command]
-pub fn open_curseforge_window(app: tauri::AppHandle) -> Result<()> {
+/// Crée la fenêtre si besoin. Cachée, elle sert à collecter sans déranger ;
+/// visible, elle sert à la connexion.
+fn ensure_curseforge_window(app: &tauri::AppHandle, visible: bool) -> Result<()> {
     if let Some(window) = app.get_webview_window(CF_WINDOW) {
-        let _ = window.show();
-        let _ = window.set_focus();
+        if visible {
+            let _ = window.show();
+            let _ = window.set_focus();
+        }
         return Ok(());
     }
     let url = tauri::Url::parse(CF_AUTHOR_PAGE)
         .map_err(|e| AppError::Config(format!("adresse CurseForge invalide : {e}")))?;
-    tauri::WebviewWindowBuilder::new(&app, CF_WINDOW, tauri::WebviewUrl::External(url))
-        .title("CurseForge — connexion, solde et statistiques")
+    tauri::WebviewWindowBuilder::new(app, CF_WINDOW, tauri::WebviewUrl::External(url))
+        .title("CurseForge — connexion à ton compte")
         .inner_size(1180.0, 860.0)
+        .visible(visible)
         .build()
         .map_err(|e| AppError::Config(format!("ouverture de la fenêtre CurseForge : {e}")))?;
     Ok(())
+}
+
+#[tauri::command]
+pub fn open_curseforge_window(app: tauri::AppHandle) -> Result<()> {
+    ensure_curseforge_window(&app, true)
 }
 
 /// Écoute posée dans la page déjà chargée : elle conserve les réponses que la
@@ -476,6 +485,209 @@ pub async fn read_curseforge_page(app: tauri::AppHandle) -> Result<CfScrape> {
         url: snapshot.url,
         title: snapshot.title,
         captures,
+    })
+}
+
+/// Résultat d'une collecte automatique.
+#[derive(Debug, Default, Serialize)]
+pub struct CfCollect {
+    /// Vrai tant que l'utilisateur n'est pas connecté : la fenêtre reste ouverte.
+    pub needs_login: bool,
+    pub visited: Vec<String>,
+    /// Séries retenues, projet par projet.
+    pub imported: Vec<CfImported>,
+    /// Solde de points relevé au passage.
+    pub points: Option<i64>,
+    pub detail: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CfImported {
+    pub title: String,
+    pub days: usize,
+    pub from: String,
+    pub to: String,
+}
+
+/// Script qui rend l'état de la page : adresse, connexion, liens du tableau de
+/// bord et réponses captées depuis l'armement.
+const STATE_SCRIPT: &str = r#"(function () {
+  var store = window.__chartographer || { captures: [] };
+  var links = [];
+  var anchors = document.querySelectorAll('a[href]');
+  for (var i = 0; i < anchors.length && links.length < 400; i++) {
+    links.push(anchors[i].href);
+  }
+  var text = document.body ? document.body.innerText : '';
+  return {
+    url: location.href,
+    ready: document.readyState,
+    text: text.slice(0, 20000),
+    links: links,
+    captures: store.captures
+  };
+})()"#;
+
+#[derive(serde::Deserialize)]
+struct RawCapture {
+    url: String,
+    body: String,
+}
+
+#[derive(serde::Deserialize)]
+struct PageState {
+    url: String,
+    #[serde(default)]
+    text: String,
+    #[serde(default)]
+    links: Vec<String>,
+    #[serde(default)]
+    captures: Vec<RawCapture>,
+}
+
+async fn page_state(app: &tauri::AppHandle) -> Result<PageState> {
+    let raw = eval_in_window(app, STATE_SCRIPT).await?;
+    serde_json::from_str(&raw).map_err(|e| AppError::Data(format!("état de page illisible : {e}")))
+}
+
+/// Vrai si la page demande encore une connexion.
+fn asks_for_login(state: &PageState) -> bool {
+    let url = state.url.to_lowercase();
+    if url.contains("/login") || url.contains("signin") || url.contains("auth") {
+        return true;
+    }
+    let text = state.text.to_lowercase();
+    text.contains("sign in") && !text.contains("dashboard")
+}
+
+/// Parcourt le tableau de bord et importe tout ce qui ressemble à un historique.
+///
+/// L'utilisateur ne fait rien d'autre que se connecter, une fois. La fenêtre
+/// visite ensuite ses propres pages : rien n'est demandé au serveur qu'un
+/// navigateur ordinaire n'aurait demandé en affichant ces mêmes pages.
+#[tauri::command]
+pub async fn collect_curseforge(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<CfCollect> {
+    // La fenêtre reste cachée tant que la session tient : la collecte ne doit
+    // rien réclamer à l'utilisateur.
+    ensure_curseforge_window(&app, false)?;
+    tokio::time::sleep(std::time::Duration::from_millis(2500)).await;
+
+    let mut page = page_state(&app).await?;
+    if asks_for_login(&page) {
+        ensure_curseforge_window(&app, true)?;
+        return Ok(CfCollect {
+            needs_login: true,
+            detail: "connecte-toi dans la fenêtre CurseForge, puis relance la collecte".into(),
+            ..Default::default()
+        });
+    }
+
+    // L'écoute se pose sur la page déjà chargée : l'injecter plus tôt empêchait
+    // l'application web de démarrer.
+    let armed = eval_in_window(&app, CAPTURE_SCRIPT).await?;
+
+    let known: Vec<(i64, String)> = state.store.with(|conn| {
+        Ok(p::list(conn)?
+            .into_iter()
+            .filter(|project| project.platform == Platform::CurseForge)
+            .map(|project| (project.id, project.ext_id))
+            .collect())
+    })?;
+
+    // Les pages à visiter sortent des liens du tableau de bord lui-même : ses
+    // adresses changent au gré des refontes, ses liens non.
+    let mut queue = crate::collect::worth_visiting(&page.links);
+    queue.truncate(12);
+    let mut visited: Vec<String> = Vec::new();
+
+    for target in queue {
+        let script = format!("(function () {{ location.href = {target:?}; return 'ok'; }})()");
+        if eval_in_window(&app, &script).await.is_err() {
+            continue;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(2200)).await;
+        // Chaque page recharge le document : l'écoute doit être reposée.
+        let _ = eval_in_window(&app, CAPTURE_SCRIPT).await;
+        tokio::time::sleep(std::time::Duration::from_millis(1200)).await;
+        if let Ok(next) = page_state(&app).await {
+            visited.push(next.url.clone());
+            page = next;
+        }
+    }
+
+    let mut imported: Vec<CfImported> = Vec::new();
+    let mut points: Option<i64> = crate::scrape::extract_points(&page.text);
+
+    for capture in &page.captures {
+        let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&capture.body) else {
+            continue;
+        };
+        let series = crate::scrape::find_daily_series(&parsed);
+        if series.is_empty() {
+            continue;
+        }
+        let Some(project_id) = crate::collect::pick_project_id(&capture.url, &capture.body, &known)
+        else {
+            continue;
+        };
+
+        let title = state.store.with(|conn| {
+            Ok(p::list(conn)?
+                .into_iter()
+                .find(|project| project.id == project_id)
+                .map(|project| project.title)
+                .unwrap_or_else(|| format!("projet {project_id}")))
+        })?;
+
+        state.store.with(|conn| {
+            for point in &series {
+                crate::store::metrics::upsert_daily(
+                    conn,
+                    project_id,
+                    &point.day,
+                    Some(point.value),
+                    None,
+                    None,
+                )?;
+            }
+            Ok(())
+        })?;
+
+        imported.push(CfImported {
+            title,
+            days: series.len(),
+            from: series.first().map(|p| p.day.clone()).unwrap_or_default(),
+            to: series.last().map(|p| p.day.clone()).unwrap_or_default(),
+        });
+    }
+
+    if points.is_none() {
+        points = crate::scrape::extract_points(&page.text);
+    }
+    if let Some(value) = points {
+        let today = sync::today_utc();
+        let now = Utc::now().to_rfc3339();
+        state
+            .store
+            .with(|conn| crate::store::metrics::record_cf_points(conn, &today, value, &now))?;
+    }
+
+    let detail = format!(
+        "{armed} · {} pages visitées · {} réponses écoutées · {} séries retenues",
+        visited.len(),
+        page.captures.len(),
+        imported.len()
+    );
+
+    Ok(CfCollect {
+        needs_login: false,
+        visited,
+        imported,
+        points,
+        detail,
     })
 }
 

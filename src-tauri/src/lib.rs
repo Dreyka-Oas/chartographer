@@ -1,3 +1,4 @@
+pub mod collect;
 pub mod commands;
 pub mod config;
 pub mod error;
@@ -47,6 +48,7 @@ pub fn run() {
             commands::open_curseforge_site,
             commands::open_curseforge_window,
             commands::arm_curseforge_capture,
+            commands::collect_curseforge,
             commands::read_curseforge_page,
             commands::import_curseforge_capture,
             commands::analyze_curseforge_text,

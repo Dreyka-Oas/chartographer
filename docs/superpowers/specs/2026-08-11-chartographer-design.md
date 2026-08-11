@@ -19,7 +19,20 @@ Hors périmètre : publication de fichiers, édition de projets, exploration de 
 
 ### Modrinth
 
-Authentification par en-tête `Authorization: <token>` (pas de préfixe `Bearer`). Un `User-Agent` explicite est requis.
+L'authentification se fait par OAuth2, sans jamais demander de token à l'utilisateur. Endpoints vérifiés :
+
+| Endpoint | Rôle |
+|---|---|
+| `GET https://api.modrinth.com/_internal/oauth/authorize` | page de consentement, ouverte dans le navigateur système |
+| `POST https://api.modrinth.com/_internal/oauth/token` | échange du code contre un token |
+
+L'endpoint d'autorisation répond `500 { "error": "server_error", "description": "Authentication method was not valid" }` lorsqu'il est appelé sans session navigateur : il attend le cookie de session de modrinth.com. C'est ce qui impose le passage par le navigateur système plutôt qu'une webview interne.
+
+L'endpoint de token attend au minimum `grant_type=authorization_code`, `code`, `client_id` et `redirect_uri`, vérifiés par sondage successif des messages d'erreur. Un `client_id` inconnu produit `400 { "error": "invalid_client" }`.
+
+Le flux retenu est le code d'autorisation avec redirection en boucle locale : l'application ouvre un écouteur HTTP sur `127.0.0.1` sur un port libre, ouvre le navigateur sur l'URL d'autorisation, reçoit `?code=&state=` sur `/callback`, vérifie le `state`, échange le code, puis arrête l'écouteur. Le token obtenu est écrit dans le dossier de configuration applicatif et utilisé ensuite en en-tête `Authorization: <token>`, **sans** préfixe `Bearer`. Un `User-Agent` explicite est requis sur tous les appels.
+
+L'application OAuth est enregistrée une fois sur `modrinth.com/settings/applications`. Son `client_id` et son `client_secret` sont injectés à la compilation par les variables d'environnement `MODRINTH_CLIENT_ID` et `MODRINTH_CLIENT_SECRET`, lues via `option_env!`. Un binaire compilé sans ces variables reste fonctionnel : l'écran de réglages explique alors la marche à suivre et accepte les deux valeurs, stockées dans `oauth.json`. Le secret embarqué dans un binaire de bureau n'est pas réellement secret ; c'est le fonctionnement normal de ce flux et sans conséquence ici puisque le token obtenu ne quitte jamais la machine.
 
 | Endpoint | Usage |
 |---|---|
@@ -38,15 +51,9 @@ Note : `/v2/analytics/*` répond 404. Ces endpoints n'existent qu'en v3.
 
 ### CurseForge
 
-Le token fourni est un **token d'upload auteur**, pas une clé Core API. `api.curseforge.com` répond 403. Ce token ouvre :
+**Aucune authentification.** CurseForge n'expose aucun flux OAuth, et il se trouve qu'il n'en faut pas : le token d'upload auteur initialement envisagé n'ouvre que `minecraft.curseforge.com/api/game/versions`, ce qui n'apporte aucune statistique. Il est écarté. La clé Core API sur `api.curseforge.com` répond 403 sans validation manuelle côté CurseForge et est écartée aussi.
 
-| Endpoint | Usage |
-|---|---|
-| `GET minecraft.curseforge.com/api/game/versions` | catalogue des versions de jeu (en-tête `X-Api-Token`) |
-
-Il sert donc à deux choses seulement : valider que les identifiants sont bons, et alimenter le référentiel de versions de jeu utilisé pour normaliser les libellés. Aucune statistique n'en sort.
-
-Les statistiques CurseForge viennent de CFWidget, public et sans authentification :
+Les statistiques viennent donc entièrement de CFWidget, public et sans authentification :
 
 | Endpoint | Usage |
 |---|---|
@@ -55,27 +62,31 @@ Les statistiques CurseForge viennent de CFWidget, public et sans authentificatio
 
 CFWidget renvoie `202` lorsqu'une ressource n'est pas encore en cache et qu'un rafraîchissement est mis en file d'attente. Le client doit traiter ce cas comme « réessayer plus tard », pas comme une erreur.
 
+Le seul paramètre CurseForge est le **pseudo auteur**, et il est déduit automatiquement : l'application essaie le pseudo Modrinth obtenu par OAuth, puis la variante suffixée `_official`. Un champ de réglage permet de le corriger si les deux échouent.
+
 CFWidget ne fournit aucun historique. L'historique CurseForge est donc **construit localement** : chaque synchronisation écrit un snapshot horodaté du total, et les deltas entre snapshots produisent la courbe. Les premiers jours après installation, la courbe CurseForge est vide — c'est attendu et l'interface le signale explicitement plutôt que d'afficher un graphique trompeur.
 
 ## Architecture
 
-Application Tauri v2. Tout le réseau et toute la persistance vivent côté Rust : la webview ne voit jamais les tokens et il n'y a aucun problème de CORS.
+Application Tauri v2. Tout le réseau et toute la persistance vivent côté Rust : la webview ne voit jamais le token et il n'y a aucun problème de CORS.
 
 ```
 src-tauri/src/
   main.rs            point d'entrée, montage des commandes
-  config.rs          chargement .env, chemins applicatifs, réglages
+  config.rs          chemins applicatifs, session, réglages
   error.rs           type d'erreur unifié, conversion vers le front
+  oauth.rs           flux OAuth Modrinth, écouteur de boucle locale
   providers/
     modrinth.rs      client HTTP Modrinth v2 + v3
-    curseforge.rs    client CFWidget + vérification du token d'upload
-    mod.rs           trait commun, politique de retry et de rate-limit
+    curseforge.rs    client CFWidget
+    mod.rs           politique commune de retry et de rate-limit
   matching.rs        appariement Modrinth <-> CurseForge
   store/
-    mod.rs           ouverture de la base, pool
+    mod.rs           ouverture de la base
     schema.rs        migrations versionnées
     projects.rs      lecture/écriture projets et liens
     metrics.rs       lecture/écriture séries et snapshots
+    queries.rs       agrégations alimentant la page de vision
   sync.rs            orchestration : découverte, rafraîchissement, snapshot
   commands.rs        surface exposée au front
 ```
@@ -212,11 +223,23 @@ Un écran unique, thème sombre par défaut, densité assumée. De haut en bas :
 
 Vue détaillée par mod : mêmes graphiques restreints au projet, plus la table de ses versions et l'écart de téléchargements entre plateformes.
 
-Écran de réglages : saisie et validation des tokens, pseudo CurseForge, fenêtre d'historique, appariements manuels, purge et export de la base.
+Écran de réglages : état de la connexion Modrinth avec bouton de connexion ou de déconnexion, pseudo CurseForge détecté et corrigeable, fenêtre d'historique, appariements manuels, purge et export de la base. Les identifiants d'application OAuth n'y apparaissent que si le binaire a été compilé sans eux.
+
+Premier lancement, écran unique : un bouton « Se connecter avec Modrinth ». Rien d'autre.
 
 ## Configuration et secrets
 
-Les identifiants vivent dans un fichier `.env` du dossier de configuration applicatif, hors du dépôt et couvert par `.gitignore`. Clés : `MODRINTH_TOKEN`, `CURSEFORGE_UPLOAD_TOKEN`, `CURSEFORGE_USERNAME`. L'écran de réglages écrit ce fichier ; il n'est jamais nécessaire de l'éditer à la main. Les tokens ne franchissent jamais la frontière vers la webview : les commandes Tauri renvoient un état de validité, jamais la valeur.
+Il n'y a rien à saisir. L'utilisateur clique « Se connecter avec Modrinth », le navigateur s'ouvre, il autorise, et l'application est configurée. Le pseudo CurseForge se déduit tout seul.
+
+Trois fichiers dans le dossier de données applicatif, aucun dans le dépôt :
+
+| Fichier | Contenu |
+|---|---|
+| `session.json` | token Modrinth, date d'obtention, pseudo et identifiant de l'utilisateur |
+| `oauth.json` | `client_id` et `client_secret`, uniquement si le binaire n'a pas été compilé avec |
+| `settings.json` | pseudo CurseForge s'il a fallu le corriger, fenêtre d'historique |
+
+Le token ne franchit jamais la frontière vers la webview : les commandes Tauri renvoient un état de connexion et un pseudo, jamais la valeur. La déconnexion supprime `session.json` et purge l'état en mémoire.
 
 Aucun token n'est journalisé. Les journaux sont actifs en développement uniquement, gatés par `#[cfg(debug_assertions)]` côté Rust et `import.meta.env.DEV` côté front.
 
@@ -228,7 +251,7 @@ Les échecs partiels sont la norme, pas l'exception : l'interface affiche toujou
 
 ## Tests
 
-Tests unitaires Rust sur l'appariement (les cas réels `mobsblocker`/`mobblocker` et `colony`/`Colony Project` sont des cas de test), sur le parsing des réponses d'analyse à partir de fixtures JSON enregistrées, et sur l'arithmétique décimale des revenus. Tests d'intégration du store sur base SQLite en mémoire, incluant les migrations et l'idempotence des écritures. Tests front Vitest sur les transformations de séries alimentant les graphiques.
+Tests unitaires Rust sur l'appariement (les cas réels `mobsblocker`/`mobblocker` et `colony`/`Colony Project` sont des cas de test), sur le parsing des réponses d'analyse à partir de fixtures JSON enregistrées, sur l'arithmétique décimale des revenus, et sur la construction de l'URL d'autorisation OAuth ainsi que la validation du paramètre `state`. Tests d'intégration du store sur base SQLite en mémoire, incluant les migrations et l'idempotence des écritures. Tests front Vitest sur les transformations de séries alimentant les graphiques.
 
 Aucun appel réseau réel en intégration continue : toutes les réponses distantes sont des fixtures.
 
@@ -238,7 +261,7 @@ GitHub Actions, déclenchement sur tag `v*`. Matrice : `ubuntu-latest` produit `
 
 ## Versions retenues
 
-Rust : tauri 2.11, tauri-build 2.6, rusqlite 0.40 (feature `bundled`), reqwest 0.13, tokio 1.53, serde 1.0, chrono 0.4, rust_decimal 1.42, strsim 0.11, thiserror 2.0, anyhow 1.0, dotenvy 0.15, tracing 0.1.
+Rust : tauri 2.11, tauri-build 2.6, tauri-plugin-opener 2.5, rusqlite 0.40 (feature `bundled`), reqwest 0.13, tokio 1.53 (dont `net` pour l'écouteur de boucle locale), serde 1.0, chrono 0.4, rust_decimal 1.42, strsim 0.11, thiserror 2.0, anyhow 1.0, tracing 0.1.
 
 Node : @tauri-apps/cli 2.11, @tauri-apps/api 2.11, svelte 5.56, vite 8.2, echarts 6.1, typescript 7.0, vitest 4.1.
 
@@ -248,4 +271,10 @@ Electron : trois fois le poids de binaire pour un gain nul ici, et les identifia
 
 Clé CurseForge Core API : demanderait une validation manuelle côté CurseForge que l'auteur n'a pas. CFWidget couvre le besoin de lecture.
 
-Stockage des tokens dans le trousseau système : écarté au profit du `.env`, choix explicite de l'auteur pour la simplicité de débogage.
+Token d'upload CurseForge : n'ouvre que le catalogue des versions de jeu, aucune statistique. Supprimé du périmètre, ce qui retire toute authentification côté CurseForge.
+
+Saisie manuelle d'un token Modrinth : remplacée par le flux OAuth navigateur. Aucun champ de token n'est proposé, y compris en repli.
+
+Webview interne pour la page de consentement : écartée. La page d'autorisation dépend du cookie de session de modrinth.com, que seul le navigateur de l'utilisateur possède, et faire saisir un mot de passe dans une webview applicative est un anti-patron.
+
+Stockage du token dans le trousseau système : écarté au profit d'un `session.json` dans le dossier de données applicatif, plus simple à purger et à déboguer.

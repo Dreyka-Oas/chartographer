@@ -18,7 +18,7 @@ Les projets sont découverts automatiquement. Aucun identifiant à saisir à la 
 
 **Modrinth** — API authentifiée. Séries temporelles complètes côté serveur : téléchargements, vues, revenus, pays.
 
-**CurseForge** — le token d'upload auteur ne donne pas accès aux statistiques. Les totaux sont lus via CFWidget, qui ne conserve pas d'historique. Chartographer prend un snapshot quotidien et reconstruit la courbe localement. La courbe CurseForge est donc vide les premiers jours après installation.
+**CurseForge** — aucune authentification. Les totaux sont lus via CFWidget, qui ne conserve pas d'historique. Chartographer prend un snapshot quotidien et reconstruit la courbe localement. La courbe CurseForge est donc vide les premiers jours après installation.
 
 ## Installation
 
@@ -26,15 +26,21 @@ Des installeurs `.deb`, `.rpm` et `.exe` sont publiés dans les [Releases](../..
 
 ## Configuration
 
-Au premier lancement, l'écran de réglages demande :
+Rien à saisir. Au premier lancement, un bouton **Se connecter avec Modrinth** ouvre ton navigateur, tu autorises l'application, et c'est terminé. Le pseudo auteur CurseForge est déduit automatiquement de ton pseudo Modrinth ; un champ de réglage permet de le corriger si la détection échoue.
 
-| Clé | Où la trouver |
-|---|---|
-| `MODRINTH_TOKEN` | Modrinth → Settings → PATs |
-| `CURSEFORGE_UPLOAD_TOKEN` | CurseForge → My Account → API Token |
-| `CURSEFORGE_USERNAME` | ton pseudo auteur CurseForge |
+Le token obtenu est écrit dans `session.json`, dans le dossier de données applicatif. Il ne quitte jamais le processus Rust et n'est jamais transmis à l'interface. Se déconnecter supprime le fichier.
 
-Ces valeurs sont écrites dans un `.env` du dossier de configuration applicatif. Elles ne quittent jamais le processus Rust et ne sont jamais transmises à l'interface.
+### Compiler avec ses propres identifiants OAuth
+
+L'application OAuth est enregistrée une fois sur [modrinth.com/settings/applications](https://modrinth.com/settings/applications), avec `http://127.0.0.1/callback` comme URL de redirection. Ses identifiants sont injectés à la compilation :
+
+```powershell
+$env:MODRINTH_CLIENT_ID = "..."
+$env:MODRINTH_CLIENT_SECRET = "..."
+npm run tauri build
+```
+
+Un binaire compilé sans ces variables reste utilisable : l'écran de réglages explique alors la marche à suivre et accepte les deux valeurs.
 
 ## Développement
 

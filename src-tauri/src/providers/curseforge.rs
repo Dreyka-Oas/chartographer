@@ -30,6 +30,87 @@ pub struct CfProject {
     pub created_at: Option<String>,
     pub downloads_total: i64,
     pub downloads_monthly: i64,
+    pub files: Vec<CfFile>,
+}
+
+/// Un fichier publié sur CurseForge.
+///
+/// CFWidget ne donne aucune série quotidienne, mais il liste les fichiers avec
+/// leur date de mise en ligne, leurs versions de jeu, leur chargeur et un
+/// compteur de téléchargements. C'est le seul historique disponible côté
+/// CurseForge : une répartition par version, datée, et non un suivi jour par
+/// jour. Le compteur par fichier est partiel — la somme reste bien inférieure au
+/// total du projet — il sert donc à répartir, pas à totaliser.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CfFile {
+    pub id: i64,
+    pub display: String,
+    pub game_versions: Vec<String>,
+    pub loaders: Vec<String>,
+    pub downloads: i64,
+    pub uploaded_at: Option<String>,
+}
+
+/// Chargeurs connus tels que CurseForge les nomme dans la liste des versions.
+const LOADERS: [&str; 6] = ["Forge", "NeoForge", "Fabric", "Quilt", "Rift", "LiteLoader"];
+
+/// Sépare la liste plate de CurseForge en versions de jeu et chargeurs.
+///
+/// Le même tableau mélange les trois familles : `["1.21.8", "NeoForge",
+/// "Server"]`. Les mentions de côté (`Server`, `Client`) ne décrivent ni l'une
+/// ni l'autre et sont écartées.
+pub fn split_versions(entries: &[String]) -> (Vec<String>, Vec<String>) {
+    let mut game = Vec::new();
+    let mut loaders = Vec::new();
+    for entry in entries {
+        if LOADERS.iter().any(|l| l.eq_ignore_ascii_case(entry)) {
+            loaders.push(entry.clone());
+        } else if entry
+            .split('.')
+            .next()
+            .is_some_and(|head| !head.is_empty() && head.chars().all(|c| c.is_ascii_digit()))
+        {
+            game.push(entry.clone());
+        }
+    }
+    (game, loaders)
+}
+
+pub fn parse_files(raw: &str) -> Vec<CfFile> {
+    #[derive(Deserialize)]
+    struct RawFile {
+        id: i64,
+        #[serde(default)]
+        display: String,
+        #[serde(default)]
+        versions: Vec<String>,
+        #[serde(default)]
+        downloads: i64,
+        uploaded_at: Option<String>,
+    }
+    #[derive(Deserialize)]
+    struct Raw {
+        #[serde(default)]
+        files: Vec<RawFile>,
+    }
+
+    let Ok(raw) = serde_json::from_str::<Raw>(raw) else {
+        return Vec::new();
+    };
+    raw.files
+        .into_iter()
+        .map(|file| {
+            let (game_versions, loaders) = split_versions(&file.versions);
+            CfFile {
+                id: file.id,
+                display: file.display,
+                game_versions,
+                loaders,
+                downloads: file.downloads,
+                uploaded_at: file.uploaded_at,
+            }
+        })
+        .collect()
 }
 
 /// CFWidget répond 202 lorsqu'un rafraîchissement est mis en file d'attente.
@@ -75,7 +156,8 @@ pub fn parse_owner(raw: &str) -> Option<String> {
         .map(|m| m.username.clone())
 }
 
-pub fn parse_project(raw: &str) -> Result<CfProject> {
+pub fn parse_project(raw_body: &str) -> Result<CfProject> {
+    let raw = raw_body;
     #[derive(Deserialize)]
     struct Downloads {
         #[serde(default)]
@@ -131,11 +213,75 @@ pub fn parse_project(raw: &str) -> Result<CfProject> {
         created_at: raw.created_at,
         downloads_total: downloads.total,
         downloads_monthly: downloads.monthly,
+        files: parse_files(raw_body),
     })
 }
 
 pub struct CurseForgeClient {
     http: reqwest::Client,
+}
+
+#[cfg(test)]
+mod file_tests {
+    use super::*;
+
+    const SAMPLE: &str = r#"{
+      "id": 1002185,
+      "title": "Mobs Blocker",
+      "files": [
+        {"id": 7366095, "display": "mobs_blocker-1.2.0-neoforge-1.21.8.jar",
+         "versions": ["1.21.8", "NeoForge", "Server"], "downloads": 0,
+         "uploaded_at": "2025-12-22T17:18:34.903Z"},
+        {"id": 5001, "display": "mobblocker-1.0.0-forge-1.20.1.jar",
+         "versions": ["1.20.1", "Forge"], "downloads": 1674,
+         "uploaded_at": "2024-04-12T09:35:14.403Z"}
+      ]
+    }"#;
+
+    #[test]
+    fn split_versions_separates_game_versions_from_loaders() {
+        let entries = vec![
+            "1.21.8".to_string(),
+            "NeoForge".to_string(),
+            "Server".to_string(),
+        ];
+        let (game, loaders) = split_versions(&entries);
+        assert_eq!(game, vec!["1.21.8"]);
+        assert_eq!(loaders, vec!["NeoForge"]);
+    }
+
+    #[test]
+    fn split_versions_drops_side_labels() {
+        let entries = vec!["Client".to_string(), "Fabric".to_string()];
+        let (game, loaders) = split_versions(&entries);
+        assert!(game.is_empty(), "`Client` n'est pas une version de jeu");
+        assert_eq!(loaders, vec!["Fabric"]);
+    }
+
+    #[test]
+    fn parse_files_reads_the_published_history() {
+        let files = parse_files(SAMPLE);
+        assert_eq!(files.len(), 2);
+        assert_eq!(files[1].downloads, 1674);
+        assert_eq!(files[1].game_versions, vec!["1.20.1"]);
+        assert_eq!(files[1].loaders, vec!["Forge"]);
+        assert_eq!(
+            files[1].uploaded_at.as_deref(),
+            Some("2024-04-12T09:35:14.403Z")
+        );
+    }
+
+    #[test]
+    fn parse_project_carries_the_files_along() {
+        let project = parse_project(SAMPLE).unwrap();
+        assert_eq!(project.files.len(), 2);
+    }
+
+    #[test]
+    fn parse_files_tolerates_a_body_without_files() {
+        assert!(parse_files(r#"{"id": 1, "title": "x"}"#).is_empty());
+        assert!(parse_files("pas du json").is_empty());
+    }
 }
 
 impl CurseForgeClient {

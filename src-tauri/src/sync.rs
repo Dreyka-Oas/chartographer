@@ -238,7 +238,23 @@ async fn discover_curseforge(store: &Store, ctx: &SyncContext) -> Result<String>
                         &now,
                         project.downloads_total,
                         Some(project.downloads_monthly),
-                    )
+                    )?;
+
+                    // Les fichiers publiés sont le seul historique que CurseForge
+                    // expose : datés, avec leur version de jeu et leur chargeur.
+                    for file in &project.files {
+                        m::upsert_version(
+                            conn,
+                            project_id,
+                            &file.id.to_string(),
+                            Some(&file.display),
+                            &file.game_versions,
+                            &file.loaders,
+                            file.downloads,
+                            file.uploaded_at.as_deref(),
+                        )?;
+                    }
+                    Ok(())
                 })?;
             }
         }

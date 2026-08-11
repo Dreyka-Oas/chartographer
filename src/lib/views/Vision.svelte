@@ -83,15 +83,15 @@
       </Card>
     {/if}
 
-    {#if dashboard.platforms.modrinth}
-      <Card
-        title="Versions de jeu et loaders"
-        subtitle="Concentration des téléchargements Modrinth"
-        onexpand={() => dashboard.openDetail("loaders")}
-      >
-        <LoaderHeatmap cells={overview.loaders} />
-      </Card>
+    <Card
+      title="Versions de jeu et loaders"
+      subtitle="Répartition des publications des deux plateformes"
+      onexpand={() => dashboard.openDetail("loaders")}
+    >
+      <LoaderHeatmap cells={overview.loaders} />
+    </Card>
 
+    {#if dashboard.platforms.modrinth}
       <Card
         title="Revenus"
         subtitle="Journalier, cumulé et échéancier de reversement"

@@ -44,7 +44,7 @@
 
 <DetailShell
   title="Versions de jeu et loaders"
-  subtitle="{byVersion.length} versions · {byLoader.length} loaders · téléchargements Modrinth"
+  subtitle="{byVersion.length} versions · {byLoader.length} loaders · Modrinth et CurseForge"
 >
   <StatRow
     stats={[
@@ -73,6 +73,11 @@
       <p class="note">
         Une cellule compte le total d'une version de jeu croisée avec un loader. Une même
         publication qui vise trois versions et deux loaders alimente six cellules.
+      </p>
+      <p class="note">
+        Modrinth compte chaque version au téléchargement près. CurseForge ne publie qu'un compteur
+        partiel par fichier, très inférieur au total du projet : ces cellules donnent la forme de la
+        répartition, pas des volumes comparables entre plateformes.
       </p>
       <Chart option={heat} height={Math.max(300, byLoader.length * 46 + 190)} />
     </div>

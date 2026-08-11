@@ -271,10 +271,22 @@ pub fn countries(conn: &Connection, from: &str, to: &str) -> Result<Vec<CountryT
     Ok(rows)
 }
 
-pub fn loaders(conn: &Connection) -> Result<Vec<LoaderCell>> {
-    let mut stmt = conn.prepare("SELECT game_versions, loaders, downloads FROM versions")?;
+/// Répartition des téléchargements par version de jeu et chargeur.
+///
+/// Les deux plateformes alimentent cette table : Modrinth par ses versions,
+/// CurseForge par ses fichiers publiés. Les compteurs CurseForge par fichier
+/// sont partiels, la carte donne donc une répartition, pas un total.
+pub fn loaders(conn: &Connection, filter: PlatformFilter) -> Result<Vec<LoaderCell>> {
+    let mut stmt = conn.prepare(
+        "SELECT v.game_versions, v.loaders, v.downloads FROM versions v
+         JOIN projects p ON p.id = v.project_id
+         WHERE p.platform IN (?1, ?2)",
+    )?;
     let mut totals: HashMap<(String, String), i64> = HashMap::new();
-    for row in stmt.query_map([], |r| {
+    // Une plateforme masquée est comparée à une valeur qu'aucune ligne ne porte.
+    let modrinth = if filter.modrinth { "modrinth" } else { "" };
+    let curseforge = if filter.curseforge { "curseforge" } else { "" };
+    for row in stmt.query_map(params![modrinth, curseforge], |r| {
         Ok((
             r.get::<_, String>(0)?,
             r.get::<_, String>(1)?,
@@ -531,13 +543,15 @@ pub fn project_detail(
             .collect::<rusqlite::Result<Vec<_>>>()?;
     }
 
+    // Les deux plateformes publient : les versions Modrinth et les fichiers
+    // CurseForge du mod sont rassemblés dans une seule chronologie.
     let mut versions = Vec::new();
-    if let Some(id) = modrinth_id {
+    for id in [modrinth_id, curseforge_id].into_iter().flatten() {
         let mut stmt = conn.prepare(
             "SELECT version_number, game_versions, loaders, downloads, date_published
              FROM versions WHERE project_id = ?1 ORDER BY date_published DESC",
         )?;
-        versions = stmt
+        let rows = stmt
             .query_map(params![id], |r| {
                 Ok(VersionRow {
                     version_number: r.get(0)?,
@@ -549,7 +563,10 @@ pub fn project_detail(
                 })
             })?
             .collect::<rusqlite::Result<Vec<_>>>()?;
+        versions.extend(rows);
     }
+    // Publications les plus récentes en tête, toutes plateformes mêlées.
+    versions.sort_by(|a, b| b.date_published.cmp(&a.date_published));
 
     let pick = |m: &BTreeMap<String, i64>| -> Vec<i64> {
         axis.iter()
@@ -653,11 +670,7 @@ pub fn overview(
         } else {
             Vec::new()
         },
-        loaders: if filter.modrinth {
-            loaders(conn)?
-        } else {
-            Vec::new()
-        },
+        loaders: loaders(conn, filter)?,
         revenue: if filter.modrinth {
             revenue(conn, &from, &to)?
         } else {
@@ -958,7 +971,7 @@ mod tests {
             None,
         )
         .unwrap();
-        let cells = loaders(&conn).unwrap();
+        let cells = loaders(&conn, PlatformFilter::default()).unwrap();
         let fabric_121 = cells
             .iter()
             .find(|c| c.game_version == "1.21" && c.loader == "fabric")

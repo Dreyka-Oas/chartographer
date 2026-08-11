@@ -211,6 +211,15 @@ export interface PublishReport {
   outcomes: PublishOutcome[];
 }
 
+/** Un geste du tableau de bord CurseForge, appris en le regardant faire. */
+export interface CfGesture {
+  method: string;
+  /** Adresse où les identifiants ont laissé place à des repères `{1}`, `{2}`. */
+  pattern: string;
+  body: string;
+  status: number;
+}
+
 export interface PairingEntry {
   id: number;
   platform: string;

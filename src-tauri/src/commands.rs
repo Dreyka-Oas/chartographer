@@ -405,6 +405,57 @@ pub fn open_curseforge_window(app: tauri::AppHandle) -> Result<()> {
     ensure_curseforge_window(&app, true)
 }
 
+/// Note les appels que la page émet : méthode, adresse, état, et le début du
+/// corps envoyé. Sert à découvrir comment le tableau de bord s'y prend pour
+/// gérer projets et fichiers, là où aucune documentation ne le dit.
+pub(crate) const WATCH_SCRIPT: &str = r#"(function () {
+  if (window.__cgWatchOn) { return 'deja en place'; }
+  window.__cgWatchOn = true;
+  window.__cgWatch = window.__cgWatch || [];
+  var out = window.__cgWatch;
+
+  function note(method, url, status, sent) {
+    if (out.length > 120) return;
+    out.push({
+      m: String(method || 'GET').toUpperCase(),
+      u: String(url).slice(0, 300),
+      s: status,
+      envoi: typeof sent === 'string' ? sent.slice(0, 300) : ''
+    });
+  }
+
+  var nativeFetch = window.fetch;
+  if (nativeFetch) {
+    window.fetch = function (input, init) {
+      var url = typeof input === 'string' ? input : (input && input.url) || '';
+      var method = (init && init.method) || (input && input.method) || 'GET';
+      var sent = init && typeof init.body === 'string' ? init.body : '';
+      return nativeFetch.apply(this, arguments).then(function (response) {
+        note(method, url, response.status, sent);
+        return response;
+      }).catch(function (error) {
+        note(method, url, -1, sent);
+        throw error;
+      });
+    };
+  }
+  var open = XMLHttpRequest.prototype.open;
+  var send = XMLHttpRequest.prototype.send;
+  XMLHttpRequest.prototype.open = function (method, url) {
+    this.__cgM = method;
+    this.__cgU = url;
+    return open.apply(this, arguments);
+  };
+  XMLHttpRequest.prototype.send = function (body) {
+    var xhr = this;
+    xhr.addEventListener('load', function () {
+      note(xhr.__cgM, xhr.__cgU || '', xhr.status, typeof body === 'string' ? body : '');
+    });
+    return send.apply(this, arguments);
+  };
+  return 'ecoute posee';
+})()"#;
+
 /// Écoute posée dans la page déjà chargée : elle conserve les réponses que la
 /// page recevra ensuite, en naviguant vers les statistiques. Rien n'est demandé
 /// au serveur qui ne l'aurait été de toute façon.
@@ -749,12 +800,19 @@ const EXPLORE_SCRIPT: &str = r#"(function () {
       }); })
       .catch(function (e) { out.push({ path: path, status: -1, body: String(e) }); });
   }
+  // Le tableau de bord est bâti sur react-admin : ses adresses suivent une
+  // convention, `?filter=&range=&sort=` pour lister, `/{id}` pour lire. On
+  // essaie donc les ressources qu'il manipule, en lecture seule.
+  var query = '?filter=%7B%7D&range=%5B0%2C3%5D&sort=%5B%22id%22%2C%22DESC%22%5D';
+  var byProject = '?filter=%7B%22projectId%22%3A1002185%7D&range=%5B0%2C5%5D&sort=%5B%22id%22%2C%22DESC%22%5D';
   var jobs = [];
-  for (var i = 1; i <= 24; i++) jobs.push('/_api/statistics-new/queries/' + i);
-  ['lastMonthRevenue', 'revenueEstimation', 'downloadsTotalByMembership',
-   'downloadsByDay', 'dailyDownloads', 'downloadsPerDay', 'rewardPoints',
-   'pointsBalance', 'downloads'].forEach(function (name) {
-    jobs.push('/_api/statistics/queries/' + name);
+  ['files', 'project-files', 'projectFiles', 'uploads', 'versions',
+   'categories', 'game-versions', 'gameVersions', 'issues', 'builds',
+   'projects/1002185/file', 'projects/1002185/upload'].forEach(function (name) {
+    jobs.push('/_api/' + name + query);
+  });
+  ['files', 'project-files', 'uploads', 'issues'].forEach(function (name) {
+    jobs.push('/_api/' + name + byProject);
   });
   jobs.reduce(function (chain, path) {
     return chain.then(function () { return probe(path); });

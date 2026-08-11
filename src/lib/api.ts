@@ -3,6 +3,7 @@ import type {
   AuthStatus,
   CfAnalysis,
   CfCollect,
+  CfGesture,
   CfPointEntry,
   CfScrape,
   CurrencyView,
@@ -82,4 +83,15 @@ export const api = {
     invoke<PublishOutcome>("delete_modrinth_version", { versionId }),
   deleteModrinthProject: (projectId: string) =>
     invoke<PublishOutcome>("delete_modrinth_project", { projectId }),
+
+  // Gestes CurseForge : l'application regarde faire, puis sait refaire.
+  watchCurseforge: () => invoke<string>("watch_curseforge"),
+  learnCurseforge: () => invoke<CfGesture[]>("learn_curseforge"),
+  curseforgeGestures: () => invoke<CfGesture[]>("curseforge_gestures"),
+  createCurseforgeProject: (name: string, summary: string) =>
+    invoke<PublishOutcome>("create_curseforge_project", { name, summary }),
+  deleteCurseforgeFile: (projectId: number, fileId: number) =>
+    invoke<PublishOutcome>("delete_curseforge_file", { projectId, fileId }),
+  curseforgeFiles: (projectId: number) =>
+    invoke<unknown>("curseforge_files", { projectId }),
 };

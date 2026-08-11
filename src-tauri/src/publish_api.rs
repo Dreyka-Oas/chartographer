@@ -192,6 +192,213 @@ pub async fn capture_token(app: &tauri::AppHandle, state: &AppState) -> Result<b
     }
 }
 
+/// Ouvre le tableau de bord et se met à regarder.
+///
+/// CurseForge ne documente pas comment son site crée un projet ni retire un
+/// fichier, et un corps deviné ne récolte qu'une erreur serveur muette.
+/// L'application observe donc le geste une fois, fait par son auteur, et sait
+/// ensuite le refaire seule.
+#[tauri::command]
+pub async fn watch_curseforge(app: tauri::AppHandle) -> Result<String> {
+    crate::commands::cf_window(&app).await?;
+    crate::commands::open_curseforge_window(app.clone())?;
+    let raw = crate::commands::eval_in_window(&app, crate::commands::WATCH_SCRIPT).await?;
+    Ok(raw.trim_matches('"').to_string())
+}
+
+/// Relève ce que la fenêtre a vu passer et en tire les gestes réutilisables.
+#[tauri::command]
+pub async fn learn_curseforge(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Vec<crate::gestures::Gesture>> {
+    let raw =
+        crate::commands::eval_in_window(&app, "JSON.stringify(window.__cgWatch || [])").await?;
+    let unquoted: String = serde_json::from_str(&raw).unwrap_or(raw);
+    let observed: Vec<crate::gestures::Observed> =
+        serde_json::from_str(&unquoted).unwrap_or_default();
+
+    // Ce qui a été appris auparavant ne s'efface pas : chaque séance complète
+    // le carnet, geste par geste.
+    let mut known = stored_gestures(&state)?;
+    for gesture in crate::gestures::learn(&observed) {
+        match known
+            .iter_mut()
+            .find(|g| g.method == gesture.method && g.pattern == gesture.pattern)
+        {
+            Some(existing) => *existing = gesture,
+            None => known.push(gesture),
+        }
+    }
+    let raw = serde_json::to_string(&known)?;
+    state
+        .store
+        .with(|conn| crate::store::metrics::set_meta(conn, "curseforge_gestures", &raw))?;
+    Ok(known)
+}
+
+/// Gestes déjà appris, pour que l'interface dise ce qu'elle sait faire.
+#[tauri::command]
+pub fn curseforge_gestures(state: State<'_, AppState>) -> Result<Vec<crate::gestures::Gesture>> {
+    stored_gestures(&state)
+}
+
+fn stored_gestures(state: &AppState) -> Result<Vec<crate::gestures::Gesture>> {
+    let raw = state
+        .store
+        .with(|conn| crate::store::metrics::get_meta(conn, "curseforge_gestures"))?;
+    Ok(raw
+        .and_then(|raw| serde_json::from_str(&raw).ok())
+        .unwrap_or_default())
+}
+
+/// Refait un geste appris dans la fenêtre du tableau de bord.
+///
+/// L'appel part de la page, avec sa session : c'est la seule façon de franchir
+/// le filtre qui refuse toute requête faite hors d'un navigateur.
+async fn replay(
+    app: &tauri::AppHandle,
+    method: &str,
+    url: &str,
+    body: Option<&str>,
+) -> Result<(i64, String)> {
+    let body_literal = match body {
+        Some(body) => serde_json::to_string(body)?,
+        None => "null".to_string(),
+    };
+    let script = format!(
+        r#"(function () {{
+          window.__cgReplay = null;
+          var init = {{ method: {method:?}, credentials: 'include' }};
+          var corps = {body_literal};
+          if (corps !== null) {{
+            init.headers = {{ 'Content-Type': 'application/json' }};
+            init.body = corps;
+          }}
+          fetch({url:?}, init).then(function (r) {{
+            return r.text().then(function (t) {{
+              window.__cgReplay = {{ s: r.status, t: t.slice(0, 4000) }};
+            }});
+          }}).catch(function (e) {{
+            window.__cgReplay = {{ s: -1, t: String(e) }};
+          }});
+          return 'parti';
+        }})()"#
+    );
+    crate::commands::eval_in_window(app, &script).await?;
+
+    // La réponse revient quand elle revient : on repasse voir plutôt que de
+    // fixer une attente qui serait trop courte un jour et perdue le reste.
+    for _ in 0..20 {
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        let raw = crate::commands::eval_in_window(app, "JSON.stringify(window.__cgReplay)").await?;
+        let unquoted: String = serde_json::from_str(&raw).unwrap_or(raw);
+        if unquoted == "null" || unquoted.is_empty() {
+            continue;
+        }
+        let value: serde_json::Value = serde_json::from_str(&unquoted).unwrap_or_default();
+        return Ok((
+            value["s"].as_i64().unwrap_or(-1),
+            value["t"].as_str().unwrap_or_default().to_string(),
+        ));
+    }
+    Err(AppError::Remote {
+        provider: "CurseForge".into(),
+        detail: "le tableau de bord n'a pas répondu".into(),
+    })
+}
+
+/// Crée un projet CurseForge en refaisant le geste appris.
+#[tauri::command]
+pub async fn create_curseforge_project(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    name: String,
+    summary: String,
+) -> Result<Outcome> {
+    let gestures = stored_gestures(&state)?;
+    let Some(gesture) = crate::gestures::creation(&gestures) else {
+        return Err(AppError::Config(
+            "CurseForge ne publie pas comment son site crée un projet : montre-le une fois \
+             depuis l'onglet Publication, l'application saura ensuite le refaire"
+                .into(),
+        ));
+    };
+    let body = crate::gestures::adapt_body(
+        &gesture.body,
+        &[
+            ("name", serde_json::json!(name)),
+            ("summary", serde_json::json!(summary)),
+        ],
+    );
+    let (status, response) = replay(&app, &gesture.method, &gesture.pattern, Some(&body)).await?;
+    if !(200..300).contains(&status) {
+        return Ok(Outcome::refused("curseforge", status as u16, &response));
+    }
+    let id = serde_json::from_str::<serde_json::Value>(&response)
+        .ok()
+        .and_then(|v| v["id"].as_i64())
+        .map(|id| id.to_string());
+    Ok(Outcome {
+        platform: "curseforge".into(),
+        ok: true,
+        id,
+        detail: format!("projet « {name} » créé"),
+    })
+}
+
+/// Retire un fichier CurseForge en refaisant le geste appris.
+#[tauri::command]
+pub async fn delete_curseforge_file(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    project_id: i64,
+    file_id: i64,
+) -> Result<Outcome> {
+    let gestures = stored_gestures(&state)?;
+    let Some(gesture) = crate::gestures::file_removal(&gestures) else {
+        return Err(AppError::Config(
+            "l'interface d'envoi CurseForge ne sait pas retirer un fichier : montre le geste \
+             une fois depuis l'onglet Publication, l'application saura ensuite le refaire"
+                .into(),
+        ));
+    };
+    // Deux repères au plus : le projet puis le fichier, ou le fichier seul.
+    let url = if gesture.pattern.contains("{2}") {
+        crate::gestures::fill(&gesture.pattern, &[project_id, file_id])
+    } else {
+        crate::gestures::fill(&gesture.pattern, &[file_id])
+    };
+    let body = (!gesture.body.is_empty()).then_some(gesture.body.as_str());
+    let (status, response) = replay(&app, &gesture.method, &url, body).await?;
+    if !(200..300).contains(&status) {
+        return Ok(Outcome::refused("curseforge", status as u16, &response));
+    }
+    Ok(Outcome {
+        platform: "curseforge".into(),
+        ok: true,
+        id: Some(file_id.to_string()),
+        detail: format!("fichier {file_id} retiré"),
+    })
+}
+
+/// Fichiers d'un projet CurseForge, tels que son tableau de bord les liste.
+#[tauri::command]
+pub async fn curseforge_files(app: tauri::AppHandle, project_id: i64) -> Result<serde_json::Value> {
+    let url = format!(
+        "/_api/project-files?filter=%7B%22projectId%22%3A%22{project_id}%22%7D\
+         &range=%5B0%2C24%5D&sort=%5B%22DateCreated%22%2C%22DESC%22%5D"
+    );
+    let (status, body) = replay(&app, "GET", &url, None).await?;
+    if !(200..300).contains(&status) {
+        return Err(AppError::Remote {
+            provider: "CurseForge".into(),
+            detail: format!("liste des fichiers refusée ({status})"),
+        });
+    }
+    Ok(serde_json::from_str(&body).unwrap_or(serde_json::Value::Null))
+}
+
 async fn read_tokens(app: &tauri::AppHandle) -> Result<Vec<String>> {
     let raw = crate::commands::eval_in_window(app, READ_TOKENS).await?;
     let unquoted: String = serde_json::from_str(&raw).unwrap_or(raw);

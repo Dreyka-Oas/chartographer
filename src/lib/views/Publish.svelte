@@ -3,7 +3,7 @@
   import { api } from "../api";
   import Card from "../components/Card.svelte";
   import { dashboard } from "../state.svelte";
-  import type { AppErrorPayload, ProjectSummary, PublishOutcome } from "../types";
+  import type { AppErrorPayload, CfGesture, ProjectSummary, PublishOutcome } from "../types";
 
   const overview = $derived(dashboard.overview);
   const projects = $derived(overview?.per_project ?? []);
@@ -121,6 +121,80 @@
       report(e);
     } finally {
       running = false;
+    }
+  }
+
+  // --- Gestes CurseForge -------------------------------------------------
+  // Son interface publique d'envoi ne sait que déposer un fichier. Son tableau
+  // de bord, lui, crée et retire — sans rien documenter, et un corps deviné
+  // n'obtient qu'une erreur serveur muette. L'application regarde donc le geste
+  // une fois, puis sait le refaire.
+  let gestures = $state<CfGesture[]>([]);
+  let watching = $state(false);
+  let gestureNote = $state("");
+  let newProjectName = $state("");
+  let newProjectSummary = $state("");
+  let creating = $state(false);
+  let gesturesLoaded = $state(false);
+
+  $effect(() => {
+    if (gesturesLoaded) return;
+    gesturesLoaded = true;
+    api
+      .curseforgeGestures()
+      .then((value) => (gestures = value))
+      .catch(report);
+  });
+
+  const knowsCreation = $derived(
+    gestures.some((g) => g.method === "POST" && g.pattern.endsWith("/_api/projects")),
+  );
+  const knowsRemoval = $derived(
+    gestures.some((g) => g.pattern.includes("file") && g.method !== "GET"),
+  );
+
+  async function watch() {
+    try {
+      await api.watchCurseforge();
+      watching = true;
+      gestureNote =
+        "La fenêtre CurseForge est ouverte. Fais le geste une fois — créer un projet, retirer un fichier — puis reviens ici.";
+    } catch (e) {
+      report(e);
+    }
+  }
+
+  async function learn() {
+    try {
+      gestures = await api.learnCurseforge();
+      watching = false;
+      gestureNote =
+        gestures.length > 0
+          ? `${gestures.length} geste(s) retenu(s).`
+          : "Rien de neuf : le geste n'a peut-être pas abouti, ou la fenêtre a été rechargée.";
+    } catch (e) {
+      report(e);
+    }
+  }
+
+  async function createProject() {
+    if (!newProjectName.trim()) return;
+    creating = true;
+    try {
+      const done = await api.createCurseforgeProject(
+        newProjectName.trim(),
+        newProjectSummary.trim(),
+      );
+      outcomes = [done, ...outcomes];
+      if (done.ok) {
+        newProjectName = "";
+        newProjectSummary = "";
+        await dashboard.sync();
+      }
+    } catch (e) {
+      report(e);
+    } finally {
+      creating = false;
     }
   }
 
@@ -254,8 +328,8 @@
           {running ? "Envoi en cours…" : "Publier"}
         </button>
         <span class="hint">
-          Modrinth accepte la suppression d'une version ; CurseForge, non : son interface d'envoi ne
-          sait que déposer, le retrait se fait sur son site.
+          Une version Modrinth se supprime d'ici. Côté CurseForge, le retrait passe par un geste
+          appris — voir la carte ci-dessous.
         </span>
       </div>
 
@@ -276,9 +350,115 @@
       {/if}
     </Card>
   </div>
+
+  <div class="wide">
+    <Card
+      title="CurseForge — créer et retirer"
+      subtitle="Ce que son interface d'envoi ne sait pas faire, son tableau de bord le fait"
+    >
+      <p class="hint block">
+        CurseForge publie de quoi déposer un fichier, rien d'autre : ni créer un projet, ni retirer
+        quoi que ce soit. Son tableau de bord, lui, fait les deux, par une voie qu'il ne documente
+        pas et dont les champs ne se devinent pas. Alors montre-lui le geste une fois :
+        l'application le regarde passer, en retient la forme exacte, et sait ensuite le refaire
+        seule.
+      </p>
+
+      <div class="actions">
+        <button onclick={watch} disabled={watching}>
+          {watching ? "En observation…" : "Montrer un geste"}
+        </button>
+        <button class:primary={watching} onclick={learn}>Retenir ce que j'ai fait</button>
+        <span class="hint">{gestureNote}</span>
+      </div>
+
+      {#if gestures.length > 0}
+        <table>
+          <thead>
+            <tr><th class="left">Geste retenu</th><th class="left">Adresse</th></tr>
+          </thead>
+          <tbody>
+            {#each gestures as gesture (gesture.method + gesture.pattern)}
+              <tr>
+                <td class="left">{gesture.method}</td>
+                <td class="left mono">{gesture.pattern}</td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      {/if}
+
+      <div class="form create">
+        <label class="field">
+          <span class="legend-label">Nom du nouveau projet</span>
+          <input bind:value={newProjectName} placeholder="Mon nouveau mod" />
+        </label>
+        <label class="field">
+          <span class="legend-label">Résumé</span>
+          <input bind:value={newProjectSummary} placeholder="Ce que fait le mod, en une ligne" />
+        </label>
+        <div class="field">
+          <span class="legend-label">&nbsp;</span>
+          <button
+            class="primary"
+            onclick={createProject}
+            disabled={!knowsCreation || creating || !newProjectName.trim()}
+          >
+            {creating ? "Création…" : "Créer sur CurseForge"}
+          </button>
+        </div>
+      </div>
+      {#if !knowsCreation}
+        <p class="hint block">
+          Le geste de création n'est pas encore connu : ouvre l'observation, crée un projet comme
+          d'habitude, puis reviens le retenir.
+        </p>
+      {/if}
+      {#if !knowsRemoval}
+        <p class="hint block">
+          Le retrait d'un fichier n'est pas encore connu non plus. Même méthode : supprime un
+          fichier depuis le tableau de bord pendant l'observation.
+        </p>
+      {/if}
+    </Card>
+  </div>
 </div>
 
 <style>
+  .block {
+    display: block;
+    margin: 0 0 14px;
+    line-height: 1.55;
+  }
+  .create {
+    margin-top: 16px;
+  }
+  .mono {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+  }
+  th {
+    text-align: right;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-dim);
+    font-weight: 500;
+    font-size: 0.8rem;
+  }
+  td {
+    text-align: right;
+    padding: 5px 8px;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.82rem;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 6px;
+  }
+  .left {
+    text-align: left;
+  }
   .grid {
     display: grid;
     grid-template-columns: 1fr;

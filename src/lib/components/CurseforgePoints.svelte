@@ -2,14 +2,18 @@
   import { api } from "../api";
   import { formatDayLong, formatMoney } from "../format";
   import { dashboard } from "../state.svelte";
-  import type { AppErrorPayload, CfPointEntry, CfScrape } from "../types";
+  import type { AppErrorPayload, CfAnalysis, CfPointEntry, PairingEntry } from "../types";
 
   let entries = $state<CfPointEntry[]>([]);
+  let projects = $state<PairingEntry[]>([]);
   let draft = $state("");
+  let pasted = $state("");
+  let analysis = $state<CfAnalysis | null>(null);
+  let target = $state<number | null>(null);
   let saving = $state(false);
+  let importing = $state(false);
+  let imported = $state("");
   let loaded = $state(false);
-  let reading = $state(false);
-  let scrape = $state<CfScrape | null>(null);
 
   function report(e: unknown) {
     dashboard.error = (e as AppErrorPayload)?.message ?? String(e);
@@ -26,6 +30,10 @@
     if (loaded) return;
     loaded = true;
     refresh();
+    api
+      .pairingState()
+      .then((value) => (projects = value.filter((p) => p.platform === "curseforge")))
+      .catch(report);
   });
 
   const latest = $derived(entries.length > 0 ? entries[entries.length - 1] : null);
@@ -47,21 +55,28 @@
     }
   }
 
-  /**
-   * Lecture assistée : l'utilisateur se connecte dans la fenêtre CurseForge,
-   * l'application relit ce que la page affiche et propose la valeur trouvée.
-   * Rien n'est enregistré sans sa validation.
-   */
-  async function readFromPage() {
-    reading = true;
-    scrape = null;
+  async function analyse() {
+    if (!pasted.trim()) return;
+    imported = "";
     try {
-      scrape = await api.readCurseforgePage();
-      if (scrape.points !== null) draft = String(scrape.points);
+      analysis = await api.analyzeCurseforgeText(pasted);
+      if (analysis.points !== null && draft === "") draft = String(analysis.points);
+    } catch (e) {
+      report(e);
+    }
+  }
+
+  async function importSeries() {
+    if (target === null) return;
+    importing = true;
+    try {
+      const days = await api.importCurseforgeSeries(target, pasted);
+      imported = `${days} jours enregistrés.`;
+      await dashboard.load();
     } catch (e) {
       report(e);
     } finally {
-      reading = false;
+      importing = false;
     }
   }
 
@@ -76,57 +91,61 @@
 </script>
 
 <p class="note">
-  CurseForge rémunère ses auteurs en points, sans aucune interface pour les lire : ni l'API publique,
-  ni le jeton de dépôt n'y donnent accès. Deux façons de renseigner ton solde : l'ouvrir dans une
-  fenêtre et laisser l'application relire la page, ou le recopier à la main. Il est converti au tarif
-  annoncé par CurseForge, 0,05 $ le point.
+  CurseForge n'expose ni son programme de points ni l'historique de son tableau de bord : ni l'API
+  publique, ni le jeton de dépôt n'y donnent accès, et le site refuse de s'afficher dans une fenêtre
+  intégrée. Ouvre-le dans ton navigateur, où tu es déjà connecté, puis rapporte ici ce que tu y vois.
 </p>
 
 <div class="assist">
-  <button onclick={() => api.openCurseforgeWindow().catch(report)}>
-    Ouvrir CurseForge et se connecter
-  </button>
-  <button onclick={readFromPage} disabled={reading}>
-    {reading ? "Lecture…" : "Lire le solde affiché"}
+  <button onclick={() => api.openCurseforgeSite().catch(report)}>
+    Ouvrir mon tableau de bord CurseForge
   </button>
 </div>
 
-{#if scrape}
-  <p class="read" class:miss={scrape.points === null}>
-    {#if scrape.points === null}
-      Aucun solde reconnu sur cette page. Ouvre la page qui affiche tes points, puis relance la
-      lecture — ou saisis le montant à la main.
-    {:else}
-      Solde trouvé : <b>{scrape.points} points</b>. Vérifie puis enregistre.
-    {/if}
-    <span class="source">Page lue : {scrape.title || scrape.url}</span>
-    {#if scrape.excerpt}<span class="source">« {scrape.excerpt} »</span>{/if}
-  </p>
+<label class="paste">
+  <span class="legend-label">Contenu rapporté</span>
+  <textarea
+    bind:value={pasted}
+    rows="4"
+    placeholder="Colle ici le texte de la page (pour le solde de points) ou la réponse JSON d'une requête de statistiques (onglet Réseau du navigateur)"
+  ></textarea>
+</label>
+<div class="assist">
+  <button onclick={analyse} disabled={!pasted.trim()}>Analyser</button>
+</div>
 
-  {#if scrape.captures.length > 0}
-    <div class="captures">
-      <span class="legend-label">Historiques repérés sur cette page</span>
-      <table>
-        <thead>
-          <tr><th class="left">Source</th><th>Jours</th><th>Période</th><th>Total</th></tr>
-        </thead>
-        <tbody>
-          {#each scrape.captures as capture (capture.url)}
-            <tr>
-              <td class="left" title={capture.url}>{capture.url.split("?")[0].split("/").pop()}</td>
-              <td>{capture.points}</td>
-              <td>{capture.from} → {capture.to}</td>
-              <td>{capture.total.toLocaleString("fr-FR")}</td>
-            </tr>
-          {/each}
-        </tbody>
-      </table>
-      <span class="source">
-        Ces séries proviennent des réponses que la page a elle-même reçues. Dis-moi laquelle
-        correspond à tes téléchargements et je l'importerai dans la base.
+{#if analysis}
+  <div class="read" class:miss={analysis.points === null && analysis.days === 0}>
+    {#if analysis.points !== null}
+      <span>Solde reconnu : <b>{analysis.points} points</b>.</span>
+    {/if}
+    {#if analysis.days > 0}
+      <span>
+        Historique reconnu : <b>{analysis.days} jours</b> du {analysis.from} au {analysis.to}, pour
+        {analysis.total.toLocaleString("fr-FR")} au total.
       </span>
-    </div>
-  {/if}
+      <div class="import">
+        <select bind:value={target}>
+          <option value={null}>À quel mod appartient cet historique…</option>
+          {#each projects as project (project.id)}
+            <option value={project.id}>{project.title}</option>
+          {/each}
+        </select>
+        <button onclick={importSeries} disabled={target === null || importing}>
+          {importing ? "Import…" : "Importer cet historique"}
+        </button>
+      </div>
+      {#if imported}<span class="ok">{imported}</span>{/if}
+    {/if}
+    {#if analysis.points === null && analysis.days === 0}
+      <span>
+        Rien de reconnaissable : ni solde de points, ni série datée. Pour l'historique, ouvre
+        l'onglet Réseau du navigateur, recharge la page des statistiques, et copie la réponse d'une
+        requête qui renvoie du JSON.
+      </span>
+    {/if}
+    {#if analysis.excerpt}<span class="source">« {analysis.excerpt} »</span>{/if}
+  </div>
 {/if}
 
 <form
@@ -136,7 +155,7 @@
   }}
 >
   <label>
-    <span class="legend-label">Solde du jour</span>
+    <span class="legend-label">Solde de points du jour</span>
     <input type="number" min="0" step="1" bind:value={draft} placeholder="points" />
   </label>
   <button type="submit" disabled={saving || draft === ""}>
@@ -178,7 +197,7 @@
     </tbody>
   </table>
 {:else}
-  <p class="empty">Aucun relevé enregistré pour l'instant.</p>
+  <p class="empty">Aucun relevé de points enregistré pour l'instant.</p>
 {/if}
 
 <style>
@@ -187,7 +206,7 @@
     font-size: 0.8rem;
     color: var(--text-dim);
     line-height: 1.5;
-    max-width: 80ch;
+    max-width: 82ch;
   }
   .assist {
     display: flex;
@@ -195,11 +214,29 @@
     flex-wrap: wrap;
     margin-bottom: 12px;
   }
-  .read {
+  .paste {
     display: flex;
     flex-direction: column;
     gap: 4px;
-    margin: 0 0 12px;
+    margin-bottom: 8px;
+  }
+  textarea {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    padding: 8px 10px;
+    font: inherit;
+    font-size: 0.8rem;
+    font-family: var(--font-mono);
+    resize: vertical;
+    width: 100%;
+  }
+  .read {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0 0 14px;
     padding: 10px 12px;
     border-left: 2px solid var(--modrinth);
     background: var(--surface-2);
@@ -210,19 +247,19 @@
     border-left-color: var(--warn);
     color: var(--text-dim);
   }
+  .import {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 4px;
+  }
+  .ok {
+    color: var(--modrinth);
+  }
   .source {
     font-size: 0.74rem;
     color: var(--text-dim);
     overflow-wrap: anywhere;
-  }
-  .captures {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    margin-bottom: 14px;
-    padding: 10px 12px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
   }
   form {
     display: flex;
@@ -235,7 +272,8 @@
     flex-direction: column;
     gap: 4px;
   }
-  input {
+  input,
+  select {
     background: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
@@ -244,6 +282,8 @@
     font: inherit;
     font-size: 0.86rem;
     font-variant-numeric: tabular-nums;
+  }
+  input {
     width: 130px;
   }
   button {

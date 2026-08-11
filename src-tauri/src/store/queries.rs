@@ -88,22 +88,38 @@ pub fn timeline(
 ) -> Result<Vec<TimelinePoint>> {
     let mut per_day: BTreeMap<String, (i64, i64)> = BTreeMap::new();
 
-    if filter.modrinth {
-        let mut stmt = conn.prepare(
-            "SELECT day, COALESCE(SUM(downloads), 0) FROM metrics_daily
-             WHERE day >= ?1 AND day < ?2 GROUP BY day",
-        )?;
-        for row in stmt.query_map(params![from, to], |r| {
-            Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?))
-        })? {
-            let (day, downloads) = row?;
-            per_day.entry(day).or_default().0 += downloads;
+    // Les mesures quotidiennes viennent surtout de Modrinth, mais un historique
+    // CurseForge rapporté du tableau de bord auteur atterrit dans la même table :
+    // la plateforme du projet décide de la série qu'elle alimente.
+    let mut stmt = conn.prepare(
+        "SELECT p.platform, m.day, COALESCE(SUM(m.downloads), 0)
+         FROM metrics_daily m JOIN projects p ON p.id = m.project_id
+         WHERE m.day >= ?1 AND m.day < ?2 GROUP BY p.platform, m.day",
+    )?;
+    let mut measured_cf_days: HashSet<String> = HashSet::new();
+    for row in stmt.query_map(params![from, to], |r| {
+        Ok((
+            r.get::<_, String>(0)?,
+            r.get::<_, String>(1)?,
+            r.get::<_, i64>(2)?,
+        ))
+    })? {
+        let (platform, day, downloads) = row?;
+        match Platform::from_str_lossy(&platform) {
+            Platform::Modrinth if filter.modrinth => per_day.entry(day).or_default().0 += downloads,
+            Platform::CurseForge if filter.curseforge => {
+                measured_cf_days.insert(day.clone());
+                per_day.entry(day).or_default().1 += downloads;
+            }
+            _ => {}
         }
     }
 
     if filter.curseforge {
         for ((_, day), delta) in snapshot_deltas(conn)? {
-            if day.as_str() >= from && day.as_str() < to {
+            // Un jour déjà mesuré prime sur l'écart entre deux snapshots :
+            // sans cela, la journée serait comptée deux fois.
+            if day.as_str() >= from && day.as_str() < to && !measured_cf_days.contains(&day) {
                 per_day.entry(day).or_default().1 += delta;
             }
         }
@@ -737,6 +753,26 @@ mod tests {
         .unwrap();
         upsert_link(&conn, m, c, 1.0, false).unwrap();
         (conn, m, c)
+    }
+
+    #[test]
+    fn an_imported_curseforge_day_beats_the_snapshot_gap() {
+        let (conn, _, c) = seed();
+        // Deux snapshots donnent un écart de 75 pour le 10.
+        insert_snapshot(&conn, c, "2026-08-09T00:00:00Z", 100, None).unwrap();
+        insert_snapshot(&conn, c, "2026-08-10T00:00:00Z", 175, None).unwrap();
+        // Le tableau de bord auteur, lui, donne le chiffre exact.
+        upsert_daily(&conn, c, "2026-08-10", Some(64), None, None).unwrap();
+
+        let points = timeline(
+            &conn,
+            "2026-08-01",
+            "2026-08-11",
+            PlatformFilter::default(),
+        )
+        .unwrap();
+        let tenth = points.iter().find(|p| p.day == "2026-08-10").unwrap();
+        assert_eq!(tenth.curseforge, 64, "la mesure prime sur l'écart estimé");
     }
 
     #[test]

@@ -159,23 +159,16 @@ export interface CfPointEntry {
   value_usd: string;
 }
 
-/** Une réponse interceptée dans la fenêtre CurseForge, résumée. */
-export interface CfCapture {
-  url: string;
-  points: number;
+/** Ce que l'application reconnaît dans un contenu rapporté de CurseForge. */
+export interface CfAnalysis {
+  /** Solde de points repéré dans du texte copié. */
+  points: number | null;
+  /** Jours de la série datée trouvée, le cas échéant. */
+  days: number;
   from: string | null;
   to: string | null;
   total: number;
-}
-
-/** Ce que la lecture de la page CurseForge a retenu, avant validation. */
-export interface CfScrape {
-  url: string;
-  title: string;
-  points: number | null;
   excerpt: string;
-  /** Réponses porteuses d'une série datée : l'historique cherché. */
-  captures: CfCapture[];
 }
 
 export interface SyncReport {

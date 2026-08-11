@@ -44,8 +44,9 @@ pub fn run() {
             commands::record_curseforge_points,
             commands::forget_curseforge_points,
             commands::curseforge_points,
-            commands::open_curseforge_window,
-            commands::read_curseforge_page,
+            commands::open_curseforge_site,
+            commands::analyze_curseforge_text,
+            commands::import_curseforge_series,
         ])
         .run(tauri::generate_context!())
         .expect("erreur au démarrage de Tauri");

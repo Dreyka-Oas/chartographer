@@ -12,9 +12,7 @@
   $effect(() => {
     if (ready) return;
     ready = true;
-    dashboard.refreshAuth().then(() => {
-      if (dashboard.auth?.connected) dashboard.load();
-    });
+    dashboard.boot();
   });
 </script>
 

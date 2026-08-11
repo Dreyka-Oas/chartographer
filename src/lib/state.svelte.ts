@@ -21,6 +21,17 @@ class Dashboard {
   }
 
   /**
+   * Démarrage : si un token est déjà enregistré, on charge la base, et si elle
+   * est encore vide on lance la première synchronisation sans rien demander.
+   */
+  async boot() {
+    await this.refreshAuth();
+    if (!this.auth?.connected) return;
+    await this.load();
+    if (this.overview && this.overview.per_project.length === 0) await this.sync();
+  }
+
+  /**
    * Valide le token côté Rust avant de l'enregistrer, puis enchaîne
    * directement sur une première synchronisation.
    */

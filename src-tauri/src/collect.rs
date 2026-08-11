@@ -107,6 +107,56 @@ pub fn parse_downloads_query(raw: &str) -> Vec<DailyDownload> {
     out
 }
 
+/// Un mois de revenus, tel que le tableau de bord l'annonce.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MonthlyRevenue {
+    /// Mois `YYYY-MM`.
+    pub month: String,
+    /// Montant en dollars : la page l'affiche « 5 $US ».
+    pub amount: f64,
+}
+
+fn month_from_epoch_ms(value: i64) -> Option<String> {
+    chrono::DateTime::from_timestamp(value / 1000, 0).map(|d| d.format("%Y-%m").to_string())
+}
+
+/// Lit la réponse `statistics/queries/lastMonthRevenue`.
+///
+/// Son nom trompe : elle ne rend pas le dernier mois mais une série mensuelle,
+/// datée en millisecondes. Le champ `undefined` double `revenue` et s'ignore.
+pub fn parse_revenue_series(raw: &str) -> Vec<MonthlyRevenue> {
+    let Ok(root) = serde_json::from_str::<serde_json::Value>(raw) else {
+        return Vec::new();
+    };
+    let Some(rows) = root["queryResult"]["data"].as_array() else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for row in rows {
+        let Some(month) = row["revenueDate"].as_i64().and_then(month_from_epoch_ms) else {
+            continue;
+        };
+        let Some(amount) = row["revenue"].as_f64() else {
+            continue;
+        };
+        out.push(MonthlyRevenue { month, amount });
+    }
+    out
+}
+
+/// Lit la réponse `statistics/queries/revenueEstimation` : le mois écoulé et le
+/// cumul de l'année en cours, tous deux en dollars.
+pub fn parse_revenue_estimation(raw: &str) -> (Option<f64>, Option<f64>) {
+    let Ok(root) = serde_json::from_str::<serde_json::Value>(raw) else {
+        return (None, None);
+    };
+    let row = &root["queryResult"]["data"][0];
+    (
+        row["estimatedLastMonthRevenue"].as_f64(),
+        row["estimatedYearlyRevenue"].as_f64(),
+    )
+}
+
 /// Rapproche une colonne de la réponse d'un projet connu.
 ///
 /// La colonne porte soit `project-<identifiant>`, soit le titre du mod en
@@ -231,6 +281,51 @@ mod tests {
             !series.iter().any(|d| d.key == "downloads"),
             "la colonne downloads double la première série, elle n'est pas un total"
         );
+    }
+
+    /// Réponses réelles des deux adresses de revenus, relevées sur le compte.
+    const REVENUE: &str = r#"{"id":6387,"queryResult":{"data":[
+      {"revenueDate":1769904000000,"revenue":5,"undefined":5},
+      {"revenueDate":1772323200000,"revenue":5,"undefined":5},
+      {"revenueDate":1777593600000,"revenue":4,"undefined":4}],"legend":[]}}"#;
+    const ESTIMATION: &str = r#"{"id":6385,"queryResult":{"data":[
+      {"estimatedLastMonthRevenue":5,"estimatedYearlyRevenue":34}],
+      "retrievedAt":"2026-08-11T12:45:35.043Z"}}"#;
+
+    #[test]
+    fn reads_the_monthly_revenue_series() {
+        let months = parse_revenue_series(REVENUE);
+        assert_eq!(
+            months,
+            vec![
+                MonthlyRevenue {
+                    month: "2026-02".into(),
+                    amount: 5.0
+                },
+                MonthlyRevenue {
+                    month: "2026-03".into(),
+                    amount: 5.0
+                },
+                MonthlyRevenue {
+                    month: "2026-05".into(),
+                    amount: 4.0
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn reads_both_revenue_estimates() {
+        assert_eq!(
+            parse_revenue_estimation(ESTIMATION),
+            (Some(5.0), Some(34.0))
+        );
+    }
+
+    #[test]
+    fn tolerates_revenue_responses_of_another_shape() {
+        assert!(parse_revenue_series("{}").is_empty());
+        assert_eq!(parse_revenue_estimation("pas du json"), (None, None));
     }
 
     #[test]

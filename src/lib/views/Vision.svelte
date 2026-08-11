@@ -41,10 +41,10 @@
 
   {#if dashboard.platforms.curseforge && overview.curseforge_history_days < 2}
     <p class="notice">
-      CurseForge ne publie pas d'historique : Chartographer le reconstruit en comparant deux relevés
-      quotidiens, et {overview.curseforge_history_days} jour est enregistré pour l'instant. Les
-      courbes CurseForge restent donc à zéro jusqu'au relevé de demain ; les totaux cumulés, eux,
-      sont déjà exacts.
+      CurseForge n'expose aucun historique public : Chartographer va le chercher sur ton tableau de
+      bord auteur, à chaque synchronisation. {overview.curseforge_history_days} jour est enregistré
+      pour l'instant. Si ce chiffre ne monte pas, ta session CurseForge a sans doute expiré : les
+      réglages proposent de te reconnecter une fois.
     </p>
   {/if}
 

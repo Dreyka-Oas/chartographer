@@ -30,9 +30,13 @@ pub struct Kpis {
     pub downloads_curseforge: i64,
     pub downloads_30d: i64,
     pub downloads_prev_30d: i64,
-    /// Tout ce que le programme de reversement a rapporté depuis l'origine :
-    /// déjà retiré, retirable et encore en maturation.
+    /// Tout ce que les deux plateformes ont rapporté depuis l'origine :
+    /// reversement Modrinth et contre-valeur des points CurseForge additionnés.
     pub revenue_total: String,
+    /// Part Modrinth : déjà retiré, retirable et encore en maturation.
+    pub revenue_modrinth: String,
+    /// Part CurseForge : le solde de points converti au tarif publié.
+    pub revenue_curseforge: String,
     /// Somme retirable immédiatement.
     pub revenue_available: String,
     /// Somme gagnée mais encore en maturation.
@@ -147,6 +151,19 @@ pub struct ProjectDetail {
     pub versions: Vec<VersionRow>,
 }
 
+/// Ce que le tableau de bord CurseForge rapporte de son côté argent.
+///
+/// Les points sont la monnaie du programme ; les montants mensuels et les deux
+/// estimations sont annoncés en dollars par le site lui-même.
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct CfRevenue {
+    pub points: i64,
+    pub points_usd: String,
+    pub last_month: Option<String>,
+    pub year_to_date: Option<String>,
+    pub monthly: Vec<crate::store::metrics::CfRevenueEntry>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct Overview {
     pub kpis: Kpis,
@@ -170,6 +187,7 @@ pub struct Overview {
     pub events: Vec<EventRow>,
     pub freshness: Vec<Freshness>,
     pub curseforge_history_days: i64,
+    pub curseforge_revenue: CfRevenue,
 }
 
 #[cfg(test)]

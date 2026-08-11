@@ -28,6 +28,51 @@ pub fn record_cf_points(conn: &Connection, day: &str, points: i64, now: &str) ->
     Ok(())
 }
 
+/// Dernier solde relevé, en points. Sert à porter la contre-valeur CurseForge
+/// dans les totaux de revenus.
+pub fn latest_cf_points(conn: &Connection) -> Result<Option<i64>> {
+    let value = conn
+        .query_row(
+            "SELECT points FROM cf_points ORDER BY day DESC LIMIT 1",
+            [],
+            |r| r.get::<_, i64>(0),
+        )
+        .ok();
+    Ok(value)
+}
+
+/// Un mois de revenus CurseForge, en dollars.
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+pub struct CfRevenueEntry {
+    /// Mois `YYYY-MM`.
+    pub month: String,
+    pub amount_usd: String,
+}
+
+/// Conserve un mois relevé. Le tableau de bord ne remonte que sur quelques
+/// mois : on complète sans jamais effacer ce qu'il ne montre plus.
+pub fn record_cf_revenue(conn: &Connection, month: &str, amount: f64, now: &str) -> Result<()> {
+    conn.execute(
+        "INSERT INTO cf_revenue (month, amount_usd, recorded_at) VALUES (?1, ?2, ?3)
+         ON CONFLICT(month) DO UPDATE SET amount_usd = excluded.amount_usd, recorded_at = excluded.recorded_at",
+        params![month, format!("{:.2}", amount.max(0.0)), now],
+    )?;
+    Ok(())
+}
+
+pub fn cf_revenue(conn: &Connection) -> Result<Vec<CfRevenueEntry>> {
+    let mut stmt = conn.prepare("SELECT month, amount_usd FROM cf_revenue ORDER BY month")?;
+    let rows = stmt
+        .query_map([], |r| {
+            Ok(CfRevenueEntry {
+                month: r.get(0)?,
+                amount_usd: r.get(1)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(rows)
+}
+
 pub fn delete_cf_points(conn: &Connection, day: &str) -> Result<usize> {
     Ok(conn.execute("DELETE FROM cf_points WHERE day = ?1", params![day])?)
 }
@@ -160,9 +205,20 @@ pub fn snapshot_deltas(conn: &Connection) -> Result<HashMap<(i64, String), i64>>
     Ok(out)
 }
 
+/// Jours pour lesquels une courbe CurseForge est traçable.
+///
+/// Deux sources s'additionnent : les journées mesurées, importées du tableau de
+/// bord, et celles reconstruites en comparant deux relevés de compteurs. Un jour
+/// couvert par les deux ne compte qu'une fois.
 pub fn snapshot_day_count(conn: &Connection) -> Result<i64> {
     Ok(conn.query_row(
-        "SELECT COUNT(DISTINCT substr(taken_at, 1, 10)) FROM cf_snapshots",
+        "SELECT COUNT(*) FROM (
+           SELECT DISTINCT substr(taken_at, 1, 10) AS day FROM cf_snapshots
+           UNION
+           SELECT DISTINCT m.day FROM metrics_daily m
+             JOIN projects p ON p.id = m.project_id
+             WHERE p.platform = 'curseforge'
+         )",
         [],
         |r| r.get(0),
     )?)
@@ -332,7 +388,11 @@ mod point_tests {
         record_cf_points(&conn, "2026-06-01", 1, "x").unwrap();
         record_cf_points(&conn, "2026-07-01", 2, "x").unwrap();
 
-        let days: Vec<String> = cf_points(&conn).unwrap().into_iter().map(|e| e.day).collect();
+        let days: Vec<String> = cf_points(&conn)
+            .unwrap()
+            .into_iter()
+            .map(|e| e.day)
+            .collect();
         assert_eq!(days, ["2026-06-01", "2026-07-01", "2026-08-11"]);
     }
 
@@ -349,6 +409,46 @@ mod point_tests {
         record_cf_points(&conn, "2026-08-11", 10, "x").unwrap();
         assert_eq!(delete_cf_points(&conn, "2026-08-11").unwrap(), 1);
         assert!(cf_points(&conn).unwrap().is_empty());
+    }
+
+    #[test]
+    fn the_latest_reading_is_the_most_recent_day() {
+        let conn = base();
+        assert_eq!(latest_cf_points(&conn).unwrap(), None);
+        record_cf_points(&conn, "2026-06-01", 100, "x").unwrap();
+        record_cf_points(&conn, "2026-08-11", 423, "x").unwrap();
+        assert_eq!(latest_cf_points(&conn).unwrap(), Some(423));
+    }
+
+    #[test]
+    fn monthly_revenue_is_kept_month_by_month() {
+        let conn = base();
+        record_cf_revenue(&conn, "2026-07", 5.0, "x").unwrap();
+        record_cf_revenue(&conn, "2026-06", 4.0, "x").unwrap();
+        let months = cf_revenue(&conn).unwrap();
+        assert_eq!(
+            months,
+            vec![
+                CfRevenueEntry {
+                    month: "2026-06".into(),
+                    amount_usd: "4.00".into()
+                },
+                CfRevenueEntry {
+                    month: "2026-07".into(),
+                    amount_usd: "5.00".into()
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn a_month_recollected_replaces_its_amount() {
+        let conn = base();
+        record_cf_revenue(&conn, "2026-07", 4.0, "x").unwrap();
+        record_cf_revenue(&conn, "2026-07", 5.0, "y").unwrap();
+        let months = cf_revenue(&conn).unwrap();
+        assert_eq!(months.len(), 1);
+        assert_eq!(months[0].amount_usd, "5.00");
     }
 }
 

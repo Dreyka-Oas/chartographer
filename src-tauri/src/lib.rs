@@ -31,6 +31,16 @@ pub fn run() {
             // tableau de bord CurseForge, note ce que la page rend vraiment et
             // écrit son rapport à côté de la base. Sans elle, on coderait à
             // l'aveugle sur un site qu'on ne peut pas ouvrir autrement.
+            // Essai en cours de développement : `CG_MINIMIZED=1` réduit la
+            // fenêtre au démarrage, pour vérifier une collecte sans que
+            // l'application vienne prendre l'écran.
+            #[cfg(debug_assertions)]
+            if std::env::var("CG_MINIMIZED").is_ok() {
+                if let Some(main) = app.get_webview_window("main") {
+                    let _ = main.minimize();
+                }
+            }
+
             if std::env::var("CF_PROBE").is_ok() {
                 let handle = app.handle().clone();
                 tauri::async_runtime::spawn(async move {

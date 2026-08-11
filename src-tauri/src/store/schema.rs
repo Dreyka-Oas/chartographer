@@ -1,7 +1,7 @@
 use crate::error::Result;
 use rusqlite::Connection;
 
-pub const SCHEMA_VERSION: i64 = 3;
+pub const SCHEMA_VERSION: i64 = 4;
 
 const V1: &str = r#"
 CREATE TABLE projects (
@@ -115,6 +115,19 @@ CREATE TABLE cf_points (
 );
 "#;
 
+/// Revenus mensuels CurseForge, en dollars.
+///
+/// Le tableau de bord les sert par mois, jamais par jour, et ne remonte que sur
+/// une poignée de mois : chaque collecte complète la table sans rien effacer,
+/// de sorte que l'historique se conserve au-delà de ce que le site montre.
+const V4: &str = r#"
+CREATE TABLE cf_revenue (
+  month TEXT PRIMARY KEY,
+  amount_usd TEXT NOT NULL,
+  recorded_at TEXT NOT NULL
+);
+"#;
+
 pub fn migrate(conn: &Connection) -> Result<()> {
     conn.execute_batch("PRAGMA foreign_keys = ON;")?;
     let current: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
@@ -129,6 +142,10 @@ pub fn migrate(conn: &Connection) -> Result<()> {
 
     if current < 3 {
         conn.execute_batch(V3)?;
+    }
+
+    if current < 4 {
+        conn.execute_batch(V4)?;
     }
 
     if current < SCHEMA_VERSION {
@@ -161,6 +178,7 @@ mod tests {
             .collect();
         for expected in [
             "cf_points",
+            "cf_revenue",
             "cf_snapshots",
             "countries_daily",
             "events",

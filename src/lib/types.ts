@@ -4,8 +4,12 @@ export interface Kpis {
   downloads_curseforge: number;
   downloads_30d: number;
   downloads_prev_30d: number;
-  /** Tout ce que le reversement a rapporté : retiré, retirable et en maturation. */
+  /** Les deux plateformes réunies : reversement Modrinth et points CurseForge. */
   revenue_total: string;
+  /** Part Modrinth : retiré, retirable et en maturation. */
+  revenue_modrinth: string;
+  /** Part CurseForge : le solde de points converti au tarif publié. */
+  revenue_curseforge: string;
   revenue_available: string;
   revenue_pending: string;
   /** Revenus relevés jour par jour sur la fenêtre affichée. */
@@ -122,6 +126,25 @@ export interface Overview {
   events: EventRow[];
   freshness: Freshness[];
   curseforge_history_days: number;
+  curseforge_revenue: CfRevenue;
+}
+
+/** Un mois de revenus relevé sur le tableau de bord CurseForge. */
+export interface CfRevenueMonth {
+  /** Mois `YYYY-MM`. */
+  month: string;
+  amount_usd: string;
+}
+
+/** Tout ce que CurseForge dit de l'argent. */
+export interface CfRevenue {
+  points: number;
+  points_usd: string;
+  /** Estimation du mois écoulé, en dollars, telle qu'affichée par le site. */
+  last_month: string | null;
+  /** Cumul de l'année en cours, en dollars. */
+  year_to_date: string | null;
+  monthly: CfRevenueMonth[];
 }
 
 export interface AuthStatus {
@@ -192,6 +215,9 @@ export interface CfCollect {
   imported: CfImported[];
   points: number | null;
   detail: string;
+  /** Rempli par le front quand la collecte n'a pas pu aboutir. Une collecte
+   * ratée ne dit rien des séries : c'est un échec, pas un résultat vide. */
+  failed?: boolean;
 }
 
 /** Ce que l'application reconnaît dans un contenu rapporté de CurseForge. */

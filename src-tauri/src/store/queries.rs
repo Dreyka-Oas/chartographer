@@ -179,7 +179,10 @@ pub fn per_project(
     let mut deltas_by_project: HashMap<i64, Vec<(String, i64)>> = HashMap::new();
     for ((cf_id, day), delta) in snapshot_deltas(conn)? {
         if day.as_str() >= from && day.as_str() < to {
-            deltas_by_project.entry(cf_id).or_default().push((day, delta));
+            deltas_by_project
+                .entry(cf_id)
+                .or_default()
+                .push((day, delta));
         }
     }
 
@@ -421,21 +424,66 @@ pub fn payout(conn: &Connection, today: &str) -> Result<crate::models::Payout> {
     })
 }
 
+/// Contre-valeur en dollars du dernier solde de points relevé.
+fn cf_balance_usd(conn: &Connection) -> Result<Decimal> {
+    let Some(points) = crate::store::metrics::latest_cf_points(conn)? else {
+        return Ok(Decimal::ZERO);
+    };
+    let rate = Decimal::from_str(&crate::store::metrics::CF_POINT_VALUE_USD.to_string())
+        .unwrap_or_default();
+    Ok(Decimal::from(points) * rate)
+}
+
+/// Tout ce que CurseForge dit de l'argent : solde de points, sa contre-valeur,
+/// les mois relevés et les deux estimations affichées sur son tableau de bord.
+pub fn curseforge_revenue(conn: &Connection) -> Result<crate::models::CfRevenue> {
+    let points = crate::store::metrics::latest_cf_points(conn)?.unwrap_or(0);
+    // Une estimation absente vaut mieux qu'une case vide : le front n'affiche
+    // la ligne que si le tableau de bord l'a vraiment donnée.
+    let read = |key: &str| -> Result<Option<String>> {
+        Ok(crate::store::metrics::get_meta(conn, key)?.filter(|value| !value.is_empty()))
+    };
+    Ok(crate::models::CfRevenue {
+        points,
+        points_usd: format!(
+            "{:.2}",
+            points as f64 * crate::store::metrics::CF_POINT_VALUE_USD
+        ),
+        last_month: read("curseforge_revenue_last_month")?,
+        year_to_date: read("curseforge_revenue_ytd")?,
+        monthly: crate::store::metrics::cf_revenue(conn)?,
+    })
+}
+
 pub fn kpis(conn: &Connection, today: &str, filter: PlatformFilter) -> Result<Kpis> {
     let window_start = shift_day(today, -30);
     let previous_start = shift_day(today, -60);
 
-    // `metrics_daily` ne contient que les séries Modrinth ; CurseForge ne fournit
-    // pas d'historique et n'entre donc pas dans ces deux fenêtres glissantes.
+    // `metrics_daily` porte désormais les deux plateformes : la collecte du
+    // tableau de bord CurseForge y écrit ses journées. La somme suit donc le
+    // filtre, plateforme par plateforme.
     let sum_downloads = |from: &str, to: &str| -> Result<i64> {
-        if !filter.modrinth {
+        let mut wanted: Vec<&str> = Vec::new();
+        if filter.modrinth {
+            wanted.push(Platform::Modrinth.as_str());
+        }
+        if filter.curseforge {
+            wanted.push(Platform::CurseForge.as_str());
+        }
+        if wanted.is_empty() {
             return Ok(0);
         }
-        Ok(conn.query_row(
-            "SELECT COALESCE(SUM(downloads), 0) FROM metrics_daily WHERE day >= ?1 AND day < ?2",
-            params![from, to],
-            |r| r.get(0),
-        )?)
+        let placeholders = vec!["?"; wanted.len()].join(", ");
+        let sql = format!(
+            "SELECT COALESCE(SUM(m.downloads), 0) FROM metrics_daily m
+             JOIN projects p ON p.id = m.project_id
+             WHERE m.day >= ? AND m.day < ? AND p.platform IN ({placeholders})"
+        );
+        let mut params: Vec<&dyn rusqlite::ToSql> = vec![&from, &to];
+        for name in &wanted {
+            params.push(name);
+        }
+        Ok(conn.query_row(&sql, params.as_slice(), |r| r.get(0))?)
     };
 
     let per_platform = |platform: Platform| -> Result<i64> {
@@ -474,11 +522,20 @@ pub fn kpis(conn: &Connection, today: &str, filter: PlatformFilter) -> Result<Kp
         + decimal(&balance.available)
         + decimal(&balance.pending);
     // Sans solde relevé, le cumul de la fenêtre reste la seule mesure connue.
-    let revenue_total = if earned.is_zero() {
+    let revenue_modrinth = if earned.is_zero() {
         revenue_window
     } else {
         earned
     };
+
+    // CurseForge paie en points, convertis au tarif qu'il publie. C'est de
+    // l'argent au même titre que le reversement Modrinth : les deux s'ajoutent.
+    let revenue_curseforge = if filter.curseforge {
+        cf_balance_usd(conn)?
+    } else {
+        Decimal::ZERO
+    };
+    let revenue_total = revenue_modrinth + revenue_curseforge;
 
     let downloads_modrinth = per_platform(Platform::Modrinth)?;
     let downloads_curseforge = per_platform(Platform::CurseForge)?;
@@ -490,6 +547,8 @@ pub fn kpis(conn: &Connection, today: &str, filter: PlatformFilter) -> Result<Kp
         downloads_30d: sum_downloads(&window_start, today)?,
         downloads_prev_30d: sum_downloads(&previous_start, &window_start)?,
         revenue_total: revenue_total.normalize().to_string(),
+        revenue_modrinth: revenue_modrinth.normalize().to_string(),
+        revenue_curseforge: revenue_curseforge.normalize().to_string(),
         revenue_available: balance.available.clone(),
         revenue_pending: balance.pending.clone(),
         revenue_window: revenue_window.normalize().to_string(),
@@ -719,6 +778,11 @@ pub fn overview(
         events: recent_events(conn, 40)?,
         freshness: freshness(conn)?,
         curseforge_history_days: snapshot_day_count(conn)?,
+        curseforge_revenue: if filter.curseforge {
+            curseforge_revenue(conn)?
+        } else {
+            crate::models::CfRevenue::default()
+        },
     })
 }
 
@@ -764,13 +828,8 @@ mod tests {
         // Le tableau de bord auteur, lui, donne le chiffre exact.
         upsert_daily(&conn, c, "2026-08-10", Some(64), None, None).unwrap();
 
-        let points = timeline(
-            &conn,
-            "2026-08-01",
-            "2026-08-11",
-            PlatformFilter::default(),
-        )
-        .unwrap();
+        let points =
+            timeline(&conn, "2026-08-01", "2026-08-11", PlatformFilter::default()).unwrap();
         let tenth = points.iter().find(|p| p.day == "2026-08-10").unwrap();
         assert_eq!(tenth.curseforge, 64, "la mesure prime sur l'écart estimé");
     }
@@ -781,7 +840,8 @@ mod tests {
         upsert_daily(&conn, m, "2026-08-10", Some(40), None, None).unwrap();
         insert_snapshot(&conn, c, "2026-08-09T00:00:00Z", 100, None).unwrap();
         insert_snapshot(&conn, c, "2026-08-10T00:00:00Z", 175, None).unwrap();
-        let points = timeline(&conn, "2026-08-01", "2026-08-11", PlatformFilter::default()).unwrap();
+        let points =
+            timeline(&conn, "2026-08-01", "2026-08-11", PlatformFilter::default()).unwrap();
         let day = points.iter().find(|p| p.day == "2026-08-10").unwrap();
         assert_eq!(day.modrinth, 40);
         assert_eq!(day.curseforge, 75);
@@ -790,7 +850,8 @@ mod tests {
     #[test]
     fn per_project_groups_linked_projects_under_one_row() {
         let (conn, _, _) = seed();
-        let rows = per_project(&conn, "2026-08-01", "2026-08-11", PlatformFilter::default()).unwrap();
+        let rows =
+            per_project(&conn, "2026-08-01", "2026-08-11", PlatformFilter::default()).unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].modrinth_downloads, 23_225);
         assert_eq!(rows[0].curseforge_downloads, 86_753);
@@ -816,7 +877,8 @@ mod tests {
             },
         )
         .unwrap();
-        let rows = per_project(&conn, "2026-08-01", "2026-08-11", PlatformFilter::default()).unwrap();
+        let rows =
+            per_project(&conn, "2026-08-01", "2026-08-11", PlatformFilter::default()).unwrap();
         assert_eq!(rows.len(), 2);
         let solo = rows.iter().find(|r| r.title == "Solo").unwrap();
         assert_eq!(solo.curseforge_downloads, 0);
@@ -825,10 +887,8 @@ mod tests {
 
     #[test]
     fn platform_filter_reads_the_names_sent_by_the_interface() {
-        let both = PlatformFilter::from_names(Some(&[
-            "modrinth".to_string(),
-            "curseforge".to_string(),
-        ]));
+        let both =
+            PlatformFilter::from_names(Some(&["modrinth".to_string(), "curseforge".to_string()]));
         assert!(both.modrinth && both.curseforge);
 
         let only_cf = PlatformFilter::from_names(Some(&["curseforge".to_string()]));
@@ -947,7 +1007,8 @@ mod tests {
     fn spark_is_aligned_on_the_dense_axis() {
         let (conn, m, _) = seed();
         upsert_daily(&conn, m, "2026-08-09", Some(7), None, None).unwrap();
-        let rows = per_project(&conn, "2026-08-08", "2026-08-11", PlatformFilter::default()).unwrap();
+        let rows =
+            per_project(&conn, "2026-08-08", "2026-08-11", PlatformFilter::default()).unwrap();
         assert_eq!(
             rows[0].spark,
             vec![0, 7, 0],
@@ -1063,6 +1124,60 @@ mod tests {
         upsert_daily(&conn, m, "2026-08-10", Some(10), None, Some("2.5")).unwrap();
         let k = kpis(&conn, "2026-08-11", PlatformFilter::default()).unwrap();
         assert_eq!(k.revenue_total, "2.5");
+    }
+
+    #[test]
+    fn the_curseforge_balance_adds_up_with_the_modrinth_payout() {
+        let (conn, m, _) = seed();
+        upsert_daily(&conn, m, "2026-08-10", Some(10), None, Some("1.00")).unwrap();
+        crate::store::metrics::set_meta(
+            &conn,
+            "modrinth_payout",
+            r#"{"available":"12.63","pending":"4.84","withdrawn_lifetime":"70.42",
+                "withdrawn_ytd":"15.36","dates":{}}"#,
+        )
+        .unwrap();
+        // 423 points × 0,05 $ = 21,15 $
+        crate::store::metrics::record_cf_points(&conn, "2026-08-11", 423, "x").unwrap();
+
+        let k = kpis(&conn, "2026-08-11", PlatformFilter::default()).unwrap();
+        assert_eq!(k.revenue_modrinth, "87.89");
+        assert_eq!(k.revenue_curseforge, "21.15");
+        assert_eq!(k.revenue_total, "109.04");
+    }
+
+    #[test]
+    fn hiding_curseforge_removes_its_balance_from_the_total() {
+        let (conn, _, _) = seed();
+        crate::store::metrics::record_cf_points(&conn, "2026-08-11", 423, "x").unwrap();
+        let only_modrinth = PlatformFilter {
+            modrinth: true,
+            curseforge: false,
+        };
+        let k = kpis(&conn, "2026-08-11", only_modrinth).unwrap();
+        assert_eq!(k.revenue_curseforge, "0");
+        assert_eq!(k.revenue_total, "0");
+    }
+
+    #[test]
+    fn thirty_day_downloads_follow_the_platform_filter() {
+        let (conn, m, c) = seed();
+        upsert_daily(&conn, m, "2026-08-10", Some(100), None, None).unwrap();
+        upsert_daily(&conn, c, "2026-08-10", Some(30), None, None).unwrap();
+
+        let both = kpis(&conn, "2026-08-11", PlatformFilter::default()).unwrap();
+        assert_eq!(both.downloads_30d, 130);
+
+        let only_modrinth = PlatformFilter {
+            modrinth: true,
+            curseforge: false,
+        };
+        assert_eq!(
+            kpis(&conn, "2026-08-11", only_modrinth)
+                .unwrap()
+                .downloads_30d,
+            100
+        );
     }
 
     #[test]

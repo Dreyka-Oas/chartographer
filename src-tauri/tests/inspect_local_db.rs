@@ -110,7 +110,10 @@ fn resume_local_database() {
         .unwrap()
     {
         let (id, platform, title, slug) = row.unwrap();
-        println!("  {id:4} {platform:12} {title:24} {}", slug.unwrap_or_default());
+        println!(
+            "  {id:4} {platform:12} {title:24} {}",
+            slug.unwrap_or_default()
+        );
     }
 
     // Reproduit exactement ce que la commande `unlinked_projects` renvoie au
@@ -138,6 +141,66 @@ fn resume_local_database() {
             })
             .collect();
         println!("\nunlinked_projects renvoie : {payload:?}");
+    }
+
+    // Ce que la collecte du tableau de bord CurseForge a réellement déposé.
+    println!("\nCurseForge collecté :");
+    println!(
+        "  jours mesures    : {}",
+        count(
+            "SELECT COUNT(DISTINCT m.day) FROM metrics_daily m
+             JOIN projects p ON p.id = m.project_id WHERE p.platform = 'curseforge'"
+        )
+    );
+    println!(
+        "  mods couverts    : {}",
+        count(
+            "SELECT COUNT(DISTINCT m.project_id) FROM metrics_daily m
+             JOIN projects p ON p.id = m.project_id WHERE p.platform = 'curseforge'"
+        )
+    );
+    println!(
+        "  soldes de points : {} · dernier {} points",
+        count("SELECT COUNT(*) FROM cf_points"),
+        count("SELECT points FROM cf_points ORDER BY day DESC LIMIT 1")
+    );
+    println!(
+        "  mois de revenus  : {}",
+        count("SELECT COUNT(*) FROM cf_revenue")
+    );
+
+    let mut cf_stmt = conn
+        .prepare(
+            "SELECT p.title, COUNT(*), MIN(m.day), MAX(m.day), SUM(m.downloads)
+             FROM metrics_daily m JOIN projects p ON p.id = m.project_id
+             WHERE p.platform = 'curseforge' GROUP BY p.id ORDER BY COUNT(*) DESC LIMIT 25",
+        )
+        .unwrap();
+    for row in cf_stmt
+        .query_map([], |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, i64>(1)?,
+                r.get::<_, String>(2)?,
+                r.get::<_, String>(3)?,
+                r.get::<_, i64>(4)?,
+            ))
+        })
+        .unwrap()
+    {
+        let (title, days, from, to, total) = row.unwrap();
+        println!("  {title:26} {days:4} j  {from} → {to}  {total} tel.");
+    }
+
+    let mut money_stmt = conn
+        .prepare("SELECT month, amount_usd FROM cf_revenue ORDER BY month")
+        .unwrap();
+    for row in money_stmt
+        .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))
+        .unwrap()
+    {
+        let (month, amount) = row.unwrap();
+        println!("  revenus {month} : {amount} $");
     }
 
     let mut stmt = conn

@@ -57,7 +57,9 @@
       {
         label: "Gagné depuis l'origine",
         value: money(overview.kpis.revenue_total),
-        hint: "retiré, retirable et en maturation",
+        hint: `Modrinth ${money(overview.kpis.revenue_modrinth)} · CurseForge ${money(
+          overview.kpis.revenue_curseforge,
+        )}`,
       },
       {
         label: "Retirable maintenant",
@@ -148,18 +150,21 @@
 
 <!--
   La carte CurseForge vit hors des conditions ci-dessus : c'est justement quand
-  Modrinth est masqué ou la base vide qu'on vient y chercher son solde.
+  Modrinth est masqué ou la base vide qu'on vient y chercher son solde. Elle ne
+  disparaît que si l'on masque CurseForge lui-même.
 -->
-<div class="grid tail">
-  <div class="wide">
-    <Card
-      title="CurseForge — programme de points"
-      subtitle="Relevés depuis ton tableau de bord auteur · réglés dans les Réglages"
-    >
-      <CurseforgeSummary />
-    </Card>
+{#if dashboard.platforms.curseforge}
+  <div class="grid tail">
+    <div class="wide">
+      <Card
+        title="CurseForge — points et revenus"
+        subtitle="Relevé automatiquement sur ton tableau de bord auteur, à chaque synchronisation"
+      >
+        <CurseforgeSummary />
+      </Card>
+    </div>
   </div>
-</div>
+{/if}
 
 <style>
   .toolbar {

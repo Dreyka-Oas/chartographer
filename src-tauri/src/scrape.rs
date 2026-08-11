@@ -189,7 +189,10 @@ pub fn excerpt_around(text: &str, needle: &str, radius: usize) -> String {
         .nth(radius)
         .map(|(i, _)| found + i)
         .unwrap_or(text.len());
-    text[start..end].split_whitespace().collect::<Vec<_>>().join(" ")
+    text[start..end]
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 #[cfg(test)]
@@ -206,7 +209,13 @@ mod tests {
             r#"[{"date":"2026-08-01","downloads":42},{"date":"2026-08-02","downloads":51}]"#,
         ));
         assert_eq!(series.len(), 2);
-        assert_eq!(series[0], DailyPoint { day: "2026-08-01".into(), value: 42 });
+        assert_eq!(
+            series[0],
+            DailyPoint {
+                day: "2026-08-01".into(),
+                value: 42
+            }
+        );
         assert_eq!(series[1].value, 51);
     }
 
@@ -284,7 +293,10 @@ mod tests {
 
     #[test]
     fn returns_nothing_when_the_page_holds_no_balance() {
-        assert_eq!(extract_points("Connecte-toi pour voir ton tableau de bord"), None);
+        assert_eq!(
+            extract_points("Connecte-toi pour voir ton tableau de bord"),
+            None
+        );
         assert_eq!(extract_points(""), None);
     }
 }

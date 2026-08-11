@@ -77,7 +77,14 @@ class Dashboard {
     await this.refreshAuth();
     if (!this.auth?.connected) return;
     await this.load();
-    await this.autoSync();
+    const synced = await this.autoSync();
+    // La collecte CurseForge n'attend pas la péremption générale : elle est la
+    // seule source de son historique et ne coûte qu'une fenêtre cachée. Elle
+    // est déjà faite si une synchronisation vient d'avoir lieu.
+    if (!synced) {
+      await this.collectCurseforge();
+      await this.load();
+    }
     this.startAutoSync();
   }
 
@@ -90,9 +97,10 @@ class Dashboard {
   /**
    * Synchronise si — et seulement si — les données le méritent : base vide,
    * échéancier de reversement jamais relevé, ou dernier cycle trop ancien.
+   * Rend vrai quand un cycle a réellement eu lieu.
    */
-  async autoSync() {
-    if (this.syncing || !this.auth?.connected) return;
+  async autoSync(): Promise<boolean> {
+    if (this.syncing || !this.auth?.connected) return false;
     const age = this.dataAgeMs;
     const stale =
       this.overview === null ||
@@ -101,6 +109,7 @@ class Dashboard {
       age === null ||
       age > STALE_AFTER_MS;
     if (stale) await this.sync();
+    return stale;
   }
 
   /**
@@ -243,13 +252,15 @@ class Dashboard {
     try {
       this.curseforge = await api.collectCurseforge();
     } catch (e) {
-      // Une collecte ratée ne doit pas faire échouer la synchronisation.
+      // Une collecte ratée ne doit pas faire échouer la synchronisation, mais
+      // elle ne doit pas non plus se lire comme un relevé vide.
       this.curseforge = {
         needs_login: false,
         visited: [],
         imported: [],
         points: null,
         detail: message(e),
+        failed: true,
       };
     }
   }

@@ -202,7 +202,12 @@ pub fn pairing_state(state: State<'_, AppState>) -> Result<Vec<PairingEntry>> {
         let link_rows = p::links(conn)?;
         let solo = p::solo_ids(conn)?;
         let projects = p::list(conn)?;
-        let title_of = |id: i64| projects.iter().find(|p| p.id == id).map(|p| p.title.clone());
+        let title_of = |id: i64| {
+            projects
+                .iter()
+                .find(|p| p.id == id)
+                .map(|p| p.title.clone())
+        };
 
         Ok(projects
             .iter()
@@ -384,12 +389,65 @@ const READ_SCRIPT: &str = r#"(function () {
   };
 })()"#;
 
+/// Rend la fenêtre du tableau de bord, en la créant cachée si elle manque.
+///
+/// La collecte doit se faire seule : une fenêtre absente — jamais ouverte, ou
+/// refermée entre deux relevés — se rouvre au lieu d'interrompre le travail.
+async fn cf_window(app: &tauri::AppHandle) -> Result<tauri::WebviewWindow> {
+    if let Some(window) = app.get_webview_window(CF_WINDOW) {
+        return Ok(window);
+    }
+    ensure_curseforge_window(app, false)?;
+    let window = app
+        .get_webview_window(CF_WINDOW)
+        .ok_or_else(|| AppError::Config("la fenêtre CurseForge n'a pas pu s'ouvrir".into()))?;
+    wait_until_loaded(&window).await;
+    Ok(window)
+}
+
+/// Attend que l'application web du tableau de bord se soit dressée.
+///
+/// Son temps de chargement varie du simple au triple selon le réseau : sonder
+/// la page vaut mieux qu'une attente fixe, trop courte un jour et perdue l'autre.
+async fn wait_until_loaded(window: &tauri::WebviewWindow) {
+    const READY: &str = r#"(function () {
+      var body = document.body ? document.body.innerText : '';
+      return document.readyState + '|' + body.length;
+    })()"#;
+    let mut mute = 0;
+    for _ in 0..24 {
+        match eval_raw(window, READY).await {
+            Ok(raw) => {
+                mute = 0;
+                let state = raw.trim_matches('"').to_string();
+                let filled = state
+                    .split_once('|')
+                    .and_then(|(_, len)| len.parse::<usize>().ok())
+                    .unwrap_or(0);
+                if state.starts_with("complete") && filled > 200 {
+                    return;
+                }
+            }
+            // Une fenêtre qui ne répond plus ne répondra pas davantage en
+            // insistant : mieux vaut rendre la main que bloquer la collecte.
+            Err(_) => {
+                mute += 1;
+                if mute >= 3 {
+                    return;
+                }
+            }
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    }
+}
+
 /// Exécute un script dans la fenêtre CurseForge et rend son résultat.
 async fn eval_in_window(app: &tauri::AppHandle, script: &str) -> Result<String> {
-    let window = app.get_webview_window(CF_WINDOW).ok_or_else(|| {
-        AppError::Config("ouvre d'abord la fenêtre CurseForge et connecte-toi".into())
-    })?;
+    let window = cf_window(app).await?;
+    eval_raw(&window, script).await
+}
 
+async fn eval_raw(window: &tauri::WebviewWindow, script: &str) -> Result<String> {
     let (sender, receiver) = tokio::sync::oneshot::channel::<String>();
     let slot = std::sync::Mutex::new(Some(sender));
     window
@@ -501,9 +559,10 @@ pub async fn probe_curseforge(app: tauri::AppHandle) {
         Err(_) => return,
     };
 
-    let mut builder = tauri::WebviewWindowBuilder::new(&app, CF_WINDOW, tauri::WebviewUrl::External(url))
-        .title("CurseForge — sonde")
-        .inner_size(1180.0, 860.0);
+    let mut builder =
+        tauri::WebviewWindowBuilder::new(&app, CF_WINDOW, tauri::WebviewUrl::External(url))
+            .title("CurseForge — sonde")
+            .inner_size(1180.0, 860.0);
     if armed_early {
         builder = builder.initialization_script(CAPTURE_SCRIPT);
     }
@@ -745,14 +804,14 @@ pub async fn collect_curseforge(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> Result<CfCollect> {
-    ensure_curseforge_window(&app, false)?;
-    tokio::time::sleep(std::time::Duration::from_millis(3000)).await;
+    let window = cf_window(&app).await?;
+    wait_until_loaded(&window).await;
 
     let page = page_state(&app).await?;
     if asks_for_login(&page) {
         return Ok(CfCollect {
             needs_login: true,
-            detail: "session CurseForge expirée : reconnecte-toi une fois".into(),
+            detail: "session CurseForge expirée : une connexion est nécessaire".into(),
             ..Default::default()
         });
     }
@@ -843,20 +902,27 @@ pub async fn collect_curseforge(
             .store
             .with(|conn| crate::store::metrics::record_cf_points(conn, &today, value, &now))?;
     }
+    let months = crate::collect::parse_revenue_series(&fetched.revenue);
+    let (last_month, year_to_date) = crate::collect::parse_revenue_estimation(&fetched.estimation);
+    let now = Utc::now().to_rfc3339();
     state.store.with(|conn| {
-        crate::store::metrics::set_meta(conn, "curseforge_revenue", &fetched.revenue)?;
-        crate::store::metrics::set_meta(conn, "curseforge_revenue_estimate", &fetched.estimation)
+        for month in &months {
+            crate::store::metrics::record_cf_revenue(conn, &month.month, month.amount, &now)?;
+        }
+        let money = |value: Option<f64>| value.map(|v| format!("{v:.2}")).unwrap_or_default();
+        crate::store::metrics::set_meta(conn, "curseforge_revenue_last_month", &money(last_month))?;
+        crate::store::metrics::set_meta(conn, "curseforge_revenue_ytd", &money(year_to_date))
     })?;
 
-    // La fenêtre a fini son travail : elle disparaît.
-    if let Some(window) = app.get_webview_window(CF_WINDOW) {
-        let _ = window.close();
-    }
+    // La fenêtre a fini son travail : elle s'efface sans se fermer, pour garder
+    // la session ouverte et repartir sans rien recharger au prochain relevé.
+    let _ = window.hide();
 
     let detail = format!(
-        "{} jours relevés · {} mods rattachés{}",
+        "{} jours relevés · {} mods rattachés · {} mois de revenus{}",
         series.len(),
         imported.len(),
+        months.len(),
         if orphan_columns.is_empty() {
             String::new()
         } else {
@@ -1034,7 +1100,9 @@ pub async fn import_curseforge_capture(
         .map_err(|e| AppError::Data(format!("contenu illisible : {e}")))?;
     let series = crate::scrape::find_daily_series(&parsed);
     if series.is_empty() {
-        return Err(AppError::Data("aucune série datée dans cette source".into()));
+        return Err(AppError::Data(
+            "aucune série datée dans cette source".into(),
+        ));
     }
 
     state.store.with(|conn| {

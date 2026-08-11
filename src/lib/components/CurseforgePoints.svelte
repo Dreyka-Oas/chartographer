@@ -71,12 +71,14 @@
 </div>
 
 {#if report}
-  <div class="read" class:miss={report.needs_login || report.imported.length === 0}>
+  <div class="read" class:miss={report.needs_login || report.failed || report.imported.length === 0}>
     {#if report.needs_login}
       <span>
-        Connexion nécessaire : la fenêtre CurseForge vient de s'ouvrir. Identifie-toi, puis relance
-        la collecte. La session est ensuite conservée.
+        Ta session CurseForge a expiré. Ouvre la fenêtre ci-dessus, identifie-toi une fois : la
+        collecte reprendra seule ensuite, sans jamais réafficher cette page.
       </span>
+    {:else if report.failed}
+      <span>La collecte n'a pas pu aboutir. Rien n'a été relevé.</span>
     {:else}
       {#if report.points !== null}
         <span>Solde relevé : <b>{report.points} points</b>.</span>

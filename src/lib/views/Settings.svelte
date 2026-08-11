@@ -47,9 +47,12 @@
       Connecté en tant que <b>{dashboard.auth.username}</b> depuis
       {dashboard.auth.connected_since?.slice(0, 10)}.
     </p>
-    <button onclick={() => dashboard.logout()}>Se déconnecter</button>
+    <div class="pair">
+      <button onclick={() => dashboard.logout()}>Se déconnecter</button>
+      <button onclick={() => api.openTokenPage()}>Gérer mes tokens Modrinth</button>
+    </div>
   {:else}
-    <button onclick={() => dashboard.login()}>Se connecter avec Modrinth</button>
+    <p class="hint">Aucun token enregistré.</p>
   {/if}
 </section>
 

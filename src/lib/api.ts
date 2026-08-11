@@ -3,10 +3,9 @@ import type { AuthStatus, Overview, Settings, SyncReport } from "./types";
 
 export const api = {
   authStatus: () => invoke<AuthStatus>("auth_status"),
-  login: () => invoke<AuthStatus>("login"),
+  connect: (token: string) => invoke<AuthStatus>("connect", { token }),
   logout: () => invoke<AuthStatus>("logout"),
-  saveOauthApp: (clientId: string, clientSecret: string) =>
-    invoke<void>("save_oauth_app", { clientId, clientSecret }),
+  openTokenPage: () => invoke<void>("open_token_page"),
   getSettings: () => invoke<Settings>("get_settings"),
   saveSettings: (curseforgeUsername: string | null, rangeDays: number) =>
     invoke<void>("save_settings", { curseforgeUsername, rangeDays }),

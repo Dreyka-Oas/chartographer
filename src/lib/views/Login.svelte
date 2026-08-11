@@ -2,51 +2,62 @@
   import { api } from "../api";
   import ThemeToggle from "../components/ThemeToggle.svelte";
   import { dashboard } from "../state.svelte";
-  import type { AppErrorPayload } from "../types";
 
-  let clientId = $state("");
-  let clientSecret = $state("");
-  let saving = $state(false);
+  let token = $state("");
 
-  const needsApp = $derived(dashboard.auth?.oauth_app_configured === false);
-
-  async function saveApp() {
-    saving = true;
-    try {
-      await api.saveOauthApp(clientId, clientSecret);
-      await dashboard.refreshAuth();
-    } catch (e) {
-      dashboard.error = (e as AppErrorPayload)?.message ?? String(e);
-    } finally {
-      saving = false;
-    }
-  }
+  // Portées à cocher sur la page de création du token. Tout est en lecture seule.
+  const SCOPES = [
+    "Read user data",
+    "Read notifications",
+    "Read payouts",
+    "Access analytics",
+    "Read projects",
+    "Read versions",
+  ];
 </script>
 
 <div class="screen">
   <h1>Chartographer</h1>
   <p class="tagline">Tes statistiques Modrinth et CurseForge sur un seul écran.</p>
 
-  {#if needsApp}
-    <div class="setup">
-      <p>
-        Enregistre une application OAuth sur <code>modrinth.com/settings/applications</code>
-        avec <code>http://127.0.0.1/callback</code> comme URL de redirection, puis colle ses
-        identifiants ici. Cette étape disparaît si l'application est compilée avec
-        <code>MODRINTH_CLIENT_ID</code> et <code>MODRINTH_CLIENT_SECRET</code>.
-      </p>
-      <input bind:value={clientId} placeholder="client_id" />
-      <input bind:value={clientSecret} type="password" placeholder="client_secret" />
-      <button onclick={saveApp} disabled={saving || !clientId || !clientSecret}>Enregistrer</button>
-    </div>
-  {:else}
-    <button class="primary" onclick={() => dashboard.login()} disabled={dashboard.connecting}>
-      {dashboard.connecting ? "En attente du navigateur…" : "Se connecter avec Modrinth"}
+  <ol class="steps">
+    <li>
+      <button class="link" onclick={() => api.openTokenPage()}>
+        Ouvrir mes tokens Modrinth
+      </button>
+      puis clique <b>Create a PAT</b>.
+    </li>
+    <li>
+      Coche ces six autorisations, toutes en lecture seule :
+      <span class="scopes">
+        {#each SCOPES as scope (scope)}<code>{scope}</code>{/each}
+      </span>
+    </li>
+    <li>Copie le token et colle-le ici.</li>
+  </ol>
+
+  <form
+    onsubmit={(e) => {
+      e.preventDefault();
+      dashboard.connect(token);
+    }}
+  >
+    <input
+      bind:value={token}
+      type="password"
+      placeholder="mrp_…"
+      autocomplete="off"
+      spellcheck="false"
+    />
+    <button class="primary" type="submit" disabled={dashboard.connecting || !token.trim()}>
+      {dashboard.connecting ? "Vérification…" : "Se connecter"}
     </button>
-    <p class="hint">
-      Ton navigateur va s'ouvrir sur la page d'autorisation Modrinth. Rien à copier, rien à coller.
-    </p>
-  {/if}
+  </form>
+
+  <p class="hint">
+    Le token reste sur cette machine et n'est jamais transmis ailleurs qu'à Modrinth. CurseForge ne
+    demande rien : tes projets y sont retrouvés automatiquement.
+  </p>
 
   {#if dashboard.error}<p class="error">{dashboard.error}</p>{/if}
 
@@ -54,19 +65,19 @@
 </div>
 
 <style>
-  .corner {
-    position: fixed;
-    top: 14px;
-    right: 16px;
-  }
   .screen {
     min-height: 100vh;
     display: grid;
     place-content: center;
     justify-items: center;
-    gap: 10px;
+    gap: 12px;
     padding: 24px;
     text-align: center;
+  }
+  .corner {
+    position: fixed;
+    top: 14px;
+    right: 16px;
   }
   h1 {
     margin: 0;
@@ -74,65 +85,86 @@
     font-weight: 600;
   }
   .tagline {
-    margin: 0 0 18px;
+    margin: 0 0 10px;
     color: var(--text-dim);
+  }
+  .steps {
+    margin: 0;
+    padding: 0 0 0 20px;
+    max-width: 52ch;
+    text-align: left;
+    color: var(--text-dim);
+    font-size: 0.86rem;
+    line-height: 1.7;
+  }
+  .steps b {
+    color: var(--text);
+  }
+  .scopes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 5px;
+  }
+  code {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 1px 6px;
+    font-size: 0.78rem;
+    color: var(--text);
+  }
+  form {
+    display: flex;
+    gap: 8px;
+    width: min(460px, 100%);
+    margin-top: 6px;
+  }
+  input {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    padding: 10px 12px;
+    font: inherit;
+  }
+  input:focus {
+    outline: none;
+    border-color: var(--accent);
   }
   .primary {
     background: var(--accent);
     color: var(--on-accent);
     border: 0;
-    border-radius: 9px;
-    padding: 12px 26px;
+    border-radius: 8px;
+    padding: 10px 20px;
     font: inherit;
     font-weight: 600;
     cursor: pointer;
   }
   .primary:disabled {
-    opacity: 0.6;
+    opacity: 0.5;
     cursor: default;
+  }
+  .link {
+    background: none;
+    border: 0;
+    padding: 0;
+    font: inherit;
+    color: var(--accent);
+    text-decoration: underline;
+    cursor: pointer;
   }
   .hint {
     color: var(--text-dim);
-    font-size: 0.82rem;
-    max-width: 36ch;
-  }
-  .setup {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    max-width: 48ch;
-  }
-  .setup p {
-    color: var(--text-dim);
-    font-size: 0.84rem;
-    line-height: 1.5;
-    text-align: left;
-  }
-  code {
-    background: var(--surface-2);
-    border-radius: 4px;
-    padding: 1px 5px;
-    font-size: 0.9em;
-  }
-  input {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 7px;
-    color: var(--text);
-    padding: 9px 11px;
-    font: inherit;
-  }
-  button {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    color: var(--text);
-    border-radius: 7px;
-    padding: 9px 14px;
-    font: inherit;
-    cursor: pointer;
+    font-size: 0.78rem;
+    max-width: 52ch;
+    margin: 0;
   }
   .error {
     color: var(--error);
     font-size: 0.84rem;
+    max-width: 52ch;
   }
 </style>

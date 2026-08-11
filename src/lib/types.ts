@@ -75,7 +75,6 @@ export interface AuthStatus {
   connected: boolean;
   username: string | null;
   connected_since: string | null;
-  oauth_app_configured: boolean;
 }
 
 export interface Settings {

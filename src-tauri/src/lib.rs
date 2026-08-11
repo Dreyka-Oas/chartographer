@@ -3,7 +3,6 @@ pub mod config;
 pub mod error;
 pub mod matching;
 pub mod models;
-pub mod oauth;
 pub mod providers;
 pub mod store;
 pub mod sync;
@@ -29,9 +28,9 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::auth_status,
-            commands::login,
+            commands::connect,
             commands::logout,
-            commands::save_oauth_app,
+            commands::open_token_page,
             commands::get_settings,
             commands::save_settings,
             commands::sync_now,

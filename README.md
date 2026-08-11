@@ -26,21 +26,15 @@ Des installeurs `.deb`, `.rpm` et `.exe` sont publiés dans les [Releases](../..
 
 ## Configuration
 
-Rien à saisir. Au premier lancement, un bouton **Se connecter avec Modrinth** ouvre ton navigateur, tu autorises l'application, et c'est terminé. Le pseudo auteur CurseForge est déduit automatiquement de ton pseudo Modrinth ; un champ de réglage permet de le corriger si la détection échoue.
+Une seule chose à faire, une seule fois : coller un token Modrinth.
 
-Le token obtenu est écrit dans `session.json`, dans le dossier de données applicatif. Il ne quitte jamais le processus Rust et n'est jamais transmis à l'interface. Se déconnecter supprime le fichier.
+L'écran d'accueil ouvre directement [modrinth.com/settings/pats](https://modrinth.com/settings/pats) pour toi. Crée un token en cochant ces six autorisations, toutes en lecture seule :
 
-### Compiler avec ses propres identifiants OAuth
+`Read user data` · `Read notifications` · `Read payouts` · `Access analytics` · `Read projects` · `Read versions`
 
-L'application OAuth est enregistrée une fois sur [modrinth.com/settings/applications](https://modrinth.com/settings/applications), avec `http://127.0.0.1/callback` comme URL de redirection. Ses identifiants sont injectés à la compilation :
+Colle-le, c'est terminé. Le token est validé auprès de Modrinth avant d'être enregistré dans `session.json`, dans le dossier de données applicatif. Il ne quitte jamais le processus Rust et n'est jamais transmis à l'interface. Se déconnecter supprime le fichier.
 
-```powershell
-$env:MODRINTH_CLIENT_ID = "..."
-$env:MODRINTH_CLIENT_SECRET = "..."
-npm run tauri build
-```
-
-Un binaire compilé sans ces variables reste utilisable : l'écran de réglages explique alors la marche à suivre et accepte les deux valeurs.
+**CurseForge ne demande rien.** Le pseudo auteur est retrouvé automatiquement en interrogeant CFWidget avec tes slugs Modrinth. Un champ de réglage permet de le corriger dans le cas improbable où la détection échoue.
 
 ## Développement
 
@@ -66,11 +60,14 @@ Le réseau et la persistance vivent entièrement côté Rust. La webview ne voit
 src-tauri/src/
   providers/    clients Modrinth et CFWidget
   store/        SQLite, migrations, accès typés
+  config.rs     session, réglages
   matching.rs   appariement inter-plateformes
   sync.rs       orchestration
   commands.rs   surface exposée au front
 src/            interface Svelte 5 + ECharts
 ```
+
+L'interface suit le thème clair ou sombre du système, avec un bouton pour forcer l'un ou l'autre.
 
 Le design complet est dans [docs/superpowers/specs/2026-08-11-chartographer-design.md](docs/superpowers/specs/2026-08-11-chartographer-design.md).
 

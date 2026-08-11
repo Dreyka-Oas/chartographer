@@ -1,17 +1,18 @@
-use crate::config::{self, OauthApp, Settings};
+use crate::config::{self, Session, Settings};
 use crate::error::{AppError, Result};
 use crate::models::{Overview, Platform};
-use crate::oauth;
+use crate::providers::modrinth::ModrinthClient;
 use crate::store::{projects as p, queries, Store};
 use crate::sync::{self, SyncContext, SyncReport};
+use chrono::Utc;
 use serde::Serialize;
 use std::path::PathBuf;
 use tauri::{Manager, State};
 use tauri_plugin_opener::OpenerExt;
 
-/// Injectés à la compilation. Absents, l'écran de réglages prend le relais.
-const COMPILED_CLIENT_ID: Option<&str> = option_env!("MODRINTH_CLIENT_ID");
-const COMPILED_CLIENT_SECRET: Option<&str> = option_env!("MODRINTH_CLIENT_SECRET");
+/// Page où l'utilisateur génère son token personnel. Ouverte pour lui depuis
+/// l'écran de connexion, pour qu'il n'ait pas à la chercher.
+pub const PAT_PAGE: &str = "https://modrinth.com/settings/pats";
 
 pub struct AppState {
     pub store: Store,
@@ -19,10 +20,6 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn oauth_app(&self) -> Option<OauthApp> {
-        config::load_oauth_app(&self.data_dir, COMPILED_CLIENT_ID, COMPILED_CLIENT_SECRET)
-    }
-
     pub fn context(&self) -> Result<SyncContext> {
         Ok(SyncContext {
             session: config::require_token(&self.data_dir)?,
@@ -36,8 +33,6 @@ pub struct AuthStatus {
     pub connected: bool,
     pub username: Option<String>,
     pub connected_since: Option<String>,
-    /// Faux quand le binaire a été compilé sans identifiants et qu'aucun fichier ne les fournit.
-    pub oauth_app_configured: bool,
 }
 
 fn status_of(state: &AppState) -> AuthStatus {
@@ -46,7 +41,6 @@ fn status_of(state: &AppState) -> AuthStatus {
         connected: session.is_some(),
         username: session.as_ref().map(|s| s.username.clone()),
         connected_since: session.as_ref().map(|s| s.obtained_at.clone()),
-        oauth_app_configured: state.oauth_app().is_some(),
     }
 }
 
@@ -55,25 +49,25 @@ pub fn auth_status(state: State<'_, AppState>) -> AuthStatus {
     status_of(&state)
 }
 
+/// Valide le token auprès de Modrinth avant de l'écrire sur le disque :
+/// une saisie erronée est rejetée tout de suite, avec le message de l'API.
 #[tauri::command]
-pub async fn login(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<AuthStatus> {
-    let oauth_app = state.oauth_app().ok_or_else(|| {
-        AppError::Config(
-            "aucune application OAuth configurée : enregistre-en une sur modrinth.com/settings/applications"
-                .into(),
-        )
-    })?;
+pub async fn connect(state: State<'_, AppState>, token: String) -> Result<AuthStatus> {
+    let token = token.trim().to_string();
+    if token.is_empty() {
+        return Err(AppError::Config("colle ton token Modrinth".into()));
+    }
 
-    let opener = app.clone();
-    let session = oauth::login(&oauth_app, move |url| {
-        opener
-            .opener()
-            .open_url(url, None::<&str>)
-            .map_err(|e| AppError::Config(format!("ouverture du navigateur : {e}")))
-    })
-    .await?;
-
-    config::save_session(&state.data_dir, &session)?;
+    let user = ModrinthClient::new(&token)?.me().await?;
+    config::save_session(
+        &state.data_dir,
+        &Session {
+            token,
+            user_id: user.id,
+            username: user.username,
+            obtained_at: Utc::now().to_rfc3339(),
+        },
+    )?;
     Ok(status_of(&state))
 }
 
@@ -84,21 +78,10 @@ pub fn logout(state: State<'_, AppState>) -> Result<AuthStatus> {
 }
 
 #[tauri::command]
-pub fn save_oauth_app(
-    state: State<'_, AppState>,
-    client_id: String,
-    client_secret: String,
-) -> Result<()> {
-    let app = OauthApp {
-        client_id: client_id.trim().to_string(),
-        client_secret: client_secret.trim().to_string(),
-    };
-    if app.client_id.is_empty() || app.client_secret.is_empty() {
-        return Err(AppError::Config(
-            "client_id et client_secret sont requis".into(),
-        ));
-    }
-    config::save_oauth_app(&state.data_dir, &app)
+pub fn open_token_page(app: tauri::AppHandle) -> Result<()> {
+    app.opener()
+        .open_url(PAT_PAGE, None::<&str>)
+        .map_err(|e| AppError::Config(format!("ouverture du navigateur : {e}")))
 }
 
 #[tauri::command]

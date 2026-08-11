@@ -38,12 +38,10 @@ jobs:
       - uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          MODRINTH_CLIENT_ID: ${{ secrets.MODRINTH_CLIENT_ID }}
-          MODRINTH_CLIENT_SECRET: ${{ secrets.MODRINTH_CLIENT_SECRET }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "Chartographer ${{ github.ref_name }}"
-          releaseBody: "Installeurs .deb, .rpm et .exe."
+          releaseBody: "Installeurs .deb, .rpm et .exe. Au premier lancement, colle un token Modrinth en lecture seule ; CurseForge ne demande rien."
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}

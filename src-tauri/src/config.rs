@@ -2,7 +2,8 @@ use crate::error::{AppError, Result};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
-/// Token Modrinth obtenu par OAuth. Ne franchit jamais la frontière vers la webview.
+/// Token personnel Modrinth collé par l'utilisateur, validé puis conservé ici.
+/// Ne repart jamais vers la webview : les commandes ne renvoient qu'un pseudo.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Session {
     pub token: String,
@@ -32,13 +33,6 @@ impl Default for Settings {
     }
 }
 
-/// Identifiants de l'application OAuth enregistrée sur modrinth.com/settings/applications.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct OauthApp {
-    pub client_id: String,
-    pub client_secret: String,
-}
-
 pub fn db_path(app_data: &Path) -> PathBuf {
     app_data.join("chartographer.db")
 }
@@ -49,10 +43,6 @@ fn session_path(app_data: &Path) -> PathBuf {
 
 fn settings_path(app_data: &Path) -> PathBuf {
     app_data.join("settings.json")
-}
-
-fn oauth_path(app_data: &Path) -> PathBuf {
-    app_data.join("oauth.json")
 }
 
 fn read_json<T: for<'de> Deserialize<'de>>(path: PathBuf) -> Option<T> {
@@ -94,28 +84,6 @@ pub fn load_settings(app_data: &Path) -> Settings {
 
 pub fn save_settings(app_data: &Path, settings: &Settings) -> Result<()> {
     write_json(app_data, settings_path(app_data), settings)
-}
-
-/// Les valeurs injectées à la compilation priment sur le fichier.
-/// Un couple incomplet est ignoré : mieux vaut aucune application qu'une application cassée.
-pub fn load_oauth_app(
-    app_data: &Path,
-    compiled_id: Option<&str>,
-    compiled_secret: Option<&str>,
-) -> Option<OauthApp> {
-    if let (Some(id), Some(secret)) = (compiled_id, compiled_secret) {
-        if !id.is_empty() && !secret.is_empty() {
-            return Some(OauthApp {
-                client_id: id.into(),
-                client_secret: secret.into(),
-            });
-        }
-    }
-    read_json(oauth_path(app_data))
-}
-
-pub fn save_oauth_app(app_data: &Path, app: &OauthApp) -> Result<()> {
-    write_json(app_data, oauth_path(app_data), app)
 }
 
 #[cfg(test)]
@@ -163,29 +131,9 @@ mod tests {
     }
 
     #[test]
-    fn oauth_app_prefers_compiled_values_then_disk() {
-        let dir = tmp("oauth");
-        assert!(load_oauth_app(&dir, None, None).is_none());
-
-        save_oauth_app(
-            &dir,
-            &OauthApp {
-                client_id: "disk".into(),
-                client_secret: "s1".into(),
-            },
-        )
-        .unwrap();
-        assert_eq!(load_oauth_app(&dir, None, None).unwrap().client_id, "disk");
-
-        let compiled = load_oauth_app(&dir, Some("compiled"), Some("s2")).unwrap();
-        assert_eq!(compiled.client_id, "compiled");
-        assert_eq!(compiled.client_secret, "s2");
-    }
-
-    #[test]
-    fn oauth_app_ignores_half_filled_compiled_values() {
-        let dir = tmp("oauth-partial");
-        assert!(load_oauth_app(&dir, Some("only-id"), None).is_none());
-        assert!(load_oauth_app(&dir, None, Some("only-secret")).is_none());
+    fn require_token_explains_what_is_missing() {
+        let dir = tmp("require");
+        let message = require_token(&dir).unwrap_err().to_string();
+        assert!(message.contains("connecte-toi"));
     }
 }

@@ -21,14 +21,14 @@ class Dashboard {
   }
 
   /**
-   * Ouvre le navigateur et attend le retour. La commande ne rend la main
-   * qu'une fois la redirection reçue ou le délai dépassé.
+   * Valide le token côté Rust avant de l'enregistrer, puis enchaîne
+   * directement sur une première synchronisation.
    */
-  async login() {
+  async connect(token: string) {
     this.connecting = true;
     this.error = null;
     try {
-      this.auth = await api.login();
+      this.auth = await api.connect(token);
       await this.sync();
     } catch (e) {
       this.error = message(e);

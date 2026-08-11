@@ -19,20 +19,11 @@ Hors périmètre : publication de fichiers, édition de projets, exploration de 
 
 ### Modrinth
 
-L'authentification se fait par OAuth2, sans jamais demander de token à l'utilisateur. Endpoints vérifiés :
+L'authentification se fait par **token personnel collé une fois**. En-tête `Authorization: <token>`, **sans** préfixe `Bearer`. Un `User-Agent` explicite est requis sur tous les appels.
 
-| Endpoint | Rôle |
-|---|---|
-| `GET https://api.modrinth.com/_internal/oauth/authorize` | page de consentement, ouverte dans le navigateur système |
-| `POST https://api.modrinth.com/_internal/oauth/token` | échange du code contre un token |
+OAuth2 a été implémenté puis retiré. Le flux fonctionnait — `GET /_internal/oauth/authorize` et `POST /_internal/oauth/token` existent — mais il impose une condition rédhibitoire : l'application doit être déclarée au préalable sur `modrinth.com/settings/applications`, et cette déclaration n'est **pas** automatisable. `POST /_internal/oauth/app` accepte bien un corps JSON (`name`, `max_scopes`, `redirect_uris`) mais répond `401 Invalid Authentication Credentials` avec un token personnel valide, alors que ce même token passe sur `/v2/user` : les routes de gestion d'applications exigent une session de navigateur. Demander à chaque utilisateur de créer sa propre application OAuth est une friction bien pire que coller un token, d'où l'abandon.
 
-L'endpoint d'autorisation répond `500 { "error": "server_error", "description": "Authentication method was not valid" }` lorsqu'il est appelé sans session navigateur : il attend le cookie de session de modrinth.com. C'est ce qui impose le passage par le navigateur système plutôt qu'une webview interne.
-
-L'endpoint de token attend au minimum `grant_type=authorization_code`, `code`, `client_id` et `redirect_uri`, vérifiés par sondage successif des messages d'erreur. Un `client_id` inconnu produit `400 { "error": "invalid_client" }`.
-
-Le flux retenu est le code d'autorisation avec redirection en boucle locale : l'application ouvre un écouteur HTTP sur `127.0.0.1` sur un port libre, ouvre le navigateur sur l'URL d'autorisation, reçoit `?code=&state=` sur `/callback`, vérifie le `state`, échange le code, puis arrête l'écouteur. Le token obtenu est écrit dans le dossier de configuration applicatif et utilisé ensuite en en-tête `Authorization: <token>`, **sans** préfixe `Bearer`. Un `User-Agent` explicite est requis sur tous les appels.
-
-L'application OAuth est enregistrée une fois sur `modrinth.com/settings/applications`. Son `client_id` et son `client_secret` sont injectés à la compilation par les variables d'environnement `MODRINTH_CLIENT_ID` et `MODRINTH_CLIENT_SECRET`, lues via `option_env!`. Un binaire compilé sans ces variables reste fonctionnel : l'écran de réglages explique alors la marche à suivre et accepte les deux valeurs, stockées dans `oauth.json`. Le secret embarqué dans un binaire de bureau n'est pas réellement secret ; c'est le fonctionnement normal de ce flux et sans conséquence ici puisque le token obtenu ne quitte jamais la machine.
+L'écran d'accueil ouvre `https://modrinth.com/settings/pats` pour l'utilisateur et liste les six portées à cocher, toutes en lecture seule : `Read user data`, `Read notifications`, `Read payouts`, `Access analytics`, `Read projects`, `Read versions`. Le token est validé par un appel à `/v2/user` avant d'être écrit sur le disque : une saisie erronée est rejetée immédiatement avec le message de l'API.
 
 | Endpoint | Usage |
 |---|---|
@@ -62,7 +53,7 @@ Les statistiques viennent donc entièrement de CFWidget, public et sans authenti
 
 CFWidget renvoie `202` lorsqu'une ressource n'est pas encore en cache et qu'un rafraîchissement est mis en file d'attente. Le client doit traiter ce cas comme « réessayer plus tard », pas comme une erreur.
 
-Le seul paramètre CurseForge est le **pseudo auteur**, et il est déduit automatiquement : l'application essaie le pseudo Modrinth obtenu par OAuth, puis la variante suffixée `_official`. Un champ de réglage permet de le corriger si les deux échouent.
+Le seul paramètre CurseForge est le **pseudo auteur**, et il est déduit automatiquement sans jamais rien demander. L'application interroge `api.cfwidget.com/minecraft/mc-mods/{slug}` avec les slugs Modrinth déjà découverts et lit le tableau `members` de la réponse, dont l'entrée portant le titre `Owner` donne le pseudo réel — quel qu'il soit, même sans rapport avec le pseudo Modrinth. À défaut, elle essaie le pseudo Modrinth puis sa variante suffixée `_official`. Un champ de réglage permet de le corriger si tout échoue.
 
 CFWidget ne fournit aucun historique. L'historique CurseForge est donc **construit localement** : chaque synchronisation écrit un snapshot horodaté du total, et les deltas entre snapshots produisent la courbe. Les premiers jours après installation, la courbe CurseForge est vide — c'est attendu et l'interface le signale explicitement plutôt que d'afficher un graphique trompeur.
 
@@ -75,7 +66,6 @@ src-tauri/src/
   main.rs            point d'entrée, montage des commandes
   config.rs          chemins applicatifs, session, réglages
   error.rs           type d'erreur unifié, conversion vers le front
-  oauth.rs           flux OAuth Modrinth, écouteur de boucle locale
   providers/
     modrinth.rs      client HTTP Modrinth v2 + v3
     curseforge.rs    client CFWidget
@@ -223,20 +213,21 @@ Un écran unique, thème sombre par défaut, densité assumée. De haut en bas :
 
 Vue détaillée par mod : mêmes graphiques restreints au projet, plus la table de ses versions et l'écart de téléchargements entre plateformes.
 
-Écran de réglages : état de la connexion Modrinth avec bouton de connexion ou de déconnexion, pseudo CurseForge détecté et corrigeable, fenêtre d'historique, appariements manuels, purge et export de la base. Les identifiants d'application OAuth n'y apparaissent que si le binaire a été compilé sans eux.
+Écran de réglages : état de la connexion Modrinth avec déconnexion et raccourci vers la page des tokens, pseudo CurseForge détecté et corrigeable, fenêtre d'historique, appariements manuels, purge et export de la base.
 
-Premier lancement, écran unique : un bouton « Se connecter avec Modrinth ». Rien d'autre.
+Premier lancement, écran unique : trois étapes numérotées, un bouton qui ouvre la page des tokens Modrinth, la liste des six portées à cocher, et un champ de collage.
+
+Le thème suit `prefers-color-scheme` par défaut. Un bouton cycle entre automatique, clair et sombre ; le choix est mémorisé et l'emporte sur la préférence système dans les deux sens. Les palettes des graphiques dérivent du même état, donc axes, infobulles, carte et heatmap basculent avec le reste.
 
 ## Configuration et secrets
 
-Il n'y a rien à saisir. L'utilisateur clique « Se connecter avec Modrinth », le navigateur s'ouvre, il autorise, et l'application est configurée. Le pseudo CurseForge se déduit tout seul.
+Une seule saisie, une seule fois : le token Modrinth. Le pseudo CurseForge se déduit tout seul.
 
-Trois fichiers dans le dossier de données applicatif, aucun dans le dépôt :
+Deux fichiers dans le dossier de données applicatif, aucun dans le dépôt :
 
 | Fichier | Contenu |
 |---|---|
-| `session.json` | token Modrinth, date d'obtention, pseudo et identifiant de l'utilisateur |
-| `oauth.json` | `client_id` et `client_secret`, uniquement si le binaire n'a pas été compilé avec |
+| `session.json` | token Modrinth, date de saisie, pseudo et identifiant de l'utilisateur |
 | `settings.json` | pseudo CurseForge s'il a fallu le corriger, fenêtre d'historique |
 
 Le token ne franchit jamais la frontière vers la webview : les commandes Tauri renvoient un état de connexion et un pseudo, jamais la valeur. La déconnexion supprime `session.json` et purge l'état en mémoire.
@@ -251,7 +242,7 @@ Les échecs partiels sont la norme, pas l'exception : l'interface affiche toujou
 
 ## Tests
 
-Tests unitaires Rust sur l'appariement (les cas réels `mobsblocker`/`mobblocker` et `colony`/`Colony Project` sont des cas de test), sur le parsing des réponses d'analyse à partir de fixtures JSON enregistrées, sur l'arithmétique décimale des revenus, et sur la construction de l'URL d'autorisation OAuth ainsi que la validation du paramètre `state`. Tests d'intégration du store sur base SQLite en mémoire, incluant les migrations et l'idempotence des écritures. Tests front Vitest sur les transformations de séries alimentant les graphiques.
+Tests unitaires Rust sur l'appariement (les cas réels `mobsblocker`/`mobblocker` et `colony`/`Colony Project` sont des cas de test), sur le parsing des réponses d'analyse à partir de fixtures JSON enregistrées, sur l'extraction du propriétaire CFWidget, et sur l'arithmétique décimale des revenus. Tests d'intégration du store sur base SQLite en mémoire, incluant les migrations et l'idempotence des écritures. Tests front Vitest sur les transformations de séries alimentant les graphiques.
 
 Aucun appel réseau réel en intégration continue : toutes les réponses distantes sont des fixtures.
 
@@ -261,7 +252,7 @@ GitHub Actions, déclenchement sur tag `v*`. Matrice : `ubuntu-latest` produit `
 
 ## Versions retenues
 
-Rust : tauri 2.11, tauri-build 2.6, tauri-plugin-opener 2.5, rusqlite 0.40 (feature `bundled`), reqwest 0.13, tokio 1.53 (dont `net` pour l'écouteur de boucle locale), serde 1.0, chrono 0.4, rust_decimal 1.42, strsim 0.11, thiserror 2.0, anyhow 1.0, tracing 0.1.
+Rust : tauri 2.11, tauri-build 2.6, tauri-plugin-opener 2.5, rusqlite 0.40 (feature `bundled`), reqwest 0.13, tokio 1.53, serde 1.0, chrono 0.4, rust_decimal 1.42, strsim 0.11, thiserror 2.0, anyhow 1.0, tracing 0.1.
 
 Node : @tauri-apps/cli 2.11, @tauri-apps/api 2.11, svelte 5.56, vite 8.2, echarts 6.1, typescript 7.0, vitest 4.1.
 
@@ -273,8 +264,8 @@ Clé CurseForge Core API : demanderait une validation manuelle côté CurseForge
 
 Token d'upload CurseForge : n'ouvre que le catalogue des versions de jeu, aucune statistique. Supprimé du périmètre, ce qui retire toute authentification côté CurseForge.
 
-Saisie manuelle d'un token Modrinth : remplacée par le flux OAuth navigateur. Aucun champ de token n'est proposé, y compris en repli.
+**OAuth2 Modrinth : implémenté puis retiré.** Le flux marchait, mais il exige que chaque personne installant l'application déclare au préalable une application OAuth sur son compte Modrinth — la création par API est fermée aux tokens personnels (`401` vérifié). Faire créer une application OAuth à un utilisateur est une friction bien supérieure à un copier-coller de token. Le code correspondant a été supprimé plutôt que laissé en repli mort.
 
-Webview interne pour la page de consentement : écartée. La page d'autorisation dépend du cookie de session de modrinth.com, que seul le navigateur de l'utilisateur possède, et faire saisir un mot de passe dans une webview applicative est un anti-patron.
+Webview interne pour une page de connexion : écartée dans tous les cas. Faire saisir un mot de passe Modrinth dans une webview applicative est un anti-patron.
 
 Stockage du token dans le trousseau système : écarté au profit d'un `session.json` dans le dossier de données applicatif, plus simple à purger et à déboguer.

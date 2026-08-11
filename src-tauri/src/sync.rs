@@ -1,0 +1,475 @@
+use crate::config::{Session, Settings};
+use crate::error::{AppError, Result};
+use crate::matching::{match_projects, Candidate};
+use crate::models::Platform;
+use crate::providers::curseforge::{CfFetch, CurseForgeClient};
+use crate::providers::modrinth::{timestamp_to_day, ModrinthClient};
+use crate::store::metrics as m;
+use crate::store::projects as p;
+use crate::store::queries::shift_day;
+use crate::store::Store;
+use chrono::{DateTime, NaiveDate, TimeZone, Utc};
+use rusqlite::Connection;
+use serde::Serialize;
+
+/// Fenêtre maximale récupérée lors du tout premier rafraîchissement.
+pub const INITIAL_WINDOW_DAYS: i64 = 365;
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SyncReport {
+    pub provider: String,
+    pub status: String,
+    pub detail: String,
+}
+
+/// Tout ce dont la synchronisation a besoin : la session OAuth et les réglages.
+pub struct SyncContext {
+    pub session: Session,
+    pub settings: Settings,
+}
+
+pub fn today_utc() -> String {
+    Utc::now().format("%Y-%m-%d").to_string()
+}
+
+pub fn window_start(last_known_day: Option<&str>, today: &str, fallback_days: i64) -> String {
+    match last_known_day {
+        Some(day) => day.to_string(),
+        None => shift_day(today, -fallback_days),
+    }
+}
+
+pub fn username_candidates(modrinth_username: &str) -> Vec<String> {
+    vec![
+        modrinth_username.to_string(),
+        format!("{modrinth_username}_official"),
+    ]
+}
+
+fn to_datetime(day: &str) -> DateTime<Utc> {
+    NaiveDate::parse_from_str(day, "%Y-%m-%d")
+        .ok()
+        .and_then(|d| d.and_hms_opt(0, 0, 0))
+        .and_then(|d| Utc.from_local_datetime(&d).single())
+        .unwrap_or_else(Utc::now)
+}
+
+pub fn apply_matches(conn: &Connection) -> Result<usize> {
+    let projects = p::list(conn)?;
+    let to_candidate = |platform: Platform| -> Vec<Candidate> {
+        projects
+            .iter()
+            .filter(|x| x.platform == platform && x.archived_at.is_none())
+            .map(|x| Candidate {
+                id: x.id,
+                slug: x.slug.clone(),
+                title: x.title.clone(),
+            })
+            .collect()
+    };
+
+    p::clear_automatic_links(conn)?;
+    let matches = match_projects(
+        &to_candidate(Platform::Modrinth),
+        &to_candidate(Platform::CurseForge),
+    );
+    for found in &matches {
+        p::upsert_link(
+            conn,
+            found.modrinth_id,
+            found.curseforge_id,
+            found.confidence,
+            false,
+        )?;
+    }
+    Ok(matches.len())
+}
+
+async fn run_provider<F>(store: &Store, provider: &str, work: F) -> SyncReport
+where
+    F: std::future::Future<Output = Result<String>>,
+{
+    let started = Utc::now().to_rfc3339();
+    let run_id = store
+        .with(|conn| m::start_sync_run(conn, provider, &started))
+        .unwrap_or(0);
+
+    let (status, detail) = match work.await {
+        Ok(detail) => ("ok".to_string(), detail),
+        Err(e) => ("failed".to_string(), e.to_string()),
+    };
+
+    let finished = Utc::now().to_rfc3339();
+    let _ = store.with(|conn| m::finish_sync_run(conn, run_id, &finished, &status, &detail));
+    SyncReport {
+        provider: provider.to_string(),
+        status,
+        detail,
+    }
+}
+
+async fn discover_modrinth(store: &Store, ctx: &SyncContext) -> Result<String> {
+    let client = ModrinthClient::new(&ctx.session.token)?;
+    let user = client.me().await?;
+    let projects = client.projects(&user.id).await?;
+    let now = Utc::now().to_rfc3339();
+    let seen: Vec<String> = projects.iter().map(|x| x.id.clone()).collect();
+
+    store.with(|conn| {
+        for project in &projects {
+            p::upsert(
+                conn,
+                &p::ProjectUpsert {
+                    platform: Platform::Modrinth,
+                    ext_id: project.id.clone(),
+                    slug: Some(project.slug.clone()),
+                    title: project.title.clone(),
+                    project_type: project.project_type.clone(),
+                    url: Some(format!("https://modrinth.com/mod/{}", project.slug)),
+                    icon_url: project.icon_url.clone(),
+                    created_at: project.published.clone(),
+                    total_downloads: project.downloads,
+                    followers: project.followers,
+                },
+            )?;
+        }
+        p::archive_missing(conn, Platform::Modrinth, &seen, &now)?;
+        m::set_meta(
+            conn,
+            "modrinth_balance",
+            &user.payout_data.balance.to_string(),
+        )?;
+        Ok(())
+    })?;
+
+    Ok(format!("{} projets", projects.len()))
+}
+
+async fn discover_curseforge(store: &Store, ctx: &SyncContext) -> Result<String> {
+    let client = CurseForgeClient::new()?;
+    let candidates = match ctx.settings.curseforge_username.as_deref() {
+        Some(name) => vec![name.to_string()],
+        None => username_candidates(&ctx.session.username),
+    };
+
+    let mut author = None;
+    for candidate in &candidates {
+        if candidate.is_empty() {
+            continue;
+        }
+        if let Ok(found) = client.author(candidate).await {
+            author = Some(found);
+            break;
+        }
+    }
+    let author = author.ok_or_else(|| {
+        AppError::Config(format!(
+            "aucun auteur CurseForge trouvé parmi : {}",
+            candidates.join(", ")
+        ))
+    })?;
+
+    let now = Utc::now().to_rfc3339();
+    let mut seen: Vec<String> = Vec::new();
+    let mut queued = 0usize;
+
+    for entry in &author.projects {
+        match client.project(entry.id).await? {
+            CfFetch::Queued => queued += 1,
+            CfFetch::Ready(project) => {
+                seen.push(project.id.to_string());
+                store.with(|conn| {
+                    let project_id = p::upsert(
+                        conn,
+                        &p::ProjectUpsert {
+                            platform: Platform::CurseForge,
+                            ext_id: project.id.to_string(),
+                            slug: project.slug.clone(),
+                            title: project.title.clone(),
+                            project_type: project.project_type.clone(),
+                            url: project.url.clone(),
+                            icon_url: project.thumbnail.clone(),
+                            created_at: project.created_at.clone(),
+                            total_downloads: project.downloads_total,
+                            followers: 0,
+                        },
+                    )?;
+                    m::insert_snapshot(
+                        conn,
+                        project_id,
+                        &now,
+                        project.downloads_total,
+                        Some(project.downloads_monthly),
+                    )
+                })?;
+            }
+        }
+    }
+
+    if !seen.is_empty() {
+        store.with(|conn| p::archive_missing(conn, Platform::CurseForge, &seen, &now))?;
+    }
+    store.with(|conn| m::set_meta(conn, "curseforge_username", &author.username))?;
+
+    Ok(format!(
+        "{} projets, {queued} en file d'attente",
+        seen.len()
+    ))
+}
+
+async fn refresh_modrinth(store: &Store, ctx: &SyncContext) -> Result<String> {
+    let client = ModrinthClient::new(&ctx.session.token)?;
+    let user_id = ctx.session.user_id.clone();
+
+    let rows = store.with(|conn| p::list_by_platform(conn, Platform::Modrinth))?;
+    let ids: Vec<String> = rows.iter().map(|r| r.ext_id.clone()).collect();
+    if ids.is_empty() {
+        return Ok("aucun projet".into());
+    }
+    let by_ext: std::collections::HashMap<String, i64> =
+        rows.iter().map(|r| (r.ext_id.clone(), r.id)).collect();
+
+    let today = today_utc();
+    let last = store.with(m::last_metrics_day)?;
+    let start = to_datetime(&window_start(last.as_deref(), &today, INITIAL_WINDOW_DAYS));
+    let end = to_datetime(&shift_day(&today, 1));
+
+    let downloads = client.analytics_downloads(&ids, start, end).await?;
+    let views = client.analytics_views(&ids, start, end).await?;
+    let revenue = client.analytics_revenue(&ids, start, end).await?;
+    let countries = client.analytics_countries(&ids, start, end).await?;
+
+    store.with(|conn| {
+        for (ext_id, series) in &downloads {
+            let Some(project_id) = by_ext.get(ext_id) else {
+                continue;
+            };
+            for (ts, value) in series {
+                m::upsert_daily(
+                    conn,
+                    *project_id,
+                    &timestamp_to_day(*ts),
+                    Some(*value),
+                    None,
+                    None,
+                )?;
+            }
+        }
+        for (ext_id, series) in &views {
+            let Some(project_id) = by_ext.get(ext_id) else {
+                continue;
+            };
+            for (ts, value) in series {
+                m::upsert_daily(
+                    conn,
+                    *project_id,
+                    &timestamp_to_day(*ts),
+                    None,
+                    Some(*value),
+                    None,
+                )?;
+            }
+        }
+        for (ext_id, series) in &revenue {
+            let Some(project_id) = by_ext.get(ext_id) else {
+                continue;
+            };
+            for (ts, value) in series {
+                m::upsert_daily(
+                    conn,
+                    *project_id,
+                    &timestamp_to_day(*ts),
+                    None,
+                    None,
+                    Some(&value.to_string()),
+                )?;
+            }
+        }
+        for (ext_id, per_country) in &countries {
+            let Some(project_id) = by_ext.get(ext_id) else {
+                continue;
+            };
+            for (code, value) in per_country {
+                m::upsert_country(conn, *project_id, &today, code, *value)?;
+            }
+        }
+        Ok(())
+    })?;
+
+    for row in &rows {
+        let versions = client.versions(&row.ext_id).await?;
+        store.with(|conn| {
+            for version in &versions {
+                m::upsert_version(
+                    conn,
+                    row.id,
+                    &version.id,
+                    version.version_number.as_deref(),
+                    &version.game_versions,
+                    &version.loaders,
+                    version.downloads,
+                    version.date_published.as_deref(),
+                )?;
+            }
+            Ok(())
+        })?;
+    }
+
+    let notifications = client.notifications(&user_id).await?;
+    store.with(|conn| {
+        for notification in &notifications {
+            let project_id = notification
+                .project_ext_id
+                .as_ref()
+                .and_then(|ext| by_ext.get(ext).copied());
+            let title = project_id
+                .and_then(|id| rows.iter().find(|r| r.id == id))
+                .map(|r| r.title.clone())
+                .unwrap_or_else(|| "Modrinth".into());
+            m::insert_event(
+                conn,
+                "modrinth",
+                &notification.occurred_at,
+                &notification.kind,
+                project_id,
+                &title,
+                &notification.detail,
+            )?;
+        }
+        Ok(())
+    })?;
+
+    Ok(format!(
+        "{} projets, {} notifications",
+        rows.len(),
+        notifications.len()
+    ))
+}
+
+async fn snapshot_curseforge(store: &Store) -> Result<String> {
+    let client = CurseForgeClient::new()?;
+    let rows = store.with(|conn| p::list_by_platform(conn, Platform::CurseForge))?;
+    let now = Utc::now().to_rfc3339();
+    let mut written = 0usize;
+    let mut queued = 0usize;
+
+    for row in &rows {
+        let Ok(id) = row.ext_id.parse::<i64>() else {
+            continue;
+        };
+        match client.project(id).await? {
+            CfFetch::Queued => queued += 1,
+            CfFetch::Ready(project) => {
+                store.with(|conn| {
+                    m::insert_snapshot(
+                        conn,
+                        row.id,
+                        &now,
+                        project.downloads_total,
+                        Some(project.downloads_monthly),
+                    )?;
+                    p::upsert(
+                        conn,
+                        &p::ProjectUpsert {
+                            platform: Platform::CurseForge,
+                            ext_id: row.ext_id.clone(),
+                            slug: project.slug.clone(),
+                            title: project.title.clone(),
+                            project_type: project.project_type.clone(),
+                            url: project.url.clone(),
+                            icon_url: project.thumbnail.clone(),
+                            created_at: project.created_at.clone(),
+                            total_downloads: project.downloads_total,
+                            followers: 0,
+                        },
+                    )?;
+                    Ok(())
+                })?;
+                written += 1;
+            }
+        }
+    }
+    Ok(format!("{written} snapshots, {queued} en file d'attente"))
+}
+
+/// Cycle complet : découverte, appariement, rafraîchissement, snapshot.
+/// Aucun échec ne bloque les autres providers.
+pub async fn full(store: &Store, ctx: &SyncContext) -> Vec<SyncReport> {
+    let mut reports = Vec::new();
+    reports.push(run_provider(store, "modrinth", discover_modrinth(store, ctx)).await);
+    reports.push(run_provider(store, "curseforge", discover_curseforge(store, ctx)).await);
+
+    if let Err(e) = store.with(apply_matches) {
+        reports.push(SyncReport {
+            provider: "matching".into(),
+            status: "failed".into(),
+            detail: e.to_string(),
+        });
+    }
+
+    reports.push(run_provider(store, "modrinth-analytics", refresh_modrinth(store, ctx)).await);
+    reports.push(run_provider(store, "curseforge-snapshot", snapshot_curseforge(store)).await);
+    reports
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::store::projects::{links, list};
+    use crate::store::Store;
+
+    #[test]
+    fn analytics_window_starts_after_the_last_known_day() {
+        assert_eq!(
+            window_start(Some("2026-08-05"), "2026-08-11", 365),
+            "2026-08-05"
+        );
+        assert_eq!(window_start(None, "2026-08-11", 30), "2026-07-12");
+    }
+
+    #[test]
+    fn candidate_username_variants_are_ordered() {
+        assert_eq!(
+            username_candidates("DreykaOas"),
+            vec!["DreykaOas".to_string(), "DreykaOas_official".to_string()]
+        );
+    }
+
+    #[test]
+    fn apply_matches_writes_links_for_identical_titles() {
+        let store = Store::open_in_memory().unwrap();
+        store
+            .with(|conn| {
+                use crate::store::projects::{upsert, ProjectUpsert};
+                let mk = |platform, ext: &str, slug: &str, title: &str| ProjectUpsert {
+                    platform,
+                    ext_id: ext.into(),
+                    slug: Some(slug.into()),
+                    title: title.into(),
+                    project_type: None,
+                    url: None,
+                    icon_url: None,
+                    created_at: None,
+                    total_downloads: 0,
+                    followers: 0,
+                };
+                upsert(
+                    conn,
+                    &mk(Platform::Modrinth, "m1", "mobsblocker", "Mobs Blocker"),
+                )
+                .unwrap();
+                upsert(
+                    conn,
+                    &mk(Platform::CurseForge, "c1", "mobblocker", "Mobs Blocker"),
+                )
+                .unwrap();
+                apply_matches(conn)
+            })
+            .unwrap();
+
+        let rows = store.with(links).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].confidence, 1.0);
+        assert_eq!(store.with(list).unwrap().len(), 2);
+    }
+}

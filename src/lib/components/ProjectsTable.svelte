@@ -1,7 +1,9 @@
 <script lang="ts">
   import Chart from "../charts/Chart.svelte";
   import { sparklineOption } from "../charts/sparkline";
+  import { palette } from "../charts/theme";
   import { compactNumber } from "../format";
+  import { theme } from "../theme.svelte";
   import type { ProjectSummary } from "../types";
 
   let { projects, onselect }: { projects: ProjectSummary[]; onselect: (key: string) => void } =
@@ -68,7 +70,7 @@
         </td>
         <td class="spark">
           {#if row.spark.length > 1}
-            <Chart option={sparklineOption(row.spark)} height={30} />
+            <Chart option={sparklineOption(row.spark, palette(theme.dark))} height={30} />
           {/if}
         </td>
         <td>{compactNumber(row.modrinth_downloads)}</td>

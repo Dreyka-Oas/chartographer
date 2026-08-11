@@ -1,5 +1,5 @@
 import type { LoaderCell } from "../types";
-import { AXIS_STYLE, COLORS, TOOLTIP } from "./theme";
+import { axisStyle, DARK, tooltip, type Palette } from "./theme";
 
 /** Trie les versions de jeu par ordre numérique croissant plutôt qu'alphabétique. */
 function sortGameVersions(values: string[]): string[] {
@@ -14,21 +14,22 @@ function sortGameVersions(values: string[]): string[] {
   });
 }
 
-export function heatmapOption(cells: LoaderCell[]) {
+export function heatmapOption(cells: LoaderCell[], p: Palette = DARK) {
   const gameVersions = sortGameVersions([...new Set(cells.map((c) => c.game_version))]);
   const loaders = [...new Set(cells.map((c) => c.loader))].sort();
   const max = cells.reduce((acc, c) => Math.max(acc, c.downloads), 0);
+  const axis = axisStyle(p);
 
   return {
     grid: { left: 90, right: 20, top: 16, bottom: 70, containLabel: true },
-    tooltip: { position: "top", ...TOOLTIP },
+    tooltip: { position: "top", ...tooltip(p) },
     xAxis: {
       type: "category",
       data: gameVersions,
-      ...AXIS_STYLE,
-      axisLabel: { color: COLORS.textDim, rotate: 45 },
+      ...axis,
+      axisLabel: { color: p.textDim, rotate: 45 },
     },
-    yAxis: { type: "category", data: loaders, ...AXIS_STYLE },
+    yAxis: { type: "category", data: loaders, ...axis },
     visualMap: {
       min: 0,
       max,
@@ -36,8 +37,8 @@ export function heatmapOption(cells: LoaderCell[]) {
       orient: "horizontal",
       left: "center",
       bottom: 0,
-      textStyle: { color: COLORS.textDim },
-      inRange: { color: ["#14181d", COLORS.accent] },
+      textStyle: { color: p.textDim },
+      inRange: { color: [p.empty, p.accent] },
     },
     series: [
       {
@@ -47,7 +48,7 @@ export function heatmapOption(cells: LoaderCell[]) {
           loaders.indexOf(c.loader),
           c.downloads,
         ]),
-        emphasis: { itemStyle: { borderColor: COLORS.text, borderWidth: 1 } },
+        emphasis: { itemStyle: { borderColor: p.text, borderWidth: 1 } },
       },
     ],
   };

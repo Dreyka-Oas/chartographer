@@ -148,7 +148,7 @@
   }
   .primary {
     background: var(--accent);
-    color: #08110d;
+    color: var(--on-accent);
     border: 0;
     font-weight: 600;
   }

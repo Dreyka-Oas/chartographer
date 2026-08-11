@@ -1,5 +1,6 @@
 <script lang="ts">
   import { api } from "../api";
+  import ThemeToggle from "../components/ThemeToggle.svelte";
   import { dashboard } from "../state.svelte";
   import type { AppErrorPayload } from "../types";
 
@@ -48,9 +49,16 @@
   {/if}
 
   {#if dashboard.error}<p class="error">{dashboard.error}</p>{/if}
+
+  <div class="corner"><ThemeToggle /></div>
 </div>
 
 <style>
+  .corner {
+    position: fixed;
+    top: 14px;
+    right: 16px;
+  }
   .screen {
     min-height: 100vh;
     display: grid;
@@ -71,7 +79,7 @@
   }
   .primary {
     background: var(--accent);
-    color: #08110d;
+    color: var(--on-accent);
     border: 0;
     border-radius: 9px;
     padding: 12px 26px;

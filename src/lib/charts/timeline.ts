@@ -1,22 +1,23 @@
 import type { TimelinePoint } from "../types";
-import { AXIS_STYLE, BASE_GRID, COLORS, TOOLTIP } from "./theme";
+import { axisStyle, BASE_GRID, DARK, tooltip, type Palette } from "./theme";
 
-export function timelineOption(points: TimelinePoint[], stacked: boolean) {
+export function timelineOption(points: TimelinePoint[], stacked: boolean, p: Palette = DARK) {
   const stack = stacked ? "downloads" : undefined;
+  const axis = axisStyle(p);
   return {
     grid: BASE_GRID,
-    tooltip: { trigger: "axis", ...TOOLTIP },
-    legend: { data: ["Modrinth", "CurseForge"], textStyle: { color: COLORS.textDim }, top: 0 },
-    xAxis: { type: "category", data: points.map((p) => p.day), ...AXIS_STYLE },
-    yAxis: { type: "value", ...AXIS_STYLE },
+    tooltip: { trigger: "axis", ...tooltip(p) },
+    legend: { data: ["Modrinth", "CurseForge"], textStyle: { color: p.textDim }, top: 0 },
+    xAxis: { type: "category", data: points.map((x) => x.day), ...axis },
+    yAxis: { type: "value", ...axis },
     dataZoom: [
       { type: "inside", start: 0, end: 100 },
       {
         type: "slider",
         height: 20,
         bottom: 8,
-        borderColor: COLORS.grid,
-        textStyle: { color: COLORS.textDim },
+        borderColor: p.grid,
+        textStyle: { color: p.textDim },
       },
     ],
     series: [
@@ -27,8 +28,8 @@ export function timelineOption(points: TimelinePoint[], stacked: boolean) {
         smooth: true,
         showSymbol: false,
         areaStyle: { opacity: 0.25 },
-        itemStyle: { color: COLORS.modrinth },
-        data: points.map((p) => p.modrinth),
+        itemStyle: { color: p.modrinth },
+        data: points.map((x) => x.modrinth),
       },
       {
         name: "CurseForge",
@@ -37,8 +38,8 @@ export function timelineOption(points: TimelinePoint[], stacked: boolean) {
         smooth: true,
         showSymbol: false,
         areaStyle: { opacity: 0.25 },
-        itemStyle: { color: COLORS.curseforge },
-        data: points.map((p) => p.curseforge),
+        itemStyle: { color: p.curseforge },
+        data: points.map((x) => x.curseforge),
       },
     ],
   };

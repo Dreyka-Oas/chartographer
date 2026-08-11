@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ThemeToggle from "./lib/components/ThemeToggle.svelte";
   import { dashboard } from "./lib/state.svelte";
   import Login from "./lib/views/Login.svelte";
   import ProjectDetail from "./lib/views/ProjectDetail.svelte";
@@ -35,6 +36,7 @@
     </button>
     <button class:active={view === "settings"} onclick={() => (view = "settings")}>Réglages</button>
     <span class="user">{dashboard.auth.username}</span>
+    <ThemeToggle />
   </nav>
 
   <main>
@@ -80,6 +82,9 @@
     margin-left: auto;
     color: var(--text-dim);
     font-size: 0.82rem;
+  }
+  nav :global(button) {
+    flex-shrink: 0;
   }
   main {
     padding: 18px 20px 40px;

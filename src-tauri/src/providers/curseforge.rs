@@ -52,6 +52,29 @@ pub fn parse_author(raw: &str) -> Result<CfAuthor> {
     Ok(serde_json::from_str(raw)?)
 }
 
+/// Pseudo du propriétaire d'un projet CFWidget.
+/// Le membre portant le titre `Owner` prime ; à défaut on prend le premier.
+pub fn parse_owner(raw: &str) -> Option<String> {
+    #[derive(Deserialize)]
+    struct Member {
+        #[serde(default)]
+        title: String,
+        username: String,
+    }
+    #[derive(Deserialize)]
+    struct Raw {
+        #[serde(default)]
+        members: Vec<Member>,
+    }
+
+    let raw: Raw = serde_json::from_str(raw).ok()?;
+    raw.members
+        .iter()
+        .find(|m| m.title.eq_ignore_ascii_case("owner"))
+        .or_else(|| raw.members.first())
+        .map(|m| m.username.clone())
+}
+
 pub fn parse_project(raw: &str) -> Result<CfProject> {
     #[derive(Deserialize)]
     struct Downloads {
@@ -149,6 +172,20 @@ impl CurseForgeClient {
             .map_err(|e| AppError::remote(PROVIDER, e.to_string()))?;
         Ok(CfFetch::Ready(Box::new(parse_project(&body)?)))
     }
+
+    /// Cherche le propriétaire d'un mod CurseForge à partir d'un slug.
+    /// Sert à déduire le pseudo auteur sans rien demander à l'utilisateur :
+    /// les slugs Modrinth sont réessayés un par un jusqu'à ce que l'un réponde.
+    pub async fn owner_of_slug(&self, slug: &str) -> Option<String> {
+        let url = format!("{WIDGET}/minecraft/mc-mods/{slug}");
+        let response = send_with_retry(PROVIDER, || self.http.get(&url))
+            .await
+            .ok()?;
+        if !response.status().is_success() {
+            return None;
+        }
+        parse_owner(&response.text().await.ok()?)
+    }
 }
 
 #[cfg(test)]
@@ -178,6 +215,25 @@ mod tests {
         assert_eq!(out.downloads_monthly, 0);
         assert_eq!(out.slug.as_deref(), Some("mobblocker"));
         assert_eq!(out.title, "Mobs Blocker");
+    }
+
+    #[test]
+    fn parse_owner_prefers_the_owner_title() {
+        let raw = r#"{"members":[{"title":"Contributor","username":"Someone","id":1},
+                                 {"title":"Owner","username":"DreykaOas_official","id":108432004}]}"#;
+        assert_eq!(parse_owner(raw).as_deref(), Some("DreykaOas_official"));
+    }
+
+    #[test]
+    fn parse_owner_falls_back_to_the_first_member() {
+        let raw = r#"{"members":[{"title":"Maintainer","username":"Someone","id":1}]}"#;
+        assert_eq!(parse_owner(raw).as_deref(), Some("Someone"));
+    }
+
+    #[test]
+    fn parse_owner_returns_none_without_members() {
+        assert_eq!(parse_owner(r#"{"members":[]}"#), None);
+        assert_eq!(parse_owner("pas du json"), None);
     }
 
     #[test]

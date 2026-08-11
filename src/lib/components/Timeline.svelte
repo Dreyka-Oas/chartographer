@@ -1,11 +1,13 @@
 <script lang="ts">
   import Chart from "../charts/Chart.svelte";
   import { timelineOption } from "../charts/timeline";
+  import { palette } from "../charts/theme";
+  import { theme } from "../theme.svelte";
   import type { TimelinePoint } from "../types";
 
   let { points }: { points: TimelinePoint[] } = $props();
   let stacked = $state(true);
-  const option = $derived(timelineOption(points, stacked));
+  const option = $derived(timelineOption(points, stacked, palette(theme.dark)));
 </script>
 
 <label>

@@ -145,29 +145,53 @@ async fn discover_modrinth(store: &Store, ctx: &SyncContext) -> Result<String> {
     Ok(format!("{} projets", projects.len()))
 }
 
-async fn discover_curseforge(store: &Store, ctx: &SyncContext) -> Result<String> {
-    let client = CurseForgeClient::new()?;
-    let candidates = match ctx.settings.curseforge_username.as_deref() {
-        Some(name) => vec![name.to_string()],
-        None => username_candidates(&ctx.session.username),
-    };
+/// Déduit le pseudo auteur CurseForge sans rien demander.
+/// D'abord en interrogeant CFWidget avec les slugs Modrinth déjà connus, ce qui
+/// donne le pseudo réel quel qu'il soit ; à défaut, en essayant les variantes
+/// dérivées du pseudo Modrinth.
+async fn resolve_curseforge_author(
+    client: &CurseForgeClient,
+    store: &Store,
+    ctx: &SyncContext,
+) -> Result<crate::providers::curseforge::CfAuthor> {
+    if let Some(name) = ctx.settings.curseforge_username.as_deref() {
+        return client.author(name).await;
+    }
 
-    let mut author = None;
-    for candidate in &candidates {
+    let slugs: Vec<String> = store
+        .with(|conn| p::list_by_platform(conn, Platform::Modrinth))?
+        .into_iter()
+        .filter_map(|row| row.slug)
+        .collect();
+
+    for slug in &slugs {
+        if let Some(owner) = client.owner_of_slug(slug).await {
+            if let Ok(found) = client.author(&owner).await {
+                return Ok(found);
+            }
+        }
+    }
+
+    let fallbacks = username_candidates(&ctx.session.username);
+    for candidate in &fallbacks {
         if candidate.is_empty() {
             continue;
         }
         if let Ok(found) = client.author(candidate).await {
-            author = Some(found);
-            break;
+            return Ok(found);
         }
     }
-    let author = author.ok_or_else(|| {
-        AppError::Config(format!(
-            "aucun auteur CurseForge trouvé parmi : {}",
-            candidates.join(", ")
-        ))
-    })?;
+
+    Err(AppError::Config(format!(
+        "auteur CurseForge introuvable : ni via les {} slugs Modrinth, ni parmi {}",
+        slugs.len(),
+        fallbacks.join(", ")
+    )))
+}
+
+async fn discover_curseforge(store: &Store, ctx: &SyncContext) -> Result<String> {
+    let client = CurseForgeClient::new()?;
+    let author = resolve_curseforge_author(&client, store, ctx).await?;
 
     let now = Utc::now().to_rfc3339();
     let mut seen: Vec<String> = Vec::new();

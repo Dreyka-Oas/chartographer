@@ -3,8 +3,10 @@
   import { feature } from "topojson-client";
   import worldTopology from "world-atlas/countries-110m.json";
   import Chart from "../charts/Chart.svelte";
+  import { palette } from "../charts/theme";
   import { worldMapOption } from "../charts/worldmap";
   import { compactNumber, countryLabel } from "../format";
+  import { theme } from "../theme.svelte";
   import type { CountryTotal } from "../types";
   import { NUMERIC_TO_ALPHA2 } from "./iso";
 
@@ -34,7 +36,7 @@
   ensureMap();
 
   const unknown = $derived(countries.find((c) => c.country === "??"));
-  const option = $derived(worldMapOption(countries));
+  const option = $derived(worldMapOption(countries, palette(theme.dark)));
   const top = $derived(countries.filter((c) => c.country !== "??").slice(0, 6));
 </script>
 

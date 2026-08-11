@@ -1,10 +1,12 @@
 <script lang="ts">
   import Chart from "../charts/Chart.svelte";
   import { revenueOption } from "../charts/revenue";
+  import { palette } from "../charts/theme";
+  import { theme } from "../theme.svelte";
   import type { RevenuePoint } from "../types";
 
   let { points }: { points: RevenuePoint[] } = $props();
-  const option = $derived(revenueOption(points));
+  const option = $derived(revenueOption(points, palette(theme.dark)));
 </script>
 
 {#if points.length === 0}

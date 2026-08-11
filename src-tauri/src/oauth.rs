@@ -18,13 +18,35 @@ pub const SCOPES: &str =
 /// Délai au-delà duquel on abandonne l'attente de la redirection.
 pub const CALLBACK_TIMEOUT_SECS: u64 = 300;
 
-const PAGE_OK: &str = "<!doctype html><meta charset=\"utf-8\"><title>Chartographer</title>\
-<body style=\"background:#0d1013;color:#e6ebf0;font-family:system-ui;display:grid;place-items:center;height:100vh;margin:0\">\
-<div style=\"text-align:center\"><h1>Connexion reussie</h1><p>Tu peux fermer cet onglet et revenir a Chartographer.</p></div>";
+/// Page de retour affichee dans le navigateur.
+/// `color-scheme: light dark` laisse le navigateur peindre le fond, et
+/// `light-dark()` fait suivre la preference systeme sans une ligne de script.
+macro_rules! callback_page {
+    ($heading:expr, $detail:expr) => {
+        concat!(
+            "<!doctype html><meta charset=\"utf-8\"><title>Chartographer</title>",
+            "<style>:root{color-scheme:light dark}",
+            "body{margin:0;height:100vh;display:grid;place-items:center;text-align:center;",
+            "font-family:system-ui;background:light-dark(#f4f6f8,#0d1013);",
+            "color:light-dark(#16202b,#e6ebf0)}",
+            "p{color:light-dark(#5c6b7a,#8b97a5)}</style>",
+            "<div><h1>",
+            $heading,
+            "</h1><p>",
+            $detail,
+            "</p></div>"
+        )
+    };
+}
 
-const PAGE_KO: &str = "<!doctype html><meta charset=\"utf-8\"><title>Chartographer</title>\
-<body style=\"background:#0d1013;color:#e6ebf0;font-family:system-ui;display:grid;place-items:center;height:100vh;margin:0\">\
-<div style=\"text-align:center\"><h1>Connexion refusee</h1><p>Retourne dans Chartographer pour reessayer.</p></div>";
+const PAGE_OK: &str = callback_page!(
+    "Connexion reussie",
+    "Tu peux fermer cet onglet et revenir a Chartographer."
+);
+const PAGE_KO: &str = callback_page!(
+    "Connexion refusee",
+    "Retourne dans Chartographer pour reessayer."
+);
 
 pub fn urlencode(value: &str) -> String {
     value

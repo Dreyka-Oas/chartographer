@@ -1,9 +1,11 @@
 <script lang="ts">
   import Chart from "../charts/Chart.svelte";
   import { sparklineOption } from "../charts/sparkline";
+  import { palette } from "../charts/theme";
   import Card from "../components/Card.svelte";
   import { compactNumber } from "../format";
   import { dashboard } from "../state.svelte";
+  import { theme } from "../theme.svelte";
 
   const project = $derived(
     dashboard.overview?.per_project.find((p) => p.key === dashboard.selectedProject) ?? null,
@@ -31,7 +33,7 @@
 
     <Card title="Tendance sur la période">
       {#if project.spark.length > 1}
-        <Chart option={sparklineOption(project.spark)} height={140} />
+        <Chart option={sparklineOption(project.spark, palette(theme.dark))} height={140} />
       {:else}
         <p class="hint">Pas encore assez de points.</p>
       {/if}

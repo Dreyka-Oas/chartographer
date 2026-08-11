@@ -1,6 +1,6 @@
-import { COLORS } from "./theme";
+import { DARK, type Palette } from "./theme";
 
-export function sparklineOption(values: number[]) {
+export function sparklineOption(values: number[], p: Palette = DARK) {
   return {
     grid: { left: 0, right: 0, top: 2, bottom: 2 },
     xAxis: { type: "category", show: false, data: values.map((_, i) => i) },
@@ -10,8 +10,8 @@ export function sparklineOption(values: number[]) {
         type: "line",
         smooth: true,
         showSymbol: false,
-        lineStyle: { width: 1.5, color: COLORS.accent },
-        areaStyle: { opacity: 0.18, color: COLORS.accent },
+        lineStyle: { width: 1.5, color: p.accent },
+        areaStyle: { opacity: 0.18, color: p.accent },
         data: values,
       },
     ],

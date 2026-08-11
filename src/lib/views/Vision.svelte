@@ -84,22 +84,26 @@
     >
       <EventsFeed events={overview.events} />
     </Card>
+  </div>
 
-    <div class="wide">
-      <Card
-        title="Tous les projets"
-        subtitle="Clique une ligne pour le détail du mod"
-        onexpand={() => dashboard.openDetail("projects")}
-      >
-        <ProjectsTable
-          projects={overview.per_project}
-          onselect={(key) => {
-            const found = overview.per_project.find((p) => p.key === key);
-            if (found) dashboard.openProject(found);
-          }}
-        />
-      </Card>
-    </div>
+  <!--
+    Le tableau vit hors de la grille : sa hauteur suit le nombre de projets,
+    alors que les cartes de la grille partagent une hauteur commune.
+  -->
+  <div class="full">
+    <Card
+      title="Tous les projets"
+      subtitle="Clique une ligne pour le détail du mod"
+      onexpand={() => dashboard.openDetail("projects")}
+    >
+      <ProjectsTable
+        projects={overview.per_project}
+        onselect={(key) => {
+          const found = overview.per_project.find((p) => p.key === key);
+          if (found) dashboard.openProject(found);
+        }}
+      />
+    </Card>
   </div>
 {:else if dashboard.loading}
   <p class="notice">Chargement…</p>
@@ -151,17 +155,17 @@
      * Deux colonnes larges plutôt que quatre étroites : au-delà, les graphiques
      * deviennent illisibles et la dernière rangée reste à moitié vide.
      */
-    grid-template-columns: repeat(auto-fit, minmax(560px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(520px, 1fr));
     /*
-     * Rangées de hauteur régulière : les cartes d'une même ligne se répondent,
-     * et leur contenu s'étire pour occuper la place au lieu de laisser du vide.
+     * Hauteur commune et bornée : le contenu s'étire pour la remplir, et une
+     * liste plus longue défile chez elle au lieu d'étirer toute la rangée.
      */
-    grid-auto-rows: minmax(340px, auto);
-    gap: 18px;
-    margin-top: 18px;
+    grid-auto-rows: 420px;
+    gap: 16px;
+    margin-top: 16px;
   }
-  .wide {
-    grid-column: 1 / -1;
+  .full {
+    margin-top: 16px;
   }
   .notice {
     margin: 14px 0 0;

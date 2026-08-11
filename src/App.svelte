@@ -82,7 +82,7 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 11px 22px;
+    padding: 11px 18px;
     border-bottom: 1px solid var(--border);
     background: var(--surface);
   }
@@ -113,10 +113,7 @@
     font-size: 0.8rem;
   }
   main {
-    /* Au-delà, les cartes s'étirent en bandes trop larges pour être lisibles. */
-    max-width: 1760px;
-    margin: 0 auto;
-    padding: 18px 22px 42px;
+    padding: 16px 18px 36px;
   }
   .boot {
     padding: 24px;

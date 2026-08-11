@@ -119,6 +119,8 @@
   }
   .dim {
     color: var(--text-dim);
+    /* Les détails de modération sont du JSON compact : il doit céder, pas la table. */
+    overflow-wrap: anywhere;
   }
   .kind {
     font-size: 0.7rem;

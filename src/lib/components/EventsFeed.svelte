@@ -11,9 +11,9 @@
     {#each events as event (event.occurred_at + event.title)}
       <li>
         <time>{event.occurred_at.slice(0, 10)}</time>
-        <span class="kind">{event.kind}</span>
-        <b>{event.title}</b>
-        <span class="detail">{event.detail}</span>
+        <span class="kind" title={event.kind}>{event.kind}</span>
+        <b title={event.title}>{event.title}</b>
+        <span class="detail" title={event.detail}>{event.detail}</span>
       </li>
     {/each}
   </ul>
@@ -33,12 +33,21 @@
     /* La liste bute net : plus de rebond qui déborde sur la page derrière. */
     overscroll-behavior: contain;
   }
+  /*
+   * Colonnes contraintes et texte tronqué : les détails bruts des évènements
+   * de modération sont du JSON, qui débordait sur la colonne voisine.
+   */
   li {
     display: grid;
-    grid-template-columns: 84px 110px 1fr;
-    gap: 8px;
+    grid-template-columns: 78px minmax(0, 128px) minmax(0, 1fr);
+    gap: 4px 8px;
     align-items: baseline;
     font-size: 0.82rem;
+  }
+  li > * {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   time,
   .kind,
@@ -51,7 +60,8 @@
     letter-spacing: 0.05em;
   }
   .detail {
-    grid-column: 1 / -1;
+    grid-column: 2 / -1;
+    font-size: 0.78rem;
   }
   .empty {
     color: var(--text-dim);

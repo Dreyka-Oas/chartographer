@@ -45,9 +45,7 @@
   </header>
 
   <div class="body">
-    <div class="sheet">
-      {@render children()}
-    </div>
+    {@render children()}
   </div>
 </section>
 
@@ -76,7 +74,7 @@
     display: flex;
     align-items: center;
     gap: 18px;
-    padding: 14px 24px;
+    padding: 12px 18px;
     border-bottom: 1px solid var(--border);
     background: var(--surface);
     flex-shrink: 0;
@@ -139,11 +137,6 @@
     overflow-y: auto;
     /* Le défilement bute net et ne se propage pas à la page de vision dessous. */
     overscroll-behavior: contain;
-    padding: 20px 24px 40px;
-  }
-  /* Même largeur utile que la page de vision : les colonnes se répondent. */
-  .sheet {
-    max-width: 1760px;
-    margin: 0 auto;
+    padding: 18px 18px 36px;
   }
 </style>

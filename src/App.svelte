@@ -7,14 +7,14 @@
   import LoadersDetail from "./lib/views/detail/LoadersDetail.svelte";
   import PlatformsDetail from "./lib/views/detail/PlatformsDetail.svelte";
   import ProjectsDetail from "./lib/views/detail/ProjectsDetail.svelte";
-  import RevenueDetail from "./lib/views/detail/RevenueDetail.svelte";
   import TimelineDetail from "./lib/views/detail/TimelineDetail.svelte";
   import Login from "./lib/views/Login.svelte";
   import ProjectDetail from "./lib/views/ProjectDetail.svelte";
+  import Revenue from "./lib/views/Revenue.svelte";
   import Settings from "./lib/views/Settings.svelte";
   import Vision from "./lib/views/Vision.svelte";
 
-  let view = $state<"vision" | "settings">("vision");
+  let view = $state<"vision" | "revenue" | "settings">("vision");
   let ready = $state(false);
 
   $effect(() => {
@@ -42,6 +42,15 @@
     >
       Vision
     </button>
+    <button
+      class:active={view === "revenue"}
+      onclick={() => {
+        view = "revenue";
+        dashboard.closeDetail();
+      }}
+    >
+      Revenus
+    </button>
     <button class:active={view === "settings"} onclick={() => (view = "settings")}>Réglages</button>
     <span class="user">{dashboard.auth.username}</span>
     <PlatformBadge
@@ -65,6 +74,8 @@
     {#if dashboard.error}<p class="error">{dashboard.error}</p>{/if}
     {#if view === "settings"}
       <Settings />
+    {:else if view === "revenue"}
+      <Revenue />
     {:else}
       <Vision />
     {/if}
@@ -82,8 +93,6 @@
       <PlatformsDetail projects={overview.per_project} />
     {:else if dashboard.detail === "loaders"}
       <LoadersDetail cells={overview.loaders} />
-    {:else if dashboard.detail === "revenue"}
-      <RevenueDetail {overview} />
     {:else if dashboard.detail === "events"}
       <EventsDetail events={overview.events} />
     {:else if dashboard.detail === "projects"}

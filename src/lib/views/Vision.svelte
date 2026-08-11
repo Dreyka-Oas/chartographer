@@ -7,7 +7,6 @@
   import PlatformSplit from "../components/PlatformSplit.svelte";
   import ProjectsTable from "../components/ProjectsTable.svelte";
   import RangePicker from "../components/RangePicker.svelte";
-  import RevenueChart from "../components/RevenueChart.svelte";
   import Timeline from "../components/Timeline.svelte";
   import WorldMap from "../components/WorldMap.svelte";
   import { dashboard } from "../state.svelte";
@@ -91,15 +90,7 @@
       <LoaderHeatmap cells={overview.loaders} />
     </Card>
 
-    {#if dashboard.platforms.modrinth}
-      <Card
-        title="Revenus"
-        subtitle="Journalier, cumulé et échéancier de reversement"
-        onexpand={() => dashboard.openDetail("revenue")}
-      >
-        <RevenueChart points={overview.revenue} />
-      </Card>
-    {/if}
+    <!-- Tout ce qui touche à l'argent vit dans l'onglet Revenus. -->
 
     <Card
       title="Évènements"

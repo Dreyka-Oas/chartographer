@@ -20,9 +20,11 @@
           : `${delta > 0 ? "+" : ""}${delta} % vs 30 j précédents`,
     },
     {
-      label: "Revenus cumulés",
-      value: formatMoney(kpis.revenue_total),
-      hint: `${formatMoney(kpis.revenue_available)} retirables · ${formatMoney(kpis.revenue_pending)} en maturation`,
+      // Ce qui est déjà retiré appartient à l'onglet Revenus : en tête de page,
+      // seul le solde encore disponible appelle une décision.
+      label: "Revenus retirables",
+      value: formatMoney(kpis.revenue_available),
+      hint: `${formatMoney(kpis.revenue_pending)} en maturation · onglet Revenus`,
     },
     {
       label: "Followers",

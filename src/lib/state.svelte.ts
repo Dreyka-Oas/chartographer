@@ -19,7 +19,6 @@ export type DetailView =
   | "countries"
   | "platforms"
   | "loaders"
-  | "revenue"
   | "events"
   | "projects";
 

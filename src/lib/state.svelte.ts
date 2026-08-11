@@ -3,6 +3,7 @@ import { lastDayOfMonth } from "./format";
 import type {
   AppErrorPayload,
   AuthStatus,
+  CfCollect,
   Overview,
   ProjectDetail,
   ProjectSummary,
@@ -224,11 +225,32 @@ class Dashboard {
     this.error = null;
     try {
       this.lastSync = await api.syncNow();
+      // Le tableau de bord CurseForge se relève dans la foulée : sa fenêtre
+      // reste invisible tant que la session tient.
+      await this.collectCurseforge();
       await this.load();
     } catch (e) {
       this.error = message(e);
     } finally {
       this.syncing = false;
+    }
+  }
+
+  /** Dernier compte rendu de la collecte CurseForge, affiché dans les réglages. */
+  curseforge = $state<CfCollect | null>(null);
+
+  async collectCurseforge() {
+    try {
+      this.curseforge = await api.collectCurseforge();
+    } catch (e) {
+      // Une collecte ratée ne doit pas faire échouer la synchronisation.
+      this.curseforge = {
+        needs_login: false,
+        visited: [],
+        imported: [],
+        points: null,
+        detail: message(e),
+      };
     }
   }
 }

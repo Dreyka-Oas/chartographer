@@ -488,6 +488,143 @@ pub async fn read_curseforge_page(app: tauri::AppHandle) -> Result<CfScrape> {
     })
 }
 
+/// Ouvre le tableau de bord et note ce que la page rend réellement.
+///
+/// Le site ne peut être observé qu'à travers un navigateur : cette sonde est le
+/// seul moyen de savoir si la page s'affiche, si elle expose des liens, et si
+/// l'écoute posée avant chargement l'empêche de démarrer. Le rapport est écrit
+/// à côté de la base, pour être relu hors de l'application.
+pub async fn probe_curseforge(app: tauri::AppHandle) {
+    let armed_early = std::env::var("CF_PROBE_EARLY").is_ok();
+    let url = match tauri::Url::parse(CF_AUTHOR_PAGE) {
+        Ok(url) => url,
+        Err(_) => return,
+    };
+
+    let mut builder = tauri::WebviewWindowBuilder::new(&app, CF_WINDOW, tauri::WebviewUrl::External(url))
+        .title("CurseForge — sonde")
+        .inner_size(1180.0, 860.0);
+    if armed_early {
+        builder = builder.initialization_script(CAPTURE_SCRIPT);
+    }
+    if let Err(error) = builder.build() {
+        eprintln!("PROBE: ouverture impossible : {error}");
+        return;
+    }
+
+    let mut report = String::new();
+    let note = |state: &PageState, label: &str, report: &mut String| {
+        report.push_str(&format!(
+            "--- {label}\nurl      : {}\nconnexion: {}\ntexte    : {} caractères\nliens    : {}\ncaptures : {}\ntexte    : {}\n",
+            state.url,
+            if asks_for_login(state) { "à faire" } else { "établie" },
+            state.text.chars().count(),
+            state.links.len(),
+            state.captures.len(),
+            state.text.chars().take(400).collect::<String>().replace('\n', " | ")
+        ));
+        for link in state.links.iter().take(30) {
+            report.push_str(&format!("  lien    : {link}\n"));
+        }
+        for capture in state.captures.iter().take(20) {
+            let series = serde_json::from_str::<serde_json::Value>(&capture.body)
+                .map(|v| crate::scrape::find_daily_series(&v))
+                .unwrap_or_default();
+            report.push_str(&format!(
+                "  capture : {} ({} octets, {} jours){}\n",
+                capture.url,
+                capture.body.len(),
+                series.len(),
+                if series.is_empty() {
+                    format!(
+                        " · début : {}",
+                        capture.body.chars().take(160).collect::<String>()
+                    )
+                } else {
+                    String::new()
+                }
+            ));
+        }
+    };
+
+    // Exploration de l'interface interne, une fois la session établie : la page
+    // l'appelle déjà pour se remplir, on lui demande simplement le reste.
+    if std::env::var("CF_EXPLORE").is_ok() {
+        tokio::time::sleep(std::time::Duration::from_secs(9)).await;
+        let _ = eval_in_window(&app, EXPLORE_SCRIPT).await;
+        tokio::time::sleep(std::time::Duration::from_secs(25)).await;
+        if let Ok(raw) = eval_in_window(&app, "JSON.stringify(window.__cgExplore || [])").await {
+            let unquoted: String = serde_json::from_str(&raw).unwrap_or(raw);
+            let path = data_dir(&app).join("cf_explore.txt");
+            let _ = std::fs::write(&path, &unquoted);
+            println!("PROBE: exploration écrite dans {}", path.display());
+        }
+    }
+
+    tokio::time::sleep(std::time::Duration::from_secs(8)).await;
+    let mut page = match page_state(&app).await {
+        Ok(page) => page,
+        Err(error) => {
+            let _ = std::fs::write(
+                data_dir(&app).join("cf_probe.txt"),
+                format!("lecture impossible : {error}"),
+            );
+            return;
+        }
+    };
+    note(&page, "état initial", &mut report);
+
+    if !asks_for_login(&page) {
+        let _ = eval_in_window(&app, CAPTURE_SCRIPT).await;
+        let targets = crate::collect::worth_visiting(&page.links);
+        report.push_str(&format!("\npages retenues : {}\n", targets.len()));
+        for target in targets.iter().take(6) {
+            let script = format!("(function () {{ location.href = {target:?}; return 'ok'; }})()");
+            let _ = eval_in_window(&app, &script).await;
+            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            let _ = eval_in_window(&app, CAPTURE_SCRIPT).await;
+            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+            if let Ok(next) = page_state(&app).await {
+                page = next;
+                note(&page, &format!("après visite de {target}"), &mut report);
+            }
+        }
+    }
+
+    let path = data_dir(&app).join("cf_probe.txt");
+    let _ = std::fs::write(&path, &report);
+    println!("PROBE: rapport écrit dans {}", path.display());
+    println!("{report}");
+}
+
+/// Interroge l'interface interne du tableau de bord depuis la page elle-même.
+///
+/// Les appels partent du site, avec sa session : c'est la seule façon de
+/// franchir son filtre anti-robot. On ne demande que ce que le tableau de bord
+/// demande déjà pour s'afficher.
+const EXPLORE_SCRIPT: &str = r#"(function () {
+  window.__cgExplore = [];
+  var out = window.__cgExplore;
+  function probe(path) {
+    return fetch(path, { credentials: 'include' })
+      .then(function (r) { return r.text().then(function (t) {
+        out.push({ path: path, status: r.status, body: t.slice(0, 900) });
+      }); })
+      .catch(function (e) { out.push({ path: path, status: -1, body: String(e) }); });
+  }
+  var jobs = [];
+  for (var i = 1; i <= 24; i++) jobs.push('/_api/statistics-new/queries/' + i);
+  ['lastMonthRevenue', 'revenueEstimation', 'downloadsTotalByMembership',
+   'downloadsByDay', 'dailyDownloads', 'downloadsPerDay', 'rewardPoints',
+   'pointsBalance', 'downloads'].forEach(function (name) {
+    jobs.push('/_api/statistics/queries/' + name);
+  });
+  jobs.reduce(function (chain, path) {
+    return chain.then(function () { return probe(path); });
+  }, Promise.resolve());
+  return 'exploration lancee sur ' + jobs.length + ' adresses';
+})()"#;
+
 /// Résultat d'une collecte automatique.
 #[derive(Debug, Default, Serialize)]
 pub struct CfCollect {
@@ -550,23 +687,197 @@ async fn page_state(app: &tauri::AppHandle) -> Result<PageState> {
     serde_json::from_str(&raw).map_err(|e| AppError::Data(format!("état de page illisible : {e}")))
 }
 
-/// Vrai si la page demande encore une connexion.
 fn asks_for_login(state: &PageState) -> bool {
-    let url = state.url.to_lowercase();
-    if url.contains("/login") || url.contains("signin") || url.contains("auth") {
-        return true;
-    }
-    let text = state.text.to_lowercase();
-    text.contains("sign in") && !text.contains("dashboard")
+    crate::collect::is_login_page(&state.url, &state.text)
 }
 
-/// Parcourt le tableau de bord et importe tout ce qui ressemble à un historique.
+/// Interroge l'interface du tableau de bord et rend ses réponses.
 ///
-/// L'utilisateur ne fait rien d'autre que se connecter, une fois. La fenêtre
-/// visite ensuite ses propres pages : rien n'est demandé au serveur qu'un
-/// navigateur ordinaire n'aurait demandé en affichant ces mêmes pages.
+/// Les adresses ont été relevées en observant la page se remplir. Les appels
+/// partent d'elle, avec sa session : c'est la seule façon de franchir le filtre
+/// qui refuse toute requête faite hors d'un navigateur.
+const FETCH_SCRIPT: &str = r#"(function () {
+  window.__cgData = null;
+  var out = {};
+  var paths = {
+    projects: '/_api/projects/compact?filter=%7B%22amOwner%22%3Atrue%2C%22status%22%3A4%7D&range=%5B0%2C999%5D&sort=%5B%22totalDownloads%22%2C%22DESC%22%5D',
+    downloads: '/_api/statistics/queries/downloads',
+    revenue: '/_api/statistics/queries/lastMonthRevenue',
+    estimation: '/_api/statistics/queries/revenueEstimation'
+  };
+  var names = Object.keys(paths);
+  names.reduce(function (chain, name) {
+    return chain.then(function () {
+      return fetch(paths[name], { credentials: 'include' })
+        .then(function (r) { return r.text(); })
+        .then(function (t) { out[name] = t; })
+        .catch(function (e) { out[name] = 'erreur ' + e; });
+    });
+  }, Promise.resolve()).then(function () {
+    out.balance = (document.body ? document.body.innerText : '').slice(0, 4000);
+    window.__cgData = out;
+  });
+  return 'appels lances';
+})()"#;
+
+/// Solde de points affiché par le tableau de bord.
+///
+/// Le bandeau montre « My Balance », le nombre de points puis leur contre-valeur
+/// en dollars. Aucune adresse ne le sert : il est lu là où il s'affiche.
+fn balance_from_text(text: &str) -> Option<i64> {
+    let lower = text.to_lowercase();
+    let start = lower.find("my balance")? + "my balance".len();
+    let rest = &text[start..];
+    let digits: String = rest
+        .chars()
+        .skip_while(|c| !c.is_ascii_digit())
+        .take_while(|c| c.is_ascii_digit())
+        .collect();
+    digits.parse().ok()
+}
+
+/// Collecte le tableau de bord CurseForge sans rien demander à l'utilisateur.
+///
+/// La fenêtre reste invisible et se referme après coup ; elle ne s'affiche que
+/// si la session a expiré et qu'il faut se reconnecter.
 #[tauri::command]
 pub async fn collect_curseforge(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<CfCollect> {
+    ensure_curseforge_window(&app, false)?;
+    tokio::time::sleep(std::time::Duration::from_millis(3000)).await;
+
+    let page = page_state(&app).await?;
+    if asks_for_login(&page) {
+        return Ok(CfCollect {
+            needs_login: true,
+            detail: "session CurseForge expirée : reconnecte-toi une fois".into(),
+            ..Default::default()
+        });
+    }
+
+    let _ = eval_in_window(&app, FETCH_SCRIPT).await;
+    // Les appels s'enchaînent ; on laisse le temps au dernier de revenir.
+    tokio::time::sleep(std::time::Duration::from_millis(6000)).await;
+    let raw = eval_in_window(&app, "JSON.stringify(window.__cgData)").await?;
+    let unquoted: String = serde_json::from_str(&raw).unwrap_or(raw);
+
+    #[derive(serde::Deserialize, Default)]
+    struct Fetched {
+        #[serde(default)]
+        downloads: String,
+        #[serde(default)]
+        revenue: String,
+        #[serde(default)]
+        estimation: String,
+        #[serde(default)]
+        balance: String,
+    }
+    let fetched: Fetched = serde_json::from_str(&unquoted).unwrap_or_default();
+
+    // Les projets connus, avec leur identifiant CurseForge et leur titre : les
+    // colonnes de la série portent l'un ou l'autre.
+    let known: Vec<(i64, String, String)> = state.store.with(|conn| {
+        Ok(p::list(conn)?
+            .into_iter()
+            .filter(|project| project.platform == Platform::CurseForge)
+            .map(|project| (project.id, project.ext_id, project.title))
+            .collect())
+    })?;
+
+    let series = crate::collect::parse_downloads_query(&fetched.downloads);
+    let mut per_project: std::collections::HashMap<i64, Vec<(String, i64)>> =
+        std::collections::HashMap::new();
+    let mut orphan_columns: std::collections::BTreeSet<String> = Default::default();
+    for point in &series {
+        match crate::collect::match_column(&point.key, &known) {
+            Some(project_id) => per_project
+                .entry(project_id)
+                .or_default()
+                .push((point.day.clone(), point.downloads)),
+            None => {
+                orphan_columns.insert(point.key.clone());
+            }
+        }
+    }
+
+    let mut imported: Vec<CfImported> = Vec::new();
+    for (project_id, days) in per_project {
+        state.store.with(|conn| {
+            for (day, downloads) in &days {
+                crate::store::metrics::upsert_daily(
+                    conn,
+                    project_id,
+                    day,
+                    Some(*downloads),
+                    None,
+                    None,
+                )?;
+            }
+            Ok(())
+        })?;
+        let title = known
+            .iter()
+            .find(|(id, _, _)| *id == project_id)
+            .map(|(_, _, title)| title.clone())
+            .unwrap_or_default();
+        let mut sorted: Vec<String> = days.iter().map(|(day, _)| day.clone()).collect();
+        sorted.sort();
+        imported.push(CfImported {
+            title,
+            days: days.len(),
+            from: sorted.first().cloned().unwrap_or_default(),
+            to: sorted.last().cloned().unwrap_or_default(),
+        });
+    }
+    imported.sort_by_key(|row| std::cmp::Reverse(row.days));
+
+    // Solde de points et revenus estimés, conservés tels que le tableau de bord
+    // les annonce.
+    let points = balance_from_text(&fetched.balance);
+    if let Some(value) = points {
+        let today = sync::today_utc();
+        let now = Utc::now().to_rfc3339();
+        state
+            .store
+            .with(|conn| crate::store::metrics::record_cf_points(conn, &today, value, &now))?;
+    }
+    state.store.with(|conn| {
+        crate::store::metrics::set_meta(conn, "curseforge_revenue", &fetched.revenue)?;
+        crate::store::metrics::set_meta(conn, "curseforge_revenue_estimate", &fetched.estimation)
+    })?;
+
+    // La fenêtre a fini son travail : elle disparaît.
+    if let Some(window) = app.get_webview_window(CF_WINDOW) {
+        let _ = window.close();
+    }
+
+    let detail = format!(
+        "{} jours relevés · {} mods rattachés{}",
+        series.len(),
+        imported.len(),
+        if orphan_columns.is_empty() {
+            String::new()
+        } else {
+            format!(
+                " · colonnes sans mod connu : {}",
+                orphan_columns.into_iter().collect::<Vec<_>>().join(", ")
+            )
+        }
+    );
+
+    Ok(CfCollect {
+        needs_login: false,
+        visited: vec![page.url],
+        imported,
+        points,
+        detail,
+    })
+}
+
+#[allow(dead_code)]
+async fn collect_curseforge_by_browsing(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> Result<CfCollect> {

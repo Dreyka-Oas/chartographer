@@ -26,6 +26,17 @@ pub fn run() {
             std::fs::create_dir_all(&data_dir).ok();
             let store = Store::open(&config::db_path(&data_dir))?;
             app.manage(AppState { store, data_dir });
+
+            // Sonde de diagnostic : lancée avec CF_PROBE=1, elle ouvre le
+            // tableau de bord CurseForge, note ce que la page rend vraiment et
+            // écrit son rapport à côté de la base. Sans elle, on coderait à
+            // l'aveugle sur un site qu'on ne peut pas ouvrir autrement.
+            if std::env::var("CF_PROBE").is_ok() {
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    commands::probe_curseforge(handle).await;
+                });
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

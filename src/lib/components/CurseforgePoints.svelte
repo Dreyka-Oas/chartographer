@@ -2,12 +2,14 @@
   import { api } from "../api";
   import { formatDayLong, formatMoney } from "../format";
   import { dashboard } from "../state.svelte";
-  import type { AppErrorPayload, CfCollect, CfPointEntry } from "../types";
+  import type { AppErrorPayload, CfPointEntry } from "../types";
 
   let entries = $state<CfPointEntry[]>([]);
-  let report = $state<CfCollect | null>(null);
   let running = $state(false);
   let loaded = $state(false);
+  /** Compte rendu de la dernière collecte, qu'elle vienne d'une synchronisation
+   * automatique ou d'une relance manuelle. */
+  const report = $derived(dashboard.curseforge);
 
   function fail(e: unknown) {
     dashboard.error = (e as AppErrorPayload)?.message ?? String(e);
@@ -37,9 +39,8 @@
    */
   async function collect() {
     running = true;
-    report = null;
     try {
-      report = await api.collectCurseforge();
+      await dashboard.collectCurseforge();
       refresh();
       await dashboard.load();
     } catch (e) {
@@ -52,18 +53,21 @@
 
 <p class="note">
   CurseForge n'expose ni son programme de points ni l'historique de son tableau de bord, et son
-  filtre anti-robot refuse toute requête faite hors d'un navigateur. L'application ouvre donc ton
-  tableau de bord dans une fenêtre, où tu te connectes une seule fois, puis parcourt tes propres
-  pages et relève ce qu'elles affichent. Tu n'as rien à recopier.
+  filtre anti-robot refuse toute requête faite hors d'un navigateur. L'application interroge donc
+  l'interface du tableau de bord depuis une fenêtre invisible, avec ta session : téléchargements
+  quotidiens par mod, solde de points et revenus estimés arrivent à chaque synchronisation, sans
+  que tu aies rien à faire. Tu ne verras cette fenêtre que si la session expire.
 </p>
 
 <div class="assist">
-  <button class="primary" onclick={collect} disabled={running}>
-    {running ? "Collecte en cours…" : "Collecter mes statistiques CurseForge"}
+  <button onclick={collect} disabled={running}>
+    {running ? "Collecte en cours…" : "Relever maintenant"}
   </button>
-  <button onclick={() => api.openCurseforgeWindow().catch(fail)}>
-    Ouvrir la fenêtre de connexion
-  </button>
+  {#if report?.needs_login}
+    <button class="primary" onclick={() => api.openCurseforgeWindow().catch(fail)}>
+      Se reconnecter à CurseForge
+    </button>
+  {/if}
 </div>
 
 {#if report}

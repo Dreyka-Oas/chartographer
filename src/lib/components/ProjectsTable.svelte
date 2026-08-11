@@ -1,5 +1,6 @@
 <script lang="ts">
   import { compactNumber } from "../format";
+  import { dashboard } from "../state.svelte";
   import type { ProjectSummary } from "../types";
   import Sparkline from "./Sparkline.svelte";
 
@@ -54,8 +55,13 @@
       <tr>
         <th><button onclick={() => sort("title")}>Projet</button></th>
         <th class="spark">Tendance</th>
-        <th><button onclick={() => sort("modrinth")}>Modrinth</button></th>
-        <th><button onclick={() => sort("curseforge")}>CurseForge</button></th>
+        <!-- La colonne d'une plateforme masquée ne montrerait que des zéros. -->
+        {#if dashboard.platforms.modrinth}
+          <th><button onclick={() => sort("modrinth")}>Modrinth</button></th>
+        {/if}
+        {#if dashboard.platforms.curseforge}
+          <th><button onclick={() => sort("curseforge")}>CurseForge</button></th>
+        {/if}
         <th><button onclick={() => sort("total")}>Total</button></th>
         <th><button onclick={() => sort("followers")}>Followers</button></th>
       </tr>
@@ -77,10 +83,23 @@
             </span>
           </td>
           <td class="spark">
-            <Sparkline values={row.spark} />
+            <!--
+              Une courbe à plat se lit comme « zéro téléchargement », alors qu'il
+              s'agit le plus souvent d'un historique pas encore constitué. Le
+              tiret dit l'absence de données sans rien affirmer d'autre.
+            -->
+            {#if row.spark.some((value) => value > 0)}
+              <Sparkline values={row.spark} />
+            {:else}
+              <span class="flat" title="Aucun écart quotidien relevé sur la période">—</span>
+            {/if}
           </td>
-          <td>{compactNumber(row.modrinth_downloads)}</td>
-          <td>{compactNumber(row.curseforge_downloads)}</td>
+          {#if dashboard.platforms.modrinth}
+            <td>{compactNumber(row.modrinth_downloads)}</td>
+          {/if}
+          {#if dashboard.platforms.curseforge}
+            <td>{compactNumber(row.curseforge_downloads)}</td>
+          {/if}
           <td><b>{compactNumber(row.modrinth_downloads + row.curseforge_downloads)}</b></td>
           <td>{row.followers}</td>
         </tr>
@@ -183,6 +202,9 @@
   }
   td.spark {
     padding: 4px 10px;
+  }
+  .flat {
+    color: var(--text-dim);
   }
   em {
     font-style: normal;

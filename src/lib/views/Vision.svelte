@@ -42,9 +42,10 @@
 
   {#if dashboard.platforms.curseforge && overview.curseforge_history_days < 2}
     <p class="notice">
-      L'historique CurseForge se construit par snapshots quotidiens :
-      {overview.curseforge_history_days} jour(s) enregistré(s). La courbe CurseForge restera plate
-      jusqu'au deuxième snapshot.
+      CurseForge ne publie pas d'historique : Chartographer le reconstruit en comparant deux relevés
+      quotidiens, et {overview.curseforge_history_days} jour est enregistré pour l'instant. Les
+      courbes CurseForge restent donc à zéro jusqu'au relevé de demain ; les totaux cumulés, eux,
+      sont déjà exacts.
     </p>
   {/if}
 
@@ -71,13 +72,16 @@
       </Card>
     {/if}
 
-    <Card
-      title="Modrinth contre CurseForge"
-      subtitle="Total par projet, trié par volume"
-      onexpand={() => dashboard.openDetail("platforms")}
-    >
-      <PlatformSplit projects={overview.per_project} />
-    </Card>
+    <!-- Comparer deux plateformes suppose que les deux soient affichées. -->
+    {#if dashboard.platforms.modrinth && dashboard.platforms.curseforge}
+      <Card
+        title="Modrinth contre CurseForge"
+        subtitle="Total par projet, trié par volume"
+        onexpand={() => dashboard.openDetail("platforms")}
+      >
+        <PlatformSplit projects={overview.per_project} />
+      </Card>
+    {/if}
 
     {#if dashboard.platforms.modrinth}
       <Card

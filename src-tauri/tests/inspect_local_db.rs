@@ -72,6 +72,21 @@ fn resume_local_database() {
         None => println!("\npayout            : jamais releve"),
     }
 
+    let mut days_stmt = conn
+        .prepare(
+            "SELECT substr(taken_at, 1, 10) AS day, COUNT(*) FROM cf_snapshots
+             GROUP BY day ORDER BY day",
+        )
+        .unwrap();
+    println!("\njours de snapshots CurseForge :");
+    for row in days_stmt
+        .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?)))
+        .unwrap()
+    {
+        let (day, count) = row.unwrap();
+        println!("  {day} : {count} relevés");
+    }
+
     let mut orphan_stmt = conn
         .prepare(
             "SELECT p.id, p.platform, p.title, p.slug FROM projects p

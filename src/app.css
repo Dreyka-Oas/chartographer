@@ -1,0 +1,26 @@
+:root {
+  color-scheme: dark;
+  --bg: #0d1013;
+  --surface: #14181d;
+  --surface-2: #1b2027;
+  --border: #262d36;
+  --text: #e6ebf0;
+  --text-dim: #8b97a5;
+  --accent: #5ac8a8;
+  --modrinth: #00af5c;
+  --curseforge: #f16436;
+  --warn: #e0a458;
+  --error: #e05c5c;
+  --radius: 10px;
+  font-family: ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}

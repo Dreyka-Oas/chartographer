@@ -1,0 +1,40 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Chartographer",
+  "version": "0.1.0",
+  "identifier": "fr.dreykaoas.chartographer",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Chartographer",
+        "width": 1560,
+        "height": 980,
+        "minWidth": 1100,
+        "minHeight": 700,
+        "resizable": true
+      }
+    ],
+    "security": { "csp": null }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["deb", "rpm", "nsis"],
+    "category": "Utility",
+    "shortDescription": "Statistiques de mods Modrinth et CurseForge",
+    "longDescription": "Cockpit de bureau qui agrege les statistiques de mods Minecraft publiees sur Modrinth et CurseForge sur une page de vision unique.",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "linux": { "deb": { "depends": [] } }
+  }
+}

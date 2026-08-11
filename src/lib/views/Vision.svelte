@@ -28,7 +28,19 @@
 
   <KpiBand kpis={overview.kpis} />
 
-  {#if overview.curseforge_history_days < 2}
+  {#if !dashboard.platforms.modrinth || !dashboard.platforms.curseforge}
+    <p class="notice">
+      {dashboard.platforms.modrinth ? "CurseForge" : "Modrinth"} est masqué : ses téléchargements ne
+      sont pas comptés ici.
+      {#if !dashboard.platforms.modrinth}
+        L'origine géographique, les versions de jeu et les revenus ne sont relevés que sur Modrinth,
+        leurs cartes sont donc retirées.
+      {/if}
+      Clique la pastille en haut de la fenêtre pour la réafficher.
+    </p>
+  {/if}
+
+  {#if dashboard.platforms.curseforge && overview.curseforge_history_days < 2}
     <p class="notice">
       L'historique CurseForge se construit par snapshots quotidiens :
       {overview.curseforge_history_days} jour(s) enregistré(s). La courbe CurseForge restera plate
@@ -45,13 +57,19 @@
       <Timeline points={overview.timeline} />
     </Card>
 
-    <Card
-      title="Origine des téléchargements"
-      subtitle="{overview.countries.length} pays relevés"
-      onexpand={() => dashboard.openDetail("countries")}
-    >
-      <WorldMap countries={overview.countries} />
-    </Card>
+    <!--
+      Origine, versions et revenus ne sont relevés que sur Modrinth : masquer
+      cette plateforme retire les cartes plutôt que de les laisser vides.
+    -->
+    {#if dashboard.platforms.modrinth}
+      <Card
+        title="Origine des téléchargements"
+        subtitle="{overview.countries.length} pays relevés"
+        onexpand={() => dashboard.openDetail("countries")}
+      >
+        <WorldMap countries={overview.countries} />
+      </Card>
+    {/if}
 
     <Card
       title="Modrinth contre CurseForge"
@@ -61,21 +79,23 @@
       <PlatformSplit projects={overview.per_project} />
     </Card>
 
-    <Card
-      title="Versions de jeu et loaders"
-      subtitle="Concentration des téléchargements Modrinth"
-      onexpand={() => dashboard.openDetail("loaders")}
-    >
-      <LoaderHeatmap cells={overview.loaders} />
-    </Card>
+    {#if dashboard.platforms.modrinth}
+      <Card
+        title="Versions de jeu et loaders"
+        subtitle="Concentration des téléchargements Modrinth"
+        onexpand={() => dashboard.openDetail("loaders")}
+      >
+        <LoaderHeatmap cells={overview.loaders} />
+      </Card>
 
-    <Card
-      title="Revenus"
-      subtitle="Journalier, cumulé et échéancier de reversement"
-      onexpand={() => dashboard.openDetail("revenue")}
-    >
-      <RevenueChart points={overview.revenue} />
-    </Card>
+      <Card
+        title="Revenus"
+        subtitle="Journalier, cumulé et échéancier de reversement"
+        onexpand={() => dashboard.openDetail("revenue")}
+      >
+        <RevenueChart points={overview.revenue} />
+      </Card>
+    {/if}
 
     <Card
       title="Évènements"

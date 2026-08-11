@@ -17,8 +17,8 @@ export const api = {
   saveSettings: (curseforgeUsername: string | null, rangeDays: number) =>
     invoke<void>("save_settings", { curseforgeUsername, rangeDays }),
   syncNow: () => invoke<SyncReport[]>("sync_now"),
-  overview: (rangeDays: number, from: string | null, to: string | null) =>
-    invoke<Overview>("overview", { rangeDays, from, to }),
+  overview: (rangeDays: number, from: string | null, to: string | null, platforms: string[]) =>
+    invoke<Overview>("overview", { rangeDays, from, to, platforms }),
   projectDetail: (
     modrinthId: number | null,
     curseforgeId: number | null,

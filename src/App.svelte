@@ -46,15 +46,17 @@
     <span class="user">{dashboard.auth.username}</span>
     <PlatformBadge
       platform="modrinth"
-      label="Modrinth"
       account={dashboard.auth.username}
       count={dashboard.auth.modrinth_projects}
+      active={dashboard.platforms.modrinth}
+      ontoggle={() => dashboard.togglePlatform("modrinth")}
     />
     <PlatformBadge
       platform="curseforge"
-      label="CurseForge"
       account={dashboard.auth.curseforge_username}
       count={dashboard.auth.curseforge_projects}
+      active={dashboard.platforms.curseforge}
+      ontoggle={() => dashboard.togglePlatform("curseforge")}
     />
     <ThemeToggle />
   </nav>

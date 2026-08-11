@@ -41,23 +41,71 @@ pub fn day_axis(from: &str, to: &str) -> Vec<String> {
     out
 }
 
-pub fn timeline(conn: &Connection, from: &str, to: &str) -> Result<Vec<TimelinePoint>> {
-    let mut per_day: BTreeMap<String, (i64, i64)> = BTreeMap::new();
+/// Plateformes retenues à l'affichage. Masquer une plateforme ne supprime rien
+/// en base : les relevés continuent, seule la lecture est filtrée.
+#[derive(Debug, Clone, Copy)]
+pub struct PlatformFilter {
+    pub modrinth: bool,
+    pub curseforge: bool,
+}
 
-    let mut stmt = conn.prepare(
-        "SELECT day, COALESCE(SUM(downloads), 0) FROM metrics_daily
-         WHERE day >= ?1 AND day < ?2 GROUP BY day",
-    )?;
-    for row in stmt.query_map(params![from, to], |r| {
-        Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?))
-    })? {
-        let (day, downloads) = row?;
-        per_day.entry(day).or_default().0 += downloads;
+impl Default for PlatformFilter {
+    fn default() -> Self {
+        Self {
+            modrinth: true,
+            curseforge: true,
+        }
+    }
+}
+
+impl PlatformFilter {
+    /// Construit le filtre depuis la liste envoyée par l'interface. Une liste
+    /// absente ou vide vaut « tout afficher » : mieux vaut trop montrer que
+    /// présenter un écran vide sur une valeur mal formée.
+    pub fn from_names(names: Option<&[String]>) -> Self {
+        let Some(names) = names.filter(|n| !n.is_empty()) else {
+            return Self::default();
+        };
+        Self {
+            modrinth: names.iter().any(|n| n == "modrinth"),
+            curseforge: names.iter().any(|n| n == "curseforge"),
+        }
     }
 
-    for ((_, day), delta) in snapshot_deltas(conn)? {
-        if day.as_str() >= from && day.as_str() < to {
-            per_day.entry(day).or_default().1 += delta;
+    pub fn shows(&self, platform: Platform) -> bool {
+        match platform {
+            Platform::Modrinth => self.modrinth,
+            Platform::CurseForge => self.curseforge,
+        }
+    }
+}
+
+pub fn timeline(
+    conn: &Connection,
+    from: &str,
+    to: &str,
+    filter: PlatformFilter,
+) -> Result<Vec<TimelinePoint>> {
+    let mut per_day: BTreeMap<String, (i64, i64)> = BTreeMap::new();
+
+    if filter.modrinth {
+        let mut stmt = conn.prepare(
+            "SELECT day, COALESCE(SUM(downloads), 0) FROM metrics_daily
+             WHERE day >= ?1 AND day < ?2 GROUP BY day",
+        )?;
+        for row in stmt.query_map(params![from, to], |r| {
+            Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?))
+        })? {
+            let (day, downloads) = row?;
+            per_day.entry(day).or_default().0 += downloads;
+        }
+    }
+
+    if filter.curseforge {
+        for ((_, day), delta) in snapshot_deltas(conn)? {
+            if day.as_str() >= from && day.as_str() < to {
+                per_day.entry(day).or_default().1 += delta;
+            }
         }
     }
 
@@ -71,7 +119,12 @@ pub fn timeline(conn: &Connection, from: &str, to: &str) -> Result<Vec<TimelineP
         .collect())
 }
 
-pub fn per_project(conn: &Connection, from: &str, to: &str) -> Result<Vec<ProjectSummary>> {
+pub fn per_project(
+    conn: &Connection,
+    from: &str,
+    to: &str,
+    filter: PlatformFilter,
+) -> Result<Vec<ProjectSummary>> {
     let projects = list(conn)?;
     let link_rows = links(conn)?;
     let by_id: HashMap<i64, &_> = projects.iter().map(|p| (p.id, p)).collect();
@@ -125,14 +178,25 @@ pub fn per_project(conn: &Connection, from: &str, to: &str) -> Result<Vec<Projec
         if let Some(cf) = cf {
             consumed_cf.insert(cf.id);
         }
-        let mut spark: BTreeMap<String, i64> = spark_by_project
-            .get(&project.id)
-            .cloned()
-            .unwrap_or_default();
-        if let Some(deltas) = cf.and_then(|c| deltas_by_project.get(&c.id)) {
-            for (day, delta) in deltas {
-                *spark.entry(day.clone()).or_insert(0) += delta;
+        let mut spark: BTreeMap<String, i64> = if filter.modrinth {
+            spark_by_project
+                .get(&project.id)
+                .cloned()
+                .unwrap_or_default()
+        } else {
+            BTreeMap::new()
+        };
+        if filter.curseforge {
+            if let Some(deltas) = cf.and_then(|c| deltas_by_project.get(&c.id)) {
+                for (day, delta) in deltas {
+                    *spark.entry(day.clone()).or_insert(0) += delta;
+                }
             }
+        }
+        // Un mod dont la seule plateforme est masquée disparaît de la liste :
+        // l'y laisser à zéro donnerait une ligne vide sans signification.
+        if !filter.modrinth && cf.is_none() {
+            continue;
         }
         out.push(ProjectSummary {
             key: format!("m{}", project.id),
@@ -143,34 +207,43 @@ pub fn per_project(conn: &Connection, from: &str, to: &str) -> Result<Vec<Projec
                 .or_else(|| cf.and_then(|c| c.icon_url.clone())),
             modrinth_id: Some(project.id),
             curseforge_id: cf.map(|c| c.id),
-            modrinth_downloads: project.total_downloads,
-            curseforge_downloads: cf.map(|c| c.total_downloads).unwrap_or(0),
+            modrinth_downloads: if filter.modrinth {
+                project.total_downloads
+            } else {
+                0
+            },
+            curseforge_downloads: match (filter.curseforge, cf) {
+                (true, Some(cf)) => cf.total_downloads,
+                _ => 0,
+            },
             followers: project.followers,
             link_confidence: link.map(|l| l.confidence),
             spark: densify(&spark),
         });
     }
 
-    for project in projects
-        .iter()
-        .filter(|p| p.platform == Platform::CurseForge && !consumed_cf.contains(&p.id))
-    {
-        let spark: BTreeMap<String, i64> = deltas_by_project
-            .get(&project.id)
-            .map(|deltas| deltas.iter().cloned().collect())
-            .unwrap_or_default();
-        out.push(ProjectSummary {
-            key: format!("c{}", project.id),
-            title: project.title.clone(),
-            icon_url: project.icon_url.clone(),
-            modrinth_id: None,
-            curseforge_id: Some(project.id),
-            modrinth_downloads: 0,
-            curseforge_downloads: project.total_downloads,
-            followers: 0,
-            link_confidence: None,
-            spark: densify(&spark),
-        });
+    if filter.curseforge {
+        for project in projects
+            .iter()
+            .filter(|p| p.platform == Platform::CurseForge && !consumed_cf.contains(&p.id))
+        {
+            let spark: BTreeMap<String, i64> = deltas_by_project
+                .get(&project.id)
+                .map(|deltas| deltas.iter().cloned().collect())
+                .unwrap_or_default();
+            out.push(ProjectSummary {
+                key: format!("c{}", project.id),
+                title: project.title.clone(),
+                icon_url: project.icon_url.clone(),
+                modrinth_id: None,
+                curseforge_id: Some(project.id),
+                modrinth_downloads: 0,
+                curseforge_downloads: project.total_downloads,
+                followers: 0,
+                link_confidence: None,
+                spark: densify(&spark),
+            });
+        }
     }
 
     out.sort_by(|a, b| {
@@ -320,11 +393,16 @@ pub fn payout(conn: &Connection, today: &str) -> Result<crate::models::Payout> {
     })
 }
 
-pub fn kpis(conn: &Connection, today: &str) -> Result<Kpis> {
+pub fn kpis(conn: &Connection, today: &str, filter: PlatformFilter) -> Result<Kpis> {
     let window_start = shift_day(today, -30);
     let previous_start = shift_day(today, -60);
 
+    // `metrics_daily` ne contient que les séries Modrinth ; CurseForge ne fournit
+    // pas d'historique et n'entre donc pas dans ces deux fenêtres glissantes.
     let sum_downloads = |from: &str, to: &str| -> Result<i64> {
+        if !filter.modrinth {
+            return Ok(0);
+        }
         Ok(conn.query_row(
             "SELECT COALESCE(SUM(downloads), 0) FROM metrics_daily WHERE day >= ?1 AND day < ?2",
             params![from, to],
@@ -333,6 +411,9 @@ pub fn kpis(conn: &Connection, today: &str) -> Result<Kpis> {
     };
 
     let per_platform = |platform: Platform| -> Result<i64> {
+        if !filter.shows(platform) {
+            return Ok(0);
+        }
         Ok(conn.query_row(
             "SELECT COALESCE(SUM(total_downloads), 0) FROM projects
              WHERE platform = ?1 AND archived_at IS NULL",
@@ -341,10 +422,15 @@ pub fn kpis(conn: &Connection, today: &str) -> Result<Kpis> {
         )?)
     };
 
-    let mut stmt = conn.prepare("SELECT revenue FROM metrics_daily WHERE revenue IS NOT NULL")?;
+    // Les revenus sont un dispositif Modrinth : masquer cette plateforme les
+    // retire de l'affichage plutôt que de laisser un total sans source visible.
     let mut revenue_total = Decimal::ZERO;
-    for row in stmt.query_map([], |r| r.get::<_, String>(0))? {
-        revenue_total += Decimal::from_str(&row?).unwrap_or_default();
+    if filter.modrinth {
+        let mut stmt =
+            conn.prepare("SELECT revenue FROM metrics_daily WHERE revenue IS NOT NULL")?;
+        for row in stmt.query_map([], |r| r.get::<_, String>(0))? {
+            revenue_total += Decimal::from_str(&row?).unwrap_or_default();
+        }
     }
 
     let downloads_modrinth = per_platform(Platform::Modrinth)?;
@@ -381,7 +467,9 @@ pub fn project_detail(
 ) -> Result<crate::models::ProjectDetail> {
     use crate::models::{ProjectDetail, VersionRow};
 
-    let summary = per_project(conn, from, to)?
+    // Le détail d'un mod montre toujours ses deux plateformes : le filtre de la
+    // page de vision ne s'applique pas ici, on y vient justement pour comparer.
+    let summary = per_project(conn, from, to, PlatformFilter::default())?
         .into_iter()
         .find(|p| {
             (modrinth_id.is_some() && p.modrinth_id == modrinth_id)
@@ -529,10 +617,23 @@ pub fn available_months(conn: &Connection) -> Result<Vec<String>> {
     Ok(rows)
 }
 
-pub fn overview(conn: &Connection, today: &str, from: &str, to: &str) -> Result<Overview> {
+pub fn overview(
+    conn: &Connection,
+    today: &str,
+    from: &str,
+    to: &str,
+    filter: PlatformFilter,
+) -> Result<Overview> {
     let (from, to) = (from.to_string(), to.to_string());
-    let mut kpis = kpis(conn, today)?;
-    let payout = payout(conn, today)?;
+    let mut kpis = kpis(conn, today, filter)?;
+    // Origine, versions, revenus et reversements ne sont relevés que sur
+    // Modrinth : masquer cette plateforme les vide au lieu de les laisser
+    // afficher des chiffres dont la source n'est plus visible.
+    let payout = if filter.modrinth {
+        payout(conn, today)?
+    } else {
+        crate::models::Payout::default()
+    };
     if !payout.available.is_empty() {
         kpis.revenue_pending = payout.available.clone();
     }
@@ -545,12 +646,28 @@ pub fn overview(conn: &Connection, today: &str, from: &str, to: &str) -> Result<
         from: from.clone(),
         available_months: available_months(conn)?,
         days: day_axis(&from, &to),
-        timeline: timeline(conn, &from, &to)?,
-        per_project: per_project(conn, &from, &to)?,
-        countries: countries(conn, &from, &to)?,
-        loaders: loaders(conn)?,
-        revenue: revenue(conn, &from, &to)?,
-        revenue_by_project: revenue_by_project(conn, &from, &to)?,
+        timeline: timeline(conn, &from, &to, filter)?,
+        per_project: per_project(conn, &from, &to, filter)?,
+        countries: if filter.modrinth {
+            countries(conn, &from, &to)?
+        } else {
+            Vec::new()
+        },
+        loaders: if filter.modrinth {
+            loaders(conn)?
+        } else {
+            Vec::new()
+        },
+        revenue: if filter.modrinth {
+            revenue(conn, &from, &to)?
+        } else {
+            Vec::new()
+        },
+        revenue_by_project: if filter.modrinth {
+            revenue_by_project(conn, &from, &to)?
+        } else {
+            Vec::new()
+        },
         payout,
         events: recent_events(conn, 40)?,
         freshness: freshness(conn)?,
@@ -597,7 +714,7 @@ mod tests {
         upsert_daily(&conn, m, "2026-08-10", Some(40), None, None).unwrap();
         insert_snapshot(&conn, c, "2026-08-09T00:00:00Z", 100, None).unwrap();
         insert_snapshot(&conn, c, "2026-08-10T00:00:00Z", 175, None).unwrap();
-        let points = timeline(&conn, "2026-08-01", "2026-08-11").unwrap();
+        let points = timeline(&conn, "2026-08-01", "2026-08-11", PlatformFilter::default()).unwrap();
         let day = points.iter().find(|p| p.day == "2026-08-10").unwrap();
         assert_eq!(day.modrinth, 40);
         assert_eq!(day.curseforge, 75);
@@ -606,7 +723,7 @@ mod tests {
     #[test]
     fn per_project_groups_linked_projects_under_one_row() {
         let (conn, _, _) = seed();
-        let rows = per_project(&conn, "2026-08-01", "2026-08-11").unwrap();
+        let rows = per_project(&conn, "2026-08-01", "2026-08-11", PlatformFilter::default()).unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].modrinth_downloads, 23_225);
         assert_eq!(rows[0].curseforge_downloads, 86_753);
@@ -632,11 +749,83 @@ mod tests {
             },
         )
         .unwrap();
-        let rows = per_project(&conn, "2026-08-01", "2026-08-11").unwrap();
+        let rows = per_project(&conn, "2026-08-01", "2026-08-11", PlatformFilter::default()).unwrap();
         assert_eq!(rows.len(), 2);
         let solo = rows.iter().find(|r| r.title == "Solo").unwrap();
         assert_eq!(solo.curseforge_downloads, 0);
         assert!(solo.curseforge_id.is_none());
+    }
+
+    #[test]
+    fn platform_filter_reads_the_names_sent_by_the_interface() {
+        let both = PlatformFilter::from_names(Some(&[
+            "modrinth".to_string(),
+            "curseforge".to_string(),
+        ]));
+        assert!(both.modrinth && both.curseforge);
+
+        let only_cf = PlatformFilter::from_names(Some(&["curseforge".to_string()]));
+        assert!(!only_cf.modrinth && only_cf.curseforge);
+
+        // Absente ou vide, la liste ne doit jamais vider l'écran.
+        assert!(PlatformFilter::from_names(None).modrinth);
+        assert!(PlatformFilter::from_names(Some(&[])).curseforge);
+    }
+
+    #[test]
+    fn hiding_a_platform_empties_its_series() {
+        let (conn, m, c) = seed();
+        upsert_daily(&conn, m, "2026-08-10", Some(40), None, None).unwrap();
+        insert_snapshot(&conn, c, "2026-08-09T00:00:00Z", 100, None).unwrap();
+        insert_snapshot(&conn, c, "2026-08-10T00:00:00Z", 175, None).unwrap();
+
+        let hidden = PlatformFilter {
+            modrinth: false,
+            curseforge: true,
+        };
+        let points = timeline(&conn, "2026-08-01", "2026-08-11", hidden).unwrap();
+        assert!(points.iter().all(|p| p.modrinth == 0));
+        assert_eq!(points.iter().map(|p| p.curseforge).sum::<i64>(), 75);
+
+        let rows = per_project(&conn, "2026-08-01", "2026-08-11", hidden).unwrap();
+        assert!(rows.iter().all(|r| r.modrinth_downloads == 0));
+        assert!(rows.iter().any(|r| r.curseforge_downloads > 0));
+    }
+
+    #[test]
+    fn hiding_modrinth_drops_projects_that_only_live_there() {
+        let (conn, _, _) = seed();
+        upsert(
+            &conn,
+            &ProjectUpsert {
+                platform: Platform::Modrinth,
+                ext_id: "solo".into(),
+                slug: Some("no-night-skip".into()),
+                title: "No Night Skip".into(),
+                project_type: Some("mod".into()),
+                url: None,
+                icon_url: None,
+                created_at: None,
+                total_downloads: 1_800,
+                followers: 1,
+            },
+        )
+        .unwrap();
+
+        let rows = per_project(
+            &conn,
+            "2026-08-01",
+            "2026-08-11",
+            PlatformFilter {
+                modrinth: false,
+                curseforge: true,
+            },
+        )
+        .unwrap();
+        assert!(
+            !rows.iter().any(|r| r.title == "No Night Skip"),
+            "un mod sans jumeau CurseForge n'a rien à montrer quand Modrinth est masqué"
+        );
     }
 
     #[test]
@@ -691,7 +880,7 @@ mod tests {
     fn spark_is_aligned_on_the_dense_axis() {
         let (conn, m, _) = seed();
         upsert_daily(&conn, m, "2026-08-09", Some(7), None, None).unwrap();
-        let rows = per_project(&conn, "2026-08-08", "2026-08-11").unwrap();
+        let rows = per_project(&conn, "2026-08-08", "2026-08-11", PlatformFilter::default()).unwrap();
         assert_eq!(
             rows[0].spark,
             vec![0, 7, 0],
@@ -785,7 +974,7 @@ mod tests {
         let (conn, m, _) = seed();
         upsert_daily(&conn, m, "2026-08-10", Some(100), None, Some("1.5")).unwrap();
         upsert_daily(&conn, m, "2026-06-20", Some(40), None, Some("0.5")).unwrap();
-        let k = kpis(&conn, "2026-08-11").unwrap();
+        let k = kpis(&conn, "2026-08-11", PlatformFilter::default()).unwrap();
         assert_eq!(k.downloads_30d, 100);
         assert_eq!(k.downloads_prev_30d, 40);
         assert_eq!(k.revenue_total, "2");

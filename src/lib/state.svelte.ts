@@ -38,6 +38,8 @@ class Dashboard {
   /** Bornes explicites. Nulles, la fenêtre glisse sur `rangeDays` jours. */
   rangeFrom = $state<string | null>(null);
   rangeTo = $state<string | null>(null);
+  /** Plateformes affichées. Masquer n'efface rien : seuls les relevés lus changent. */
+  platforms = $state({ modrinth: true, curseforge: true });
   loading = $state(false);
   syncing = $state(false);
   connecting = $state(false);
@@ -124,11 +126,33 @@ class Dashboard {
     this.overview = null;
   }
 
+  /** Noms des plateformes retenues, tels qu'attendus par le backend. */
+  get visiblePlatforms(): string[] {
+    return Object.entries(this.platforms)
+      .filter(([, on]) => on)
+      .map(([name]) => name);
+  }
+
+  /**
+   * Masque ou réaffiche une plateforme. La dernière visible ne peut pas être
+   * masquée : un écran vide n'apprendrait rien.
+   */
+  async togglePlatform(name: "modrinth" | "curseforge") {
+    if (this.platforms[name] && this.visiblePlatforms.length === 1) return;
+    this.platforms = { ...this.platforms, [name]: !this.platforms[name] };
+    await this.load();
+  }
+
   async load() {
     this.loading = true;
     this.error = null;
     try {
-      this.overview = await api.overview(this.rangeDays, this.rangeFrom, this.rangeTo);
+      this.overview = await api.overview(
+        this.rangeDays,
+        this.rangeFrom,
+        this.rangeTo,
+        this.visiblePlatforms,
+      );
     } catch (e) {
       this.error = message(e);
     } finally {

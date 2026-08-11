@@ -147,13 +147,15 @@ pub fn overview(
     range_days: i64,
     from: Option<String>,
     to: Option<String>,
+    platforms: Option<Vec<String>>,
 ) -> Result<Overview> {
     let today = sync::today_utc();
     let range = range_days.clamp(7, 730);
     let (from, to) = queries::resolve_range(&today, range, from.as_deref(), to.as_deref());
+    let filter = queries::PlatformFilter::from_names(platforms.as_deref());
     state
         .store
-        .with(|conn| queries::overview(conn, &today, &from, &to))
+        .with(|conn| queries::overview(conn, &today, &from, &to, filter))
 }
 
 #[tauri::command]

@@ -33,14 +33,43 @@ pub struct AuthStatus {
     pub connected: bool,
     pub username: Option<String>,
     pub connected_since: Option<String>,
+    /// Auteur CurseForge retenu, réglé à la main ou détecté au dernier cycle.
+    pub curseforge_username: Option<String>,
+    /// Nombre de projets relevés par plateforme, pour l'état de connexion.
+    pub modrinth_projects: i64,
+    pub curseforge_projects: i64,
 }
 
 fn status_of(state: &AppState) -> AuthStatus {
     let session = config::load_session(&state.data_dir);
+    let settings = config::load_settings(&state.data_dir);
+    // L'état des plateformes se lit dans la base : elle survit au redémarrage,
+    // contrairement à ce que le front garde en mémoire.
+    let (author, modrinth, curseforge) = state
+        .store
+        .with(|conn| {
+            let count = |platform: Platform| -> Result<i64> {
+                Ok(conn.query_row(
+                    "SELECT COUNT(*) FROM projects WHERE platform = ?1",
+                    [platform.as_str()],
+                    |r| r.get(0),
+                )?)
+            };
+            Ok((
+                crate::store::metrics::get_meta(conn, "curseforge_author")?,
+                count(Platform::Modrinth)?,
+                count(Platform::CurseForge)?,
+            ))
+        })
+        .unwrap_or((None, 0, 0));
+
     AuthStatus {
         connected: session.is_some(),
         username: session.as_ref().map(|s| s.username.clone()),
         connected_since: session.as_ref().map(|s| s.obtained_at.clone()),
+        curseforge_username: settings.curseforge_username.or(author),
+        modrinth_projects: modrinth,
+        curseforge_projects: curseforge,
     }
 }
 
@@ -144,11 +173,68 @@ pub fn project_detail(
         .with(|conn| queries::project_detail(conn, &from, &to, modrinth_id, curseforge_id))
 }
 
+/// Un projet vu par l'écran d'appariement : son état vis-à-vis de l'autre
+/// plateforme, qu'il soit apparié, en attente, ou déclaré sans équivalent.
+#[derive(Debug, Serialize)]
+pub struct PairingEntry {
+    pub id: i64,
+    pub platform: String,
+    pub title: String,
+    /// Identifiant et titre du jumeau, si le projet est apparié.
+    pub linked_id: Option<i64>,
+    pub linked_to: Option<String>,
+    /// Vrai si l'appariement a été posé à la main.
+    pub manual: bool,
+    /// Vrai si le projet a été déclaré sans équivalent sur l'autre plateforme.
+    pub solo: bool,
+}
+
+/// Tous les projets des deux plateformes avec leur état d'appariement.
+///
+/// L'écran a besoin de la liste complète, pas seulement des orphelins : sans
+/// elle, impossible de corriger un rapprochement erroné ni de rattacher un mod
+/// à un jumeau déjà pris.
+#[tauri::command]
+pub fn pairing_state(state: State<'_, AppState>) -> Result<Vec<PairingEntry>> {
+    state.store.with(|conn| {
+        let link_rows = p::links(conn)?;
+        let solo = p::solo_ids(conn)?;
+        let projects = p::list(conn)?;
+        let title_of = |id: i64| projects.iter().find(|p| p.id == id).map(|p| p.title.clone());
+
+        Ok(projects
+            .iter()
+            .map(|project| {
+                let link = link_rows.iter().find(|l| match project.platform {
+                    Platform::Modrinth => l.modrinth_project_id == project.id,
+                    Platform::CurseForge => l.cf_project_id == project.id,
+                });
+                let linked_id = link.map(|l| match project.platform {
+                    Platform::Modrinth => l.cf_project_id,
+                    Platform::CurseForge => l.modrinth_project_id,
+                });
+                PairingEntry {
+                    id: project.id,
+                    platform: project.platform.as_str().to_string(),
+                    title: project.title.clone(),
+                    linked_to: linked_id.and_then(title_of),
+                    linked_id,
+                    manual: link.map(|l| l.manual).unwrap_or(false),
+                    solo: solo.contains(&project.id),
+                }
+            })
+            .collect())
+    })
+}
+
 #[tauri::command]
 pub fn link_manual(state: State<'_, AppState>, modrinth_id: i64, curseforge_id: i64) -> Result<()> {
-    state
-        .store
-        .with(|conn| p::upsert_link(conn, modrinth_id, curseforge_id, 1.0, true))
+    state.store.with(|conn| {
+        // Un projet rattaché à la main n'est plus « sans équivalent ».
+        p::set_solo(conn, modrinth_id, false)?;
+        p::set_solo(conn, curseforge_id, false)?;
+        p::link_exclusive(conn, modrinth_id, curseforge_id)
+    })
 }
 
 #[tauri::command]
@@ -159,26 +245,8 @@ pub fn unlink(state: State<'_, AppState>, modrinth_id: i64, curseforge_id: i64) 
 }
 
 #[tauri::command]
-pub fn unlinked_projects(state: State<'_, AppState>) -> Result<Vec<(i64, String, String)>> {
-    state.store.with(|conn| {
-        let link_rows = p::links(conn)?;
-        Ok(p::list(conn)?
-            .into_iter()
-            .filter(|project| match project.platform {
-                Platform::Modrinth => !link_rows
-                    .iter()
-                    .any(|l| l.modrinth_project_id == project.id),
-                Platform::CurseForge => !link_rows.iter().any(|l| l.cf_project_id == project.id),
-            })
-            .map(|project| {
-                (
-                    project.id,
-                    project.platform.as_str().to_string(),
-                    project.title,
-                )
-            })
-            .collect())
-    })
+pub fn set_solo(state: State<'_, AppState>, project_id: i64, solo: bool) -> Result<()> {
+    state.store.with(|conn| p::set_solo(conn, project_id, solo))
 }
 
 pub fn data_dir(app: &tauri::AppHandle) -> PathBuf {

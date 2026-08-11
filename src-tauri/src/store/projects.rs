@@ -160,6 +160,35 @@ pub fn upsert_link(
     Ok(())
 }
 
+/// Appariement manuel exclusif : un projet n'a qu'un seul jumeau. Les liens
+/// existants des deux côtés sont donc effacés avant d'écrire le nouveau, sinon
+/// un mod mal apparié resterait rattaché à son ancien jumeau.
+pub fn link_exclusive(conn: &Connection, modrinth_id: i64, cf_id: i64) -> Result<()> {
+    conn.execute(
+        "DELETE FROM links WHERE modrinth_project_id = ?1 OR cf_project_id = ?2",
+        params![modrinth_id, cf_id],
+    )?;
+    upsert_link(conn, modrinth_id, cf_id, 1.0, true)
+}
+
+/// Déclare un projet sans équivalent sur l'autre plateforme, ou annule cette
+/// déclaration. Un projet marqué ainsi sort de la liste des appariements à faire.
+pub fn set_solo(conn: &Connection, id: i64, solo: bool) -> Result<()> {
+    conn.execute(
+        "UPDATE projects SET solo = ?2 WHERE id = ?1",
+        params![id, solo as i64],
+    )?;
+    Ok(())
+}
+
+pub fn solo_ids(conn: &Connection) -> Result<Vec<i64>> {
+    let mut stmt = conn.prepare("SELECT id FROM projects WHERE solo = 1")?;
+    let rows = stmt
+        .query_map([], |r| r.get::<_, i64>(0))?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(rows)
+}
+
 pub fn links(conn: &Connection) -> Result<Vec<LinkRow>> {
     let mut stmt =
         conn.prepare("SELECT modrinth_project_id, cf_project_id, confidence, manual FROM links")?;

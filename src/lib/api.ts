@@ -1,5 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { AuthStatus, Overview, ProjectDetail, Settings, SyncReport } from "./types";
+import type {
+  AuthStatus,
+  Overview,
+  PairingEntry,
+  ProjectDetail,
+  Settings,
+  SyncReport,
+} from "./types";
 
 export const api = {
   authStatus: () => invoke<AuthStatus>("auth_status"),
@@ -23,5 +30,6 @@ export const api = {
     invoke<void>("link_manual", { modrinthId, curseforgeId }),
   unlink: (modrinthId: number, curseforgeId: number) =>
     invoke<void>("unlink", { modrinthId, curseforgeId }),
-  unlinkedProjects: () => invoke<[number, string, string][]>("unlinked_projects"),
+  setSolo: (projectId: number, solo: boolean) => invoke<void>("set_solo", { projectId, solo }),
+  pairingState: () => invoke<PairingEntry[]>("pairing_state"),
 };

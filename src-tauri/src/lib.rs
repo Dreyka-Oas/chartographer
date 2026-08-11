@@ -38,7 +38,8 @@ pub fn run() {
             commands::project_detail,
             commands::link_manual,
             commands::unlink,
-            commands::unlinked_projects,
+            commands::set_solo,
+            commands::pairing_state,
         ])
         .run(tauri::generate_context!())
         .expect("erreur au démarrage de Tauri");

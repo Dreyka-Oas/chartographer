@@ -1,7 +1,7 @@
 use crate::error::Result;
 use rusqlite::Connection;
 
-pub const SCHEMA_VERSION: i64 = 1;
+pub const SCHEMA_VERSION: i64 = 2;
 
 const V1: &str = r#"
 CREATE TABLE projects (
@@ -95,12 +95,23 @@ CREATE INDEX idx_snapshots_taken ON cf_snapshots(taken_at);
 CREATE INDEX idx_events_occurred ON events(occurred_at DESC);
 "#;
 
+/// `solo` marque un projet qui n'existe pas sur l'autre plateforme. Sans lui,
+/// un mod publié sur un seul site reste éternellement dans la liste des
+/// appariements à faire, alors qu'il n'y a rien à apparier.
+const V2: &str = r#"
+ALTER TABLE projects ADD COLUMN solo INTEGER NOT NULL DEFAULT 0;
+"#;
+
 pub fn migrate(conn: &Connection) -> Result<()> {
     conn.execute_batch("PRAGMA foreign_keys = ON;")?;
     let current: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
 
     if current < 1 {
         conn.execute_batch(V1)?;
+    }
+
+    if current < 2 {
+        conn.execute_batch(V2)?;
     }
 
     if current < SCHEMA_VERSION {
@@ -156,6 +167,26 @@ mod tests {
         let first = version(&conn);
         migrate(&conn).unwrap();
         assert_eq!(version(&conn), first);
+    }
+
+    #[test]
+    fn migrate_adds_the_solo_column_to_an_existing_v1_base() {
+        let conn = Connection::open_in_memory().unwrap();
+        // Base au format d'origine, telle qu'installée chez un utilisateur.
+        conn.execute_batch(V1).unwrap();
+        conn.execute_batch("PRAGMA user_version = 1;").unwrap();
+
+        migrate(&conn).unwrap();
+
+        let solo: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('projects') WHERE name = 'solo'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(solo, 1, "la colonne solo doit être ajoutée");
+        assert_eq!(version(&conn), SCHEMA_VERSION);
     }
 
     #[test]

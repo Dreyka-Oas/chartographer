@@ -1,4 +1,5 @@
 <script lang="ts">
+  import PlatformBadge from "./lib/components/PlatformBadge.svelte";
   import ThemeToggle from "./lib/components/ThemeToggle.svelte";
   import { dashboard } from "./lib/state.svelte";
   import CountriesDetail from "./lib/views/detail/CountriesDetail.svelte";
@@ -43,6 +44,18 @@
     </button>
     <button class:active={view === "settings"} onclick={() => (view = "settings")}>Réglages</button>
     <span class="user">{dashboard.auth.username}</span>
+    <PlatformBadge
+      platform="modrinth"
+      label="Modrinth"
+      account={dashboard.auth.username}
+      count={dashboard.auth.modrinth_projects}
+    />
+    <PlatformBadge
+      platform="curseforge"
+      label="CurseForge"
+      account={dashboard.auth.curseforge_username}
+      count={dashboard.auth.curseforge_projects}
+    />
     <ThemeToggle />
   </nav>
 
@@ -112,6 +125,7 @@
     margin-left: auto;
     color: var(--text-dim);
     font-size: 0.8rem;
+    margin-right: 2px;
   }
   main {
     flex: 1;

@@ -3,12 +3,12 @@
   import { formatAge, formatDayLong } from "../format";
   import { dashboard } from "../state.svelte";
   import { theme, type ThemeMode } from "../theme.svelte";
-  import type { AppErrorPayload, Settings } from "../types";
+  import type { AppErrorPayload, PairingEntry, Settings } from "../types";
 
   /** Valeurs enregistrées, pour détecter ce qui a été modifié depuis. */
   let saved = $state<Settings>({ curseforge_username: null, range_days: 90 });
   let draft = $state<Settings>({ curseforge_username: null, range_days: 90 });
-  let unlinked = $state<[number, string, string][]>([]);
+  let entries = $state<PairingEntry[]>([]);
   let message = $state("");
   let leftId = $state<number | null>(null);
   let rightId = $state<number | null>(null);
@@ -30,15 +30,82 @@
       .catch(report);
   });
 
-  // La liste des orphelins est relue après chaque cycle de synchronisation :
-  // les appariements automatiques sont recalculés à ce moment-là.
+  // L'état d'appariement est relu après chaque cycle de synchronisation :
+  // les rapprochements automatiques sont recalculés à ce moment-là.
   $effect(() => {
     dashboard.lastSync;
-    api
-      .unlinkedProjects()
-      .then((value) => (unlinked = value))
-      .catch(report);
+    refreshPairing();
   });
+
+  function refreshPairing() {
+    api
+      .pairingState()
+      .then((value) => (entries = value))
+      .catch(report);
+  }
+
+  /** Projets d'une plateforme : ceux qui réclament une action d'abord. */
+  function column(platform: string) {
+    const rank = (e: PairingEntry) => (e.linked_id !== null ? 2 : e.solo ? 1 : 0);
+    return entries
+      .filter((e) => e.platform === platform)
+      .sort((a, b) => rank(a) - rank(b) || a.title.localeCompare(b.title));
+  }
+
+  const modrinthList = $derived(column("modrinth"));
+  const curseforgeList = $derived(column("curseforge"));
+  const pending = $derived(entries.filter((e) => e.linked_id === null && !e.solo).length);
+
+  const leftEntry = $derived(entries.find((e) => e.id === leftId) ?? null);
+  const rightEntry = $derived(entries.find((e) => e.id === rightId) ?? null);
+  /** Une seule sélection : les actions solo et détacher s'y appliquent. */
+  const single = $derived(leftEntry !== null && rightEntry === null ? leftEntry : rightEntry !== null && leftEntry === null ? rightEntry : null);
+
+  async function afterChange() {
+    leftId = null;
+    rightId = null;
+    refreshPairing();
+    await dashboard.load();
+  }
+
+  async function pair() {
+    if (leftId === null || rightId === null) return;
+    try {
+      await api.linkManual(leftId, rightId);
+      await afterChange();
+    } catch (e) {
+      report(e);
+    }
+  }
+
+  async function detach(entry: PairingEntry) {
+    if (entry.linked_id === null) return;
+    const [modrinthId, curseforgeId] =
+      entry.platform === "modrinth" ? [entry.id, entry.linked_id] : [entry.linked_id, entry.id];
+    try {
+      await api.unlink(modrinthId, curseforgeId);
+      await afterChange();
+    } catch (e) {
+      report(e);
+    }
+  }
+
+  async function toggleSolo(entry: PairingEntry) {
+    try {
+      await api.setSolo(entry.id, !entry.solo);
+      await afterChange();
+    } catch (e) {
+      report(e);
+    }
+  }
+
+  function select(entry: PairingEntry) {
+    if (entry.platform === "modrinth") {
+      leftId = leftId === entry.id ? null : entry.id;
+    } else {
+      rightId = rightId === entry.id ? null : entry.id;
+    }
+  }
 
   const dirty = $derived(
     draft.curseforge_username !== saved.curseforge_username || draft.range_days !== saved.range_days,
@@ -60,18 +127,6 @@
     draft = { ...saved };
     message = "";
   }
-
-  async function link(modrinthId: number, curseforgeId: number) {
-    await api.linkManual(modrinthId, curseforgeId);
-    unlinked = await api.unlinkedProjects();
-    leftId = null;
-    rightId = null;
-    await dashboard.load();
-  }
-
-  const modrinthOrphans = $derived(unlinked.filter(([, platform]) => platform === "modrinth"));
-  const curseforgeOrphans = $derived(unlinked.filter(([, platform]) => platform === "curseforge"));
-  const orphans = $derived(modrinthOrphans.length + curseforgeOrphans.length);
 
   const THEMES: { mode: ThemeMode; label: string }[] = [
     { mode: "auto", label: "Automatique" },
@@ -219,74 +274,95 @@
     </section>
 
     <section id="appariements">
-      <h2>Appariements <span class="count">{orphans}</span></h2>
-      {#if orphans === 0}
-        <div class="row">
-          <div class="text">
-            <span class="name">Tout est apparié</span>
-            <span class="desc">
-              Chaque mod présent des deux côtés voit ses téléchargements additionnés.
-            </span>
+      <h2>Appariements <span class="count">{pending}</span></h2>
+
+      <div class="row column">
+        <div class="text">
+          <span class="name">Rapprocher un mod de son jumeau</span>
+          <span class="desc">
+            Les deux colonnes listent tous tes projets. Clique un projet à gauche et son équivalent
+            à droite, puis Apparier : leurs téléchargements seront additionnés. Un mod publié sur un
+            seul site se marque « sans équivalent » — il cesse d'être signalé et reste compté sur sa
+            plateforme.
+          </span>
+        </div>
+
+        <div class="orphans">
+          <div>
+            <span class="legend-label">Modrinth · {modrinthList.length}</span>
+            <ul>
+              {#each modrinthList as entry (entry.id)}
+                <li>
+                  <button
+                    class:active={leftId === entry.id}
+                    class:linked={entry.linked_id !== null}
+                    class:solo={entry.solo}
+                    title={entry.linked_to
+                      ? `Apparié à ${entry.linked_to}`
+                      : entry.solo
+                        ? "Déclaré sans équivalent sur CurseForge"
+                        : "En attente d'appariement"}
+                    onclick={() => select(entry)}
+                  >
+                    {entry.title}
+                  </button>
+                </li>
+              {/each}
+            </ul>
+          </div>
+          <div>
+            <span class="legend-label">CurseForge · {curseforgeList.length}</span>
+            {#if curseforgeList.length === 0}
+              <p class="none">Aucun projet CurseForge relevé.</p>
+            {:else}
+              <ul>
+                {#each curseforgeList as entry (entry.id)}
+                  <li>
+                    <button
+                      class:active={rightId === entry.id}
+                      class:linked={entry.linked_id !== null}
+                      class:solo={entry.solo}
+                      title={entry.linked_to
+                        ? `Apparié à ${entry.linked_to}`
+                        : entry.solo
+                          ? "Déclaré sans équivalent sur Modrinth"
+                          : "En attente d'appariement"}
+                      onclick={() => select(entry)}
+                    >
+                      {entry.title}
+                    </button>
+                  </li>
+                {/each}
+              </ul>
+            {/if}
           </div>
         </div>
-      {:else}
-        <div class="row column">
-          <div class="text">
-            <span class="name">Projets sans jumeau</span>
-            <span class="desc">
-              Ces projets n'ont pas trouvé d'équivalent sur l'autre plateforme : soit ils n'y sont
-              pas publiés, soit leurs titres diffèrent trop pour être rapprochés automatiquement.
-              Sélectionne un projet de chaque colonne pour les apparier à la main.
-            </span>
-          </div>
-          <div class="orphans">
-            <div>
-              <span class="legend-label">Modrinth · {modrinthOrphans.length}</span>
-              {#if modrinthOrphans.length === 0}
-                <p class="none">Aucun projet Modrinth en attente.</p>
-              {:else}
-                <ul>
-                  {#each modrinthOrphans as [id, , title] (id)}
-                    <li>
-                      <button class:active={leftId === id} onclick={() => (leftId = id)}>
-                        {title}
-                      </button>
-                    </li>
-                  {/each}
-                </ul>
-              {/if}
-            </div>
-            <div>
-              <span class="legend-label">CurseForge · {curseforgeOrphans.length}</span>
-              {#if curseforgeOrphans.length === 0}
-                <p class="none">
-                  Aucun projet CurseForge en attente : les projets ci-contre n'existent
-                  vraisemblablement pas sur CurseForge, et resteront comptés sur Modrinth seul.
-                </p>
-              {:else}
-                <ul>
-                  {#each curseforgeOrphans as [id, , title] (id)}
-                    <li>
-                      <button class:active={rightId === id} onclick={() => (rightId = id)}>
-                        {title}
-                      </button>
-                    </li>
-                  {/each}
-                </ul>
-              {/if}
-            </div>
-          </div>
-          <button
-            class="primary"
-            disabled={leftId === null || rightId === null}
-            onclick={() => {
-              if (leftId !== null && rightId !== null) link(leftId, rightId);
-            }}
-          >
+
+        <div class="actions">
+          <button class="primary" disabled={leftId === null || rightId === null} onclick={pair}>
             Apparier les deux sélections
           </button>
+          {#if single}
+            {#if single.linked_id !== null}
+              <button onclick={() => detach(single)}>
+                Détacher « {single.title} » de {single.linked_to}
+              </button>
+            {:else}
+              <button onclick={() => toggleSolo(single)}>
+                {single.solo
+                  ? `Remettre « ${single.title} » en attente`
+                  : `« ${single.title} » n'existe pas sur l'autre plateforme`}
+              </button>
+            {/if}
+          {/if}
         </div>
-      {/if}
+
+        <p class="legend">
+          <span class="dot pending"></span> en attente
+          <span class="dot linked"></span> apparié
+          <span class="dot solo"></span> sans équivalent
+        </p>
+      </div>
     </section>
   </div>
 </div>
@@ -471,9 +547,10 @@
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
-    max-height: 180px;
+    max-height: 220px;
     overflow-y: auto;
     overscroll-behavior: contain;
+    align-content: flex-start;
   }
   input {
     background: var(--surface-2);
@@ -518,14 +595,61 @@
   .segmented {
     gap: 4px;
   }
-  .segmented button.active,
-  li button.active {
+  .segmented button.active {
     border-color: var(--accent);
     color: var(--accent);
   }
+  /*
+   * Trois états lisibles d'un coup d'œil : en attente (neutre), apparié (vert),
+   * sans équivalent (estompé). La sélection ajoute un cerclage plein.
+   */
   li button {
     font-size: 0.78rem;
     padding: 4px 10px;
+    color: var(--text);
+  }
+  li button.linked {
+    border-color: var(--modrinth);
+    color: var(--modrinth);
+  }
+  li button.solo {
+    color: var(--text-dim);
+    border-style: dashed;
+  }
+  li button.active {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+    color: var(--accent);
+  }
+  .actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .legend {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    font-size: 0.74rem;
+    color: var(--text-dim);
+  }
+  .dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 3px;
+    border: 1px solid var(--border);
+    margin-left: 8px;
+  }
+  .dot:first-child {
+    margin-left: 0;
+  }
+  .dot.linked {
+    border-color: var(--modrinth);
+    background: var(--modrinth);
+  }
+  .dot.solo {
+    border-style: dashed;
   }
   .primary {
     background: var(--accent);

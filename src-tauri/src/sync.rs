@@ -203,6 +203,9 @@ async fn resolve_curseforge_author(
 async fn discover_curseforge(store: &Store, ctx: &SyncContext) -> Result<String> {
     let client = CurseForgeClient::new()?;
     let author = resolve_curseforge_author(&client, store, ctx).await?;
+    // L'auteur retenu est conservé : l'interface l'affiche, et il évite de
+    // resonder les slugs au cycle suivant.
+    store.with(|conn| m::set_meta(conn, "curseforge_author", &author.username))?;
 
     let now = Utc::now().to_rfc3339();
     let mut seen: Vec<String> = Vec::new();

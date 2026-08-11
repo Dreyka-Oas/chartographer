@@ -124,11 +124,27 @@ export interface AuthStatus {
   connected: boolean;
   username: string | null;
   connected_since: string | null;
+  /** Auteur CurseForge retenu, réglé à la main ou détecté au dernier cycle. */
+  curseforge_username: string | null;
+  modrinth_projects: number;
+  curseforge_projects: number;
 }
 
 export interface Settings {
   curseforge_username: string | null;
   range_days: number;
+}
+
+export interface PairingEntry {
+  id: number;
+  platform: string;
+  title: string;
+  /** Identifiant et titre du jumeau, si le projet est apparié. */
+  linked_id: number | null;
+  linked_to: string | null;
+  manual: boolean;
+  /** Déclaré sans équivalent sur l'autre plateforme. */
+  solo: boolean;
 }
 
 export interface SyncReport {

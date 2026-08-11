@@ -5,6 +5,7 @@
   import { revenueOption } from "../charts/revenue";
   import { palette } from "../charts/theme";
   import Card from "../components/Card.svelte";
+  import CurseforgePoints from "../components/CurseforgePoints.svelte";
   import RangePicker from "../components/RangePicker.svelte";
   import StatRow from "../components/StatRow.svelte";
   import { formatMoney } from "../format";
@@ -142,11 +143,16 @@
     </div>
   </div>
 
-  <p class="disclaimer">
-    CurseForge n'apparaît pas ici : son programme de rémunération distribue des points, consultables
-    seulement depuis le tableau de bord auteur, et n'expose aucune interface publique de revenus. Ses
-    téléchargements, eux, sont bien comptés dans la page de vision.
-  </p>
+  <div class="grid tail">
+    <div class="wide">
+      <Card
+        title="CurseForge — programme de points"
+        subtitle="Relevé à la main, faute d'interface côté CurseForge"
+      >
+        <CurseforgePoints />
+      </Card>
+    </div>
+  </div>
 {/if}
 
 <style>
@@ -160,6 +166,9 @@
   }
   .wide {
     grid-column: 1 / -1;
+  }
+  .tail {
+    margin-top: 16px;
   }
   .note {
     margin: 10px 0 0;
@@ -196,8 +205,7 @@
   .left {
     text-align: left;
   }
-  .notice,
-  .disclaimer {
+  .notice {
     margin: 16px 0 0;
     padding: 10px 14px;
     border-left: 2px solid var(--warn);

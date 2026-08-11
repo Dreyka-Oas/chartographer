@@ -3,6 +3,50 @@ use crate::models::Freshness;
 use rusqlite::{params, Connection};
 use std::collections::HashMap;
 
+/// Valeur d'un point du programme de rémunération CurseForge, telle qu'annoncée
+/// dans leur foire aux questions : 0,05 $ US. C'est une constante déclarée par
+/// la plateforme, pas une estimation de notre part.
+pub const CF_POINT_VALUE_USD: f64 = 0.05;
+
+/// Un relevé manuel du solde de points CurseForge.
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+pub struct CfPointEntry {
+    pub day: String,
+    pub points: i64,
+    /// Contre-valeur en dollars au tarif annoncé par CurseForge.
+    pub value_usd: String,
+}
+
+/// Enregistre le solde relevé un jour donné. Un second relevé le même jour
+/// remplace le premier : c'est une correction de saisie, pas un cumul.
+pub fn record_cf_points(conn: &Connection, day: &str, points: i64, now: &str) -> Result<()> {
+    conn.execute(
+        "INSERT INTO cf_points (day, points, recorded_at) VALUES (?1, ?2, ?3)
+         ON CONFLICT(day) DO UPDATE SET points = excluded.points, recorded_at = excluded.recorded_at",
+        params![day, points.max(0), now],
+    )?;
+    Ok(())
+}
+
+pub fn delete_cf_points(conn: &Connection, day: &str) -> Result<usize> {
+    Ok(conn.execute("DELETE FROM cf_points WHERE day = ?1", params![day])?)
+}
+
+pub fn cf_points(conn: &Connection) -> Result<Vec<CfPointEntry>> {
+    let mut stmt = conn.prepare("SELECT day, points FROM cf_points ORDER BY day")?;
+    let rows = stmt
+        .query_map([], |r| {
+            let points: i64 = r.get(1)?;
+            Ok(CfPointEntry {
+                day: r.get(0)?,
+                points,
+                value_usd: format!("{:.2}", points as f64 * CF_POINT_VALUE_USD),
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(rows)
+}
+
 #[derive(Debug, Clone)]
 pub struct DailyRow {
     pub project_id: i64,
@@ -249,6 +293,63 @@ pub fn freshness(conn: &Connection) -> Result<Vec<Freshness>> {
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     Ok(rows)
+}
+
+#[cfg(test)]
+mod point_tests {
+    use super::*;
+    use crate::store::schema::migrate;
+
+    fn base() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        migrate(&conn).unwrap();
+        conn
+    }
+
+    #[test]
+    fn a_second_reading_the_same_day_corrects_the_first() {
+        let conn = base();
+        record_cf_points(&conn, "2026-08-11", 120, "2026-08-11T10:00:00Z").unwrap();
+        record_cf_points(&conn, "2026-08-11", 132, "2026-08-11T18:00:00Z").unwrap();
+
+        let entries = cf_points(&conn).unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].points, 132);
+    }
+
+    #[test]
+    fn points_convert_at_the_rate_curseforge_publishes() {
+        let conn = base();
+        record_cf_points(&conn, "2026-08-11", 132, "2026-08-11T10:00:00Z").unwrap();
+        // 132 points × 0,05 $
+        assert_eq!(cf_points(&conn).unwrap()[0].value_usd, "6.60");
+    }
+
+    #[test]
+    fn readings_come_back_in_chronological_order() {
+        let conn = base();
+        record_cf_points(&conn, "2026-08-11", 3, "x").unwrap();
+        record_cf_points(&conn, "2026-06-01", 1, "x").unwrap();
+        record_cf_points(&conn, "2026-07-01", 2, "x").unwrap();
+
+        let days: Vec<String> = cf_points(&conn).unwrap().into_iter().map(|e| e.day).collect();
+        assert_eq!(days, ["2026-06-01", "2026-07-01", "2026-08-11"]);
+    }
+
+    #[test]
+    fn a_negative_reading_is_clamped_rather_than_stored() {
+        let conn = base();
+        record_cf_points(&conn, "2026-08-11", -40, "x").unwrap();
+        assert_eq!(cf_points(&conn).unwrap()[0].points, 0);
+    }
+
+    #[test]
+    fn forgetting_a_reading_removes_it() {
+        let conn = base();
+        record_cf_points(&conn, "2026-08-11", 10, "x").unwrap();
+        assert_eq!(delete_cf_points(&conn, "2026-08-11").unwrap(), 1);
+        assert!(cf_points(&conn).unwrap().is_empty());
+    }
 }
 
 #[cfg(test)]

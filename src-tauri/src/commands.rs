@@ -251,6 +251,34 @@ pub fn set_solo(state: State<'_, AppState>, project_id: i64, solo: bool) -> Resu
     state.store.with(|conn| p::set_solo(conn, project_id, solo))
 }
 
+/// Enregistre le solde de points CurseForge relevé à la main.
+///
+/// Leur programme de rémunération n'expose aucune interface : ni l'API publique,
+/// ni le jeton de dépôt ne donnent accès au solde. Il ne se lit que sur le
+/// tableau de bord auteur, d'où cette saisie.
+#[tauri::command]
+pub fn record_curseforge_points(state: State<'_, AppState>, points: i64) -> Result<()> {
+    let today = sync::today_utc();
+    let now = Utc::now().to_rfc3339();
+    state
+        .store
+        .with(|conn| crate::store::metrics::record_cf_points(conn, &today, points, &now))
+}
+
+#[tauri::command]
+pub fn forget_curseforge_points(state: State<'_, AppState>, day: String) -> Result<()> {
+    state
+        .store
+        .with(|conn| crate::store::metrics::delete_cf_points(conn, &day).map(|_| ()))
+}
+
+#[tauri::command]
+pub fn curseforge_points(
+    state: State<'_, AppState>,
+) -> Result<Vec<crate::store::metrics::CfPointEntry>> {
+    state.store.with(crate::store::metrics::cf_points)
+}
+
 pub fn data_dir(app: &tauri::AppHandle) -> PathBuf {
     app.path()
         .app_data_dir()

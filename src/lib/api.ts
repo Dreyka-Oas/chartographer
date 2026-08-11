@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   AuthStatus,
+  CfPointEntry,
   Overview,
   PairingEntry,
   ProjectDetail,
@@ -31,5 +32,9 @@ export const api = {
   unlink: (modrinthId: number, curseforgeId: number) =>
     invoke<void>("unlink", { modrinthId, curseforgeId }),
   setSolo: (projectId: number, solo: boolean) => invoke<void>("set_solo", { projectId, solo }),
+  recordCurseforgePoints: (points: number) =>
+    invoke<void>("record_curseforge_points", { points }),
+  forgetCurseforgePoints: (day: string) => invoke<void>("forget_curseforge_points", { day }),
+  curseforgePoints: () => invoke<CfPointEntry[]>("curseforge_points"),
   pairingState: () => invoke<PairingEntry[]>("pairing_state"),
 };

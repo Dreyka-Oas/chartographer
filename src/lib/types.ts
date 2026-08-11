@@ -151,6 +151,14 @@ export interface PairingEntry {
   solo: boolean;
 }
 
+/** Relevé manuel du solde de points CurseForge. */
+export interface CfPointEntry {
+  day: string;
+  points: number;
+  /** Contre-valeur au tarif annoncé par CurseForge : 0,05 $ le point. */
+  value_usd: string;
+}
+
 export interface SyncReport {
   provider: string;
   status: string;

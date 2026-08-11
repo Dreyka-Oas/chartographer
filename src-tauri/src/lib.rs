@@ -40,6 +40,9 @@ pub fn run() {
             commands::unlink,
             commands::set_solo,
             commands::pairing_state,
+            commands::record_curseforge_points,
+            commands::forget_curseforge_points,
+            commands::curseforge_points,
         ])
         .run(tauri::generate_context!())
         .expect("erreur au démarrage de Tauri");

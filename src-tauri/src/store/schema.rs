@@ -1,7 +1,7 @@
 use crate::error::Result;
 use rusqlite::Connection;
 
-pub const SCHEMA_VERSION: i64 = 2;
+pub const SCHEMA_VERSION: i64 = 3;
 
 const V1: &str = r#"
 CREATE TABLE projects (
@@ -102,6 +102,19 @@ const V2: &str = r#"
 ALTER TABLE projects ADD COLUMN solo INTEGER NOT NULL DEFAULT 0;
 "#;
 
+/// Relevés manuels du solde de points CurseForge.
+///
+/// Leur programme de rémunération n'expose aucune interface : le solde ne se lit
+/// que sur le tableau de bord auteur. L'utilisateur le recopie ici, un relevé
+/// par jour, et l'application en tire une courbe.
+const V3: &str = r#"
+CREATE TABLE cf_points (
+  day TEXT PRIMARY KEY,
+  points INTEGER NOT NULL,
+  recorded_at TEXT NOT NULL
+);
+"#;
+
 pub fn migrate(conn: &Connection) -> Result<()> {
     conn.execute_batch("PRAGMA foreign_keys = ON;")?;
     let current: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
@@ -112,6 +125,10 @@ pub fn migrate(conn: &Connection) -> Result<()> {
 
     if current < 2 {
         conn.execute_batch(V2)?;
+    }
+
+    if current < 3 {
+        conn.execute_batch(V3)?;
     }
 
     if current < SCHEMA_VERSION {
@@ -143,6 +160,7 @@ mod tests {
             .map(|r| r.unwrap())
             .collect();
         for expected in [
+            "cf_points",
             "cf_snapshots",
             "countries_daily",
             "events",

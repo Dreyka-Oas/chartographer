@@ -4,6 +4,7 @@ pub mod error;
 pub mod matching;
 pub mod models;
 pub mod providers;
+pub mod scrape;
 pub mod store;
 pub mod sync;
 
@@ -43,6 +44,8 @@ pub fn run() {
             commands::record_curseforge_points,
             commands::forget_curseforge_points,
             commands::curseforge_points,
+            commands::open_curseforge_window,
+            commands::read_curseforge_page,
         ])
         .run(tauri::generate_context!())
         .expect("erreur au démarrage de Tauri");

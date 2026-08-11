@@ -279,6 +279,94 @@ pub fn curseforge_points(
     state.store.with(crate::store::metrics::cf_points)
 }
 
+/// Fenêtre où l'utilisateur se connecte à CurseForge. Ses identifiants sont
+/// saisis dans la page officielle, jamais dans notre interface.
+pub const CF_WINDOW: &str = "curseforge";
+pub const CF_AUTHOR_PAGE: &str = "https://authors.curseforge.com/";
+
+#[tauri::command]
+pub fn open_curseforge_window(app: tauri::AppHandle) -> Result<()> {
+    if let Some(window) = app.get_webview_window(CF_WINDOW) {
+        let _ = window.show();
+        let _ = window.set_focus();
+        return Ok(());
+    }
+    let url = tauri::Url::parse(CF_AUTHOR_PAGE)
+        .map_err(|e| AppError::Config(format!("adresse CurseForge invalide : {e}")))?;
+    tauri::WebviewWindowBuilder::new(&app, CF_WINDOW, tauri::WebviewUrl::External(url))
+        .title("CurseForge — connexion et solde de points")
+        .inner_size(1100.0, 820.0)
+        .build()
+        .map_err(|e| AppError::Config(format!("ouverture de la fenêtre CurseForge : {e}")))?;
+    Ok(())
+}
+
+/// Ce que la lecture de la page a retenu, soumis à l'utilisateur avant
+/// enregistrement : la valeur n'est jamais écrite dans son dos.
+#[derive(Debug, Serialize)]
+pub struct CfScrape {
+    pub url: String,
+    pub title: String,
+    pub points: Option<i64>,
+    pub excerpt: String,
+}
+
+/// Relève le texte affiché dans la fenêtre CurseForge. On ne lit que ce que
+/// l'utilisateur voit déjà à l'écran, sur son propre compte.
+const READ_SCRIPT: &str = r#"(function () {
+  return {
+    url: location.href,
+    title: document.title,
+    text: (document.body ? document.body.innerText : '').slice(0, 20000)
+  };
+})()"#;
+
+#[tauri::command]
+pub async fn read_curseforge_page(app: tauri::AppHandle) -> Result<CfScrape> {
+    let window = app.get_webview_window(CF_WINDOW).ok_or_else(|| {
+        AppError::Config("ouvre d'abord la fenêtre CurseForge et connecte-toi".into())
+    })?;
+
+    let (sender, receiver) = tokio::sync::oneshot::channel::<String>();
+    let slot = std::sync::Mutex::new(Some(sender));
+    window
+        .eval_with_callback(READ_SCRIPT, move |raw| {
+            if let Ok(mut guard) = slot.lock() {
+                if let Some(sender) = guard.take() {
+                    let _ = sender.send(raw);
+                }
+            }
+        })
+        .map_err(|e| AppError::Config(format!("lecture de la page : {e}")))?;
+
+    let raw = tokio::time::timeout(std::time::Duration::from_secs(8), receiver)
+        .await
+        .map_err(|_| AppError::Remote {
+            provider: "CurseForge".into(),
+            detail: "la page n'a pas répondu en huit secondes".into(),
+        })?
+        .map_err(|_| AppError::Remote {
+            provider: "CurseForge".into(),
+            detail: "lecture de la page interrompue".into(),
+        })?;
+
+    #[derive(serde::Deserialize)]
+    struct Snapshot {
+        url: String,
+        title: String,
+        text: String,
+    }
+    let snapshot: Snapshot = serde_json::from_str(&raw)
+        .map_err(|e| AppError::Data(format!("réponse de la page illisible : {e}")))?;
+
+    Ok(CfScrape {
+        points: crate::scrape::extract_points(&snapshot.text),
+        excerpt: crate::scrape::excerpt_around(&snapshot.text, "point", 90),
+        url: snapshot.url,
+        title: snapshot.title,
+    })
+}
+
 pub fn data_dir(app: &tauri::AppHandle) -> PathBuf {
     app.path()
         .app_data_dir()

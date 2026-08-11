@@ -2,12 +2,14 @@
   import { api } from "../api";
   import { formatDayLong, formatMoney } from "../format";
   import { dashboard } from "../state.svelte";
-  import type { AppErrorPayload, CfPointEntry } from "../types";
+  import type { AppErrorPayload, CfPointEntry, CfScrape } from "../types";
 
   let entries = $state<CfPointEntry[]>([]);
   let draft = $state("");
   let saving = $state(false);
   let loaded = $state(false);
+  let reading = $state(false);
+  let scrape = $state<CfScrape | null>(null);
 
   function report(e: unknown) {
     dashboard.error = (e as AppErrorPayload)?.message ?? String(e);
@@ -45,6 +47,24 @@
     }
   }
 
+  /**
+   * Lecture assistée : l'utilisateur se connecte dans la fenêtre CurseForge,
+   * l'application relit ce que la page affiche et propose la valeur trouvée.
+   * Rien n'est enregistré sans sa validation.
+   */
+  async function readFromPage() {
+    reading = true;
+    scrape = null;
+    try {
+      scrape = await api.readCurseforgePage();
+      if (scrape.points !== null) draft = String(scrape.points);
+    } catch (e) {
+      report(e);
+    } finally {
+      reading = false;
+    }
+  }
+
   async function forget(day: string) {
     try {
       await api.forgetCurseforgePoints(day);
@@ -57,10 +77,32 @@
 
 <p class="note">
   CurseForge rémunère ses auteurs en points, sans aucune interface pour les lire : ni l'API publique,
-  ni le jeton de dépôt n'y donnent accès. Relève ton solde sur ton tableau de bord auteur et note-le
-  ici ; l'application le convertit au tarif annoncé par CurseForge, 0,05 $ le point, et suit son
-  évolution.
+  ni le jeton de dépôt n'y donnent accès. Deux façons de renseigner ton solde : l'ouvrir dans une
+  fenêtre et laisser l'application relire la page, ou le recopier à la main. Il est converti au tarif
+  annoncé par CurseForge, 0,05 $ le point.
 </p>
+
+<div class="assist">
+  <button onclick={() => api.openCurseforgeWindow().catch(report)}>
+    Ouvrir CurseForge et se connecter
+  </button>
+  <button onclick={readFromPage} disabled={reading}>
+    {reading ? "Lecture…" : "Lire le solde affiché"}
+  </button>
+</div>
+
+{#if scrape}
+  <p class="read" class:miss={scrape.points === null}>
+    {#if scrape.points === null}
+      Aucun solde reconnu sur cette page. Ouvre la page qui affiche tes points, puis relance la
+      lecture — ou saisis le montant à la main.
+    {:else}
+      Solde trouvé : <b>{scrape.points} points</b>. Vérifie puis enregistre.
+    {/if}
+    <span class="source">Page lue : {scrape.title || scrape.url}</span>
+    {#if scrape.excerpt}<span class="source">« {scrape.excerpt} »</span>{/if}
+  </p>
+{/if}
 
 <form
   onsubmit={(e) => {
@@ -121,6 +163,32 @@
     color: var(--text-dim);
     line-height: 1.5;
     max-width: 80ch;
+  }
+  .assist {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+  .read {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 0 0 12px;
+    padding: 10px 12px;
+    border-left: 2px solid var(--modrinth);
+    background: var(--surface-2);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    font-size: 0.82rem;
+  }
+  .read.miss {
+    border-left-color: var(--warn);
+    color: var(--text-dim);
+  }
+  .source {
+    font-size: 0.74rem;
+    color: var(--text-dim);
+    overflow-wrap: anywhere;
   }
   form {
     display: flex;

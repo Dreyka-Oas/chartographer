@@ -159,6 +159,14 @@ export interface CfPointEntry {
   value_usd: string;
 }
 
+/** Ce que la lecture de la page CurseForge a retenu, avant validation. */
+export interface CfScrape {
+  url: string;
+  title: string;
+  points: number | null;
+  excerpt: string;
+}
+
 export interface SyncReport {
   provider: string;
   status: string;

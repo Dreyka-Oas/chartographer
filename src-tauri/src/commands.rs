@@ -566,6 +566,61 @@ pub(crate) async fn wait_until_loaded(window: &tauri::WebviewWindow) {
     }
 }
 
+/// Emmène la fenêtre sur une adresse et attend d'y être vraiment.
+///
+/// Demander la navigation ne suffit pas : le document d'avant reste en place
+/// quelques instants, déjà chargé, et qui le lirait aussitôt lirait la page
+/// qu'on vient de quitter. On attend donc que l'adresse ait changé, puis que la
+/// nouvelle page se soit dressée.
+pub(crate) async fn navigate(
+    app: &tauri::AppHandle,
+    window: &tauri::WebviewWindow,
+    url: &str,
+    expect: &str,
+) -> Result<()> {
+    let script = format!("(function () {{ location.href = {url:?}; return 'ok'; }})()");
+    eval_in_window(app, &script).await?;
+    for _ in 0..40 {
+        tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+        if let Ok(raw) = eval_raw(window, "location.href").await {
+            if raw.contains(expect) {
+                break;
+            }
+        }
+    }
+    wait_until_loaded(window).await;
+    wait_until_settled(window).await;
+    Ok(())
+}
+
+/// Attend que la page cesse de grossir.
+///
+/// `readyState` passe à « complete » avant que tout soit là : le pied de page,
+/// les tableaux et les listes arrivent après. Lire à cet instant donne une page
+/// à moitié vide. On attend donc deux mesures identiques d'affilée.
+pub(crate) async fn wait_until_settled(window: &tauri::WebviewWindow) {
+    const SIZE: &str =
+        "(function () { return (document.body ? document.body.innerText.length : 0); })()";
+    let mut previous = 0usize;
+    let mut stable = 0;
+    for _ in 0..20 {
+        tokio::time::sleep(std::time::Duration::from_millis(600)).await;
+        let Ok(raw) = eval_raw(window, SIZE).await else {
+            continue;
+        };
+        let size = raw.trim_matches('"').parse::<usize>().unwrap_or(0);
+        if size > 200 && size == previous {
+            stable += 1;
+            if stable >= 1 {
+                return;
+            }
+        } else {
+            stable = 0;
+        }
+        previous = size;
+    }
+}
+
 /// Exécute un script dans la fenêtre CurseForge et rend son résultat.
 pub(crate) async fn eval_in_window(app: &tauri::AppHandle, script: &str) -> Result<String> {
     let window = cf_window(app).await?;
@@ -942,6 +997,7 @@ pub async fn collect_curseforge(
 ) -> Result<CfCollect> {
     let window = cf_window(&app).await?;
     wait_until_loaded(&window).await;
+    tracing::debug!("collecte CurseForge : fenêtre prête");
 
     let page = page_state(&app).await?;
     if asks_for_login(&page) {
@@ -1050,12 +1106,32 @@ pub async fn collect_curseforge(
         crate::store::metrics::set_meta(conn, "curseforge_revenue_ytd", &money(year_to_date))
     })?;
 
+    // Le jeton d'envoi se relève au même passage, tant que la session est là.
+    // Il n'a pas à être réclamé plus tard, ni saisi : la fenêtre est déjà
+    // ouverte sur le bon compte, autant s'en servir une bonne fois.
+    let token_note = if config::load_settings(&state.data_dir)
+        .curseforge_upload_token
+        .is_none()
+    {
+        tracing::debug!("relevé du jeton d'envoi CurseForge");
+        match crate::publish_api::capture_token(&app, &state).await {
+            Ok(true) => " · jeton d'envoi relevé",
+            Ok(false) => " · aucun jeton d'envoi lisible",
+            Err(error) => {
+                tracing::debug!(%error, "relevé du jeton impossible");
+                ""
+            }
+        }
+    } else {
+        ""
+    };
+
     // La fenêtre a fini son travail : elle s'efface sans se fermer, pour garder
     // la session ouverte et repartir sans rien recharger au prochain relevé.
     let _ = window.hide();
 
     let detail = format!(
-        "{} jours relevés · {} mods rattachés · {} mois de revenus{}",
+        "{} jours relevés · {} mods rattachés · {} mois de revenus{}{token_note}",
         series.len(),
         imported.len(),
         months.len(),

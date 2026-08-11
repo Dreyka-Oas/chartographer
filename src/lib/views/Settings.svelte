@@ -293,8 +293,9 @@
         <div class="text">
           <span class="name">Jeton d'envoi</span>
           <span class="desc">
-            Nécessaire pour publier un fichier. L'application le relève elle-même sur ton compte,
-            avec la session déjà ouverte, et ne l'affiche jamais.
+            Nécessaire pour publier un fichier. L'application en demande un à ton compte lors de sa
+            première collecte, sous le nom « Chartographer », et ne l'affiche jamais. Tu peux le
+            révoquer depuis CurseForge à tout moment.
           </span>
         </div>
         <div class="control">

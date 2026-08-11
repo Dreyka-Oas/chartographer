@@ -89,49 +89,67 @@ fn upload_client(state: &AppState) -> Result<UploadClient> {
     UploadClient::new(&token)
 }
 
-/// Page où CurseForge liste les jetons d'envoi de l'auteur. Le tableau de bord
-/// actuel ne les montre plus : ils sont restés sur l'ancien site, où la session
-/// vaut aussi.
-const TOKEN_PAGE: &str = "https://legacy.curseforge.com/account/api-tokens";
-
-/// Relève les jetons affichés sur la page du compte.
+/// Page où CurseForge gère les jetons d'envoi de l'auteur.
 ///
-/// Ils y figurent en clair, dans le tableau ; d'autres identifiants de même
-/// forme traînent parfois ailleurs dans la page, d'où la vérification qui suit.
+/// Le tableau de bord actuel ne les montre plus : ils sont restés sur l'ancien
+/// site. L'adresse publique y redirige en emportant la session, alors que viser
+/// l'ancien site directement rend une page dépouillée.
+const TOKEN_PAGE: &str = "https://www.curseforge.com/account/api-tokens";
+
+/// Relève les jetons du compte en redemandant la page, plutôt qu'en la lisant
+/// à l'écran.
+///
+/// Une fenêtre cachée ne dessine pas : son document reste à moitié vide, et le
+/// tableau des jetons n'y paraît jamais. La page est donc redemandée depuis
+/// elle-même — même origine, même session — et les jetons sont cherchés dans la
+/// réponse, qui, elle, est toujours complète.
 const READ_TOKENS: &str = r#"(function () {
-  var found = [];
-  var pattern = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
-  document.querySelectorAll('td, code, pre, input').forEach(function (node) {
-    var text = (node.innerText || node.value || '').trim();
-    var hit = text.match(pattern);
-    if (hit && found.indexOf(hit[0]) < 0) found.push(hit[0]);
-  });
-  if (found.length === 0) {
-    var all = (document.documentElement ? document.documentElement.innerHTML : '')
-      .match(new RegExp(pattern.source, 'gi')) || [];
-    all.forEach(function (t) { if (found.indexOf(t) < 0) found.push(t); });
+  window.__cgTokens = null;
+  var motif = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+  var uniques = [];
+  function ajoute(source) {
+    (String(source).match(motif) || []).forEach(function (t) {
+      if (uniques.indexOf(t) < 0) uniques.push(t);
+    });
   }
-  return JSON.stringify(found);
+  ajoute(document.documentElement ? document.documentElement.innerHTML : '');
+  // La page est aussi redemandée : une fenêtre cachée ne dessine pas tout, mais
+  // la réponse, elle, est toujours entière.
+  fetch(location.href, { credentials: 'include' })
+    .then(function (r) { return r.text(); })
+    .then(function (html) { ajoute(html); window.__cgTokens = uniques; })
+    .catch(function () { window.__cgTokens = uniques; });
+  return 'lecture lancee';
 })()"#;
 
-/// Demande un nouveau jeton quand le compte n'en montre aucun.
-const GENERATE_TOKEN: &str = r#"(function () {
-  var nodes = document.querySelectorAll('button, a, input[type=submit]');
-  for (var i = 0; i < nodes.length; i++) {
-    var label = (nodes[i].innerText || nodes[i].value || '').trim();
-    if (/générer un jeton|generate token|generate a token/i.test(label)) {
-      nodes[i].click();
-      return 'demandé';
-    }
-  }
-  return 'bouton introuvable';
-})()"#;
-
-/// Relève le jeton d'envoi CurseForge sans rien demander à l'utilisateur.
+/// Demande un nouveau jeton, nommé pour qu'on sache d'où il vient.
 ///
-/// La page du compte l'affiche en clair : l'application la lit avec la session
-/// déjà ouverte, essaie chaque jeton trouvé contre l'interface d'envoi, et garde
-/// celui qui répond. Aucun n'est affiché nulle part.
+/// Un jeton existant n'est jamais réaffiché : le site ne le montre qu'une fois,
+/// à sa création. En obtenir un est donc le seul moyen d'en avoir un, et le nom
+/// permet de le reconnaître — et de le révoquer — depuis le compte.
+const GENERATE_TOKEN: &str = r#"(function () {
+  var champ = document.querySelector('input[name=name]');
+  if (!champ) { return 'champ absent'; }
+  var setter = Object.getOwnPropertyDescriptor(
+    window.HTMLInputElement.prototype, 'value'
+  ).set;
+  setter.call(champ, 'Chartographer');
+  champ.dispatchEvent(new Event('input', { bubbles: true }));
+  champ.dispatchEvent(new Event('change', { bubbles: true }));
+  var formulaire = champ.form;
+  if (!formulaire) { return 'formulaire absent'; }
+  var envoi = formulaire.querySelector('input[type=submit], button[type=submit]');
+  if (envoi) { envoi.click(); return 'demandé'; }
+  formulaire.submit();
+  return 'envoyé';
+})()"#;
+
+/// Obtient le jeton d'envoi CurseForge sans rien demander à l'utilisateur.
+///
+/// Un jeton déjà émis n'est jamais réaffiché : le compte ne le montre qu'à sa
+/// création. L'application en demande donc un, nommé « Chartographer », le lit
+/// sur la page qui suit, puis l'essaie contre l'interface d'envoi avant de le
+/// garder. Il ne ressort jamais vers la fenêtre.
 #[tauri::command]
 pub async fn capture_curseforge_token(
     app: tauri::AppHandle,
@@ -148,24 +166,37 @@ pub async fn capture_token(app: &tauri::AppHandle, state: &AppState) -> Result<b
         .await
         .unwrap_or_default();
 
-    let go = format!("(function () {{ location.href = {TOKEN_PAGE:?}; return 'ok'; }})()");
-    crate::commands::eval_in_window(app, &go).await?;
-    crate::commands::wait_until_loaded(&window).await;
+    // Une fenêtre cachée ne dessine pas, et le tableau des jetons n'arrive
+    // qu'au rendu. On la sort donc de sa cachette — mais loin hors de l'écran,
+    // pour que personne ne la voie passer.
+    let posted = window.outer_position().ok();
+    let _ = window.set_position(tauri::PhysicalPosition::new(-8000, -8000));
+    let _ = window.show();
 
-    let mut candidates = read_tokens(app).await?;
-    if candidates.is_empty() {
-        crate::commands::eval_in_window(app, GENERATE_TOKEN).await?;
-        tokio::time::sleep(std::time::Duration::from_millis(2500)).await;
-        crate::commands::wait_until_loaded(&window).await;
-        candidates = read_tokens(app).await?;
-    }
+    crate::commands::navigate(app, &window, TOKEN_PAGE, "api-tokens").await?;
+
+    // Le compte n'affiche jamais un jeton déjà émis : on en demande un, nommé,
+    // et on le lit sur la page qui suit — la seule où il paraît en clair.
+    let asked = crate::commands::eval_in_window(app, GENERATE_TOKEN).await?;
+    tracing::debug!(reponse = %asked, "jeton d'envoi demandé au compte");
+    tokio::time::sleep(std::time::Duration::from_millis(3000)).await;
+    crate::commands::wait_until_loaded(&window).await;
+    crate::commands::wait_until_settled(&window).await;
+    let candidates = read_tokens(app).await?;
 
     let mut kept = None;
     for candidate in candidates {
         if let Ok(client) = UploadClient::new(&candidate) {
-            if client.game_versions().await.is_ok() {
-                kept = Some(candidate);
-                break;
+            match client.game_versions().await {
+                Ok(list) => {
+                    tracing::debug!(
+                        versions = list.len(),
+                        "jeton accepté par l'interface d'envoi"
+                    );
+                    kept = Some(candidate);
+                    break;
+                }
+                Err(error) => tracing::debug!(%error, "jeton refusé"),
             }
         }
     }
@@ -178,8 +209,13 @@ pub async fn capture_token(app: &tauri::AppHandle, state: &AppState) -> Result<b
     } else {
         "https://authors.curseforge.com/".to_string()
     };
-    let go_back = format!("(function () {{ location.href = {target:?}; return 'ok'; }})()");
-    let _ = crate::commands::eval_in_window(app, &go_back).await;
+    let _ = crate::commands::navigate(app, &window, &target, "curseforge.com").await;
+
+    // La fenêtre retourne d'où elle vient : cachée, et à sa place.
+    let _ = window.hide();
+    if let Some(position) = posted {
+        let _ = window.set_position(position);
+    }
 
     match kept {
         Some(token) => {
@@ -399,10 +435,26 @@ pub async fn curseforge_files(app: tauri::AppHandle, project_id: i64) -> Result<
     Ok(serde_json::from_str(&body).unwrap_or(serde_json::Value::Null))
 }
 
+/// Lit les jetons affichés, en laissant à la page le temps de les afficher.
+///
+/// Le tableau arrive après le reste de la page : attendre une taille stable ne
+/// suffit pas, elle grossit par paliers. On attend donc exactement ce qu'on
+/// cherche, et on s'arrête dès qu'il paraît.
 async fn read_tokens(app: &tauri::AppHandle) -> Result<Vec<String>> {
-    let raw = crate::commands::eval_in_window(app, READ_TOKENS).await?;
-    let unquoted: String = serde_json::from_str(&raw).unwrap_or(raw);
-    Ok(serde_json::from_str(&unquoted).unwrap_or_default())
+    crate::commands::eval_in_window(app, READ_TOKENS).await?;
+    let mut found: Vec<String> = Vec::new();
+    for _ in 0..20 {
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        let raw = crate::commands::eval_in_window(app, "JSON.stringify(window.__cgTokens)").await?;
+        let unquoted: String = serde_json::from_str(&raw).unwrap_or(raw);
+        if unquoted == "null" || unquoted.is_empty() {
+            continue;
+        }
+        found = serde_json::from_str(&unquoted).unwrap_or_default();
+        break;
+    }
+    tracing::debug!(trouves = found.len(), "jetons lus sur la page du compte");
+    Ok(found)
 }
 
 /// Catalogue des versions de jeu CurseForge, gardé en base entre deux envois.

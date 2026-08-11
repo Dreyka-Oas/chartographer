@@ -45,6 +45,10 @@ pub fn run() {
             commands::forget_curseforge_points,
             commands::curseforge_points,
             commands::open_curseforge_site,
+            commands::open_curseforge_window,
+            commands::arm_curseforge_capture,
+            commands::read_curseforge_page,
+            commands::import_curseforge_capture,
             commands::analyze_curseforge_text,
             commands::import_curseforge_series,
         ])

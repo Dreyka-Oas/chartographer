@@ -159,6 +159,24 @@ export interface CfPointEntry {
   value_usd: string;
 }
 
+/** Une réponse interceptée dans la fenêtre CurseForge, résumée. */
+export interface CfCapture {
+  url: string;
+  days: number;
+  from: string | null;
+  to: string | null;
+  total: number;
+}
+
+/** Ce que la fenêtre CurseForge donne à lire. */
+export interface CfScrape {
+  url: string;
+  title: string;
+  points: number | null;
+  excerpt: string;
+  captures: CfCapture[];
+}
+
 /** Ce que l'application reconnaît dans un contenu rapporté de CurseForge. */
 export interface CfAnalysis {
   /** Solde de points repéré dans du texte copié. */

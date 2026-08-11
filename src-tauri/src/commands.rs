@@ -286,11 +286,247 @@ pub fn curseforge_points(
 /// donc là où l'utilisateur est déjà connecté, et il rapporte ce qu'il y voit.
 pub const CF_AUTHOR_PAGE: &str = "https://authors.curseforge.com/";
 
+pub const CF_WINDOW: &str = "curseforge";
+
 #[tauri::command]
 pub fn open_curseforge_site(app: tauri::AppHandle) -> Result<()> {
     app.opener()
         .open_url(CF_AUTHOR_PAGE, None::<&str>)
         .map_err(|e| AppError::Config(format!("ouverture du navigateur : {e}")))
+}
+
+/// Ouvre le tableau de bord dans une fenêtre de l'application.
+///
+/// Rien n'est injecté au chargement : le site est une application web protégée
+/// par un filtre anti-robot, et modifier `fetch` avant son démarrage l'empêchait
+/// de s'afficher. L'écoute des requêtes est posée après coup, à la demande.
+#[tauri::command]
+pub fn open_curseforge_window(app: tauri::AppHandle) -> Result<()> {
+    if let Some(window) = app.get_webview_window(CF_WINDOW) {
+        let _ = window.show();
+        let _ = window.set_focus();
+        return Ok(());
+    }
+    let url = tauri::Url::parse(CF_AUTHOR_PAGE)
+        .map_err(|e| AppError::Config(format!("adresse CurseForge invalide : {e}")))?;
+    tauri::WebviewWindowBuilder::new(&app, CF_WINDOW, tauri::WebviewUrl::External(url))
+        .title("CurseForge — connexion, solde et statistiques")
+        .inner_size(1180.0, 860.0)
+        .build()
+        .map_err(|e| AppError::Config(format!("ouverture de la fenêtre CurseForge : {e}")))?;
+    Ok(())
+}
+
+/// Écoute posée dans la page déjà chargée : elle conserve les réponses que la
+/// page recevra ensuite, en naviguant vers les statistiques. Rien n'est demandé
+/// au serveur qui ne l'aurait été de toute façon.
+const CAPTURE_SCRIPT: &str = r#"(function () {
+  if (window.__chartographer) { return 'deja en place'; }
+  var store = { captures: [] };
+  window.__chartographer = store;
+
+  function keep(url, body) {
+    if (typeof body !== 'string') return;
+    var trimmed = body.trim();
+    if (trimmed.charAt(0) !== '{' && trimmed.charAt(0) !== '[') return;
+    store.captures.unshift({ url: String(url), body: trimmed.slice(0, 400000) });
+    if (store.captures.length > 40) store.captures.length = 40;
+  }
+
+  try {
+    var nativeFetch = window.fetch;
+    if (nativeFetch) {
+      window.fetch = function () {
+        var first = arguments[0];
+        var url = typeof first === 'string' ? first : (first && first.url) || '';
+        return nativeFetch.apply(this, arguments).then(function (response) {
+          try { response.clone().text().then(function (b) { keep(url, b); }); } catch (e) {}
+          return response;
+        });
+      };
+    }
+    var open = XMLHttpRequest.prototype.open;
+    var send = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.open = function (method, url) {
+      this.__cgUrl = url;
+      return open.apply(this, arguments);
+    };
+    XMLHttpRequest.prototype.send = function () {
+      var xhr = this;
+      xhr.addEventListener('load', function () {
+        try { keep(xhr.__cgUrl || '', xhr.responseText); } catch (e) {}
+      });
+      return send.apply(this, arguments);
+    };
+    return 'ecoute posee';
+  } catch (e) {
+    return 'echec : ' + e;
+  }
+})()"#;
+
+/// Relève le texte affiché et les réponses interceptées depuis l'armement.
+const READ_SCRIPT: &str = r#"(function () {
+  var store = window.__chartographer || { captures: [] };
+  return {
+    url: location.href,
+    title: document.title,
+    text: (document.body ? document.body.innerText : '').slice(0, 20000),
+    captures: store.captures
+  };
+})()"#;
+
+/// Exécute un script dans la fenêtre CurseForge et rend son résultat.
+async fn eval_in_window(app: &tauri::AppHandle, script: &str) -> Result<String> {
+    let window = app.get_webview_window(CF_WINDOW).ok_or_else(|| {
+        AppError::Config("ouvre d'abord la fenêtre CurseForge et connecte-toi".into())
+    })?;
+
+    let (sender, receiver) = tokio::sync::oneshot::channel::<String>();
+    let slot = std::sync::Mutex::new(Some(sender));
+    window
+        .eval_with_callback(script, move |raw| {
+            if let Ok(mut guard) = slot.lock() {
+                if let Some(sender) = guard.take() {
+                    let _ = sender.send(raw);
+                }
+            }
+        })
+        .map_err(|e| AppError::Config(format!("exécution dans la page : {e}")))?;
+
+    tokio::time::timeout(std::time::Duration::from_secs(8), receiver)
+        .await
+        .map_err(|_| AppError::Remote {
+            provider: "CurseForge".into(),
+            detail: "la page n'a pas répondu en huit secondes".into(),
+        })?
+        .map_err(|_| AppError::Remote {
+            provider: "CurseForge".into(),
+            detail: "lecture de la page interrompue".into(),
+        })
+}
+
+#[tauri::command]
+pub async fn arm_curseforge_capture(app: tauri::AppHandle) -> Result<String> {
+    let raw = eval_in_window(&app, CAPTURE_SCRIPT).await?;
+    Ok(raw.trim_matches('"').to_string())
+}
+
+/// Une réponse interceptée, résumée pour l'interface.
+#[derive(Debug, Serialize)]
+pub struct CfCapture {
+    pub url: String,
+    pub days: usize,
+    pub from: Option<String>,
+    pub to: Option<String>,
+    pub total: i64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CfScrape {
+    pub url: String,
+    pub title: String,
+    pub points: Option<i64>,
+    pub excerpt: String,
+    pub captures: Vec<CfCapture>,
+}
+
+#[tauri::command]
+pub async fn read_curseforge_page(app: tauri::AppHandle) -> Result<CfScrape> {
+    let raw = eval_in_window(&app, READ_SCRIPT).await?;
+
+    #[derive(serde::Deserialize)]
+    struct RawCapture {
+        url: String,
+        body: String,
+    }
+    #[derive(serde::Deserialize)]
+    struct Snapshot {
+        url: String,
+        title: String,
+        text: String,
+        #[serde(default)]
+        captures: Vec<RawCapture>,
+    }
+    let snapshot: Snapshot = serde_json::from_str(&raw)
+        .map_err(|e| AppError::Data(format!("réponse de la page illisible : {e}")))?;
+
+    let mut captures: Vec<CfCapture> = snapshot
+        .captures
+        .iter()
+        .filter_map(|capture| {
+            let parsed: serde_json::Value = serde_json::from_str(&capture.body).ok()?;
+            let series = crate::scrape::find_daily_series(&parsed);
+            if series.is_empty() {
+                return None;
+            }
+            Some(CfCapture {
+                url: capture.url.clone(),
+                days: series.len(),
+                from: series.first().map(|p| p.day.clone()),
+                to: series.last().map(|p| p.day.clone()),
+                total: series.iter().map(|p| p.value).sum(),
+            })
+        })
+        .collect();
+    captures.sort_by_key(|c| std::cmp::Reverse(c.days));
+
+    Ok(CfScrape {
+        points: crate::scrape::extract_points(&snapshot.text),
+        excerpt: crate::scrape::excerpt_around(&snapshot.text, "point", 90),
+        url: snapshot.url,
+        title: snapshot.title,
+        captures,
+    })
+}
+
+/// Enregistre le solde lu dans la page, après validation de l'utilisateur.
+#[tauri::command]
+pub async fn import_curseforge_capture(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    curseforge_id: i64,
+    url: String,
+) -> Result<usize> {
+    let raw = eval_in_window(&app, READ_SCRIPT).await?;
+
+    #[derive(serde::Deserialize)]
+    struct RawCapture {
+        url: String,
+        body: String,
+    }
+    #[derive(serde::Deserialize)]
+    struct Snapshot {
+        #[serde(default)]
+        captures: Vec<RawCapture>,
+    }
+    let snapshot: Snapshot = serde_json::from_str(&raw)
+        .map_err(|e| AppError::Data(format!("réponse de la page illisible : {e}")))?;
+
+    let capture = snapshot
+        .captures
+        .iter()
+        .find(|c| c.url == url)
+        .ok_or_else(|| AppError::Data("cette source n'est plus en mémoire".into()))?;
+    let parsed: serde_json::Value = serde_json::from_str(&capture.body)
+        .map_err(|e| AppError::Data(format!("contenu illisible : {e}")))?;
+    let series = crate::scrape::find_daily_series(&parsed);
+    if series.is_empty() {
+        return Err(AppError::Data("aucune série datée dans cette source".into()));
+    }
+
+    state.store.with(|conn| {
+        for point in &series {
+            crate::store::metrics::upsert_daily(
+                conn,
+                curseforge_id,
+                &point.day,
+                Some(point.value),
+                None,
+                None,
+            )?;
+        }
+        Ok(series.len())
+    })
 }
 
 /// Ce que l'application a reconnu dans ce que l'utilisateur a rapporté de son

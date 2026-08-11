@@ -3,6 +3,7 @@ import type {
   AuthStatus,
   CfAnalysis,
   CfPointEntry,
+  CfScrape,
   Overview,
   PairingEntry,
   ProjectDetail,
@@ -38,6 +39,11 @@ export const api = {
   forgetCurseforgePoints: (day: string) => invoke<void>("forget_curseforge_points", { day }),
   curseforgePoints: () => invoke<CfPointEntry[]>("curseforge_points"),
   openCurseforgeSite: () => invoke<void>("open_curseforge_site"),
+  openCurseforgeWindow: () => invoke<void>("open_curseforge_window"),
+  armCurseforgeCapture: () => invoke<string>("arm_curseforge_capture"),
+  readCurseforgePage: () => invoke<CfScrape>("read_curseforge_page"),
+  importCurseforgeCapture: (curseforgeId: number, url: string) =>
+    invoke<number>("import_curseforge_capture", { curseforgeId, url }),
   analyzeCurseforgeText: (text: string) => invoke<CfAnalysis>("analyze_curseforge_text", { text }),
   importCurseforgeSeries: (curseforgeId: number, text: string) =>
     invoke<number>("import_curseforge_series", { curseforgeId, text }),

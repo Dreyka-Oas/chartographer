@@ -2,7 +2,13 @@
   import { api } from "../api";
   import { formatDayLong, formatMoney } from "../format";
   import { dashboard } from "../state.svelte";
-  import type { AppErrorPayload, CfAnalysis, CfPointEntry, PairingEntry } from "../types";
+  import type {
+    AppErrorPayload,
+    CfAnalysis,
+    CfPointEntry,
+    CfScrape,
+    PairingEntry,
+  } from "../types";
 
   let entries = $state<CfPointEntry[]>([]);
   let projects = $state<PairingEntry[]>([]);
@@ -14,6 +20,10 @@
   let importing = $state(false);
   let imported = $state("");
   let loaded = $state(false);
+  let arming = $state(false);
+  let reading = $state(false);
+  let armed = $state("");
+  let scrape = $state<CfScrape | null>(null);
 
   function report(e: unknown) {
     dashboard.error = (e as AppErrorPayload)?.message ?? String(e);
@@ -52,6 +62,51 @@
       report(e);
     } finally {
       saving = false;
+    }
+  }
+
+  async function openWindow() {
+    try {
+      await api.openCurseforgeWindow();
+      armed = "";
+      scrape = null;
+    } catch (e) {
+      report(e);
+    }
+  }
+
+  /** Pose l'écoute une fois la page chargée : l'injecter avant l'empêchait de démarrer. */
+  async function armCapture() {
+    arming = true;
+    try {
+      armed = await api.armCurseforgeCapture();
+    } catch (e) {
+      report(e);
+    } finally {
+      arming = false;
+    }
+  }
+
+  async function readWindow() {
+    reading = true;
+    try {
+      scrape = await api.readCurseforgePage();
+      if (scrape.points !== null && draft === "") draft = String(scrape.points);
+    } catch (e) {
+      report(e);
+    } finally {
+      reading = false;
+    }
+  }
+
+  async function importCapture(url: string) {
+    if (target === null) return;
+    try {
+      const days = await api.importCurseforgeCapture(target, url);
+      imported = `${days} jours enregistrés.`;
+      await dashboard.load();
+    } catch (e) {
+      report(e);
     }
   }
 
@@ -97,10 +152,65 @@
 </p>
 
 <div class="assist">
-  <button onclick={() => api.openCurseforgeSite().catch(report)}>
-    Ouvrir mon tableau de bord CurseForge
+  <button class="primary" onclick={openWindow}>Ouvrir CurseForge dans l'application</button>
+  <button onclick={armCapture} disabled={arming}>
+    {arming ? "Écoute…" : "Écouter les statistiques"}
   </button>
+  <button onclick={readWindow} disabled={reading}>
+    {reading ? "Lecture…" : "Lire la page"}
+  </button>
+  <button onclick={() => api.openCurseforgeSite().catch(report)}>Ouvrir dans mon navigateur</button>
 </div>
+
+{#if armed}<p class="hint">{armed}</p>{/if}
+
+{#if scrape}
+  <div class="read" class:miss={scrape.points === null && scrape.captures.length === 0}>
+    {#if scrape.points !== null}
+      <span>Solde lu dans la page : <b>{scrape.points} points</b>.</span>
+    {:else}
+      <span>Aucun solde reconnu sur cette page.</span>
+    {/if}
+    <span class="source">Page : {scrape.title || scrape.url}</span>
+    {#if scrape.excerpt}<span class="source">« {scrape.excerpt} »</span>{/if}
+
+    {#if scrape.captures.length > 0}
+      <span class="legend-label">Historiques captés</span>
+      <table>
+        <thead>
+          <tr><th class="left">Source</th><th>Jours</th><th>Période</th><th>Total</th><th></th></tr>
+        </thead>
+        <tbody>
+          {#each scrape.captures as capture (capture.url)}
+            <tr>
+              <td class="left" title={capture.url}>{capture.url.split("?")[0].split("/").pop()}</td>
+              <td>{capture.days}</td>
+              <td>{capture.from} → {capture.to}</td>
+              <td>{capture.total.toLocaleString("fr-FR")}</td>
+              <td class="right">
+                <button
+                  class="ghost"
+                  disabled={target === null}
+                  title={target === null ? "Choisis d'abord le mod" : "Importer cette série"}
+                  onclick={() => importCapture(capture.url)}
+                >
+                  Importer
+                </button>
+              </td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+      <select bind:value={target}>
+        <option value={null}>À quel mod appartiennent ces séries…</option>
+        {#each projects as project (project.id)}
+          <option value={project.id}>{project.title}</option>
+        {/each}
+      </select>
+      {#if imported}<span class="ok">{imported}</span>{/if}
+    {/if}
+  </div>
+{/if}
 
 <label class="paste">
   <span class="legend-label">Contenu rapporté</span>
@@ -302,6 +412,17 @@
   button:disabled {
     opacity: 0.45;
     cursor: default;
+  }
+  .primary {
+    background: var(--accent);
+    color: var(--on-accent);
+    border-color: var(--accent);
+    font-weight: 600;
+  }
+  .hint {
+    font-size: 0.76rem;
+    color: var(--text-dim);
+    margin: 0 0 10px;
   }
   .ghost {
     border-color: transparent;

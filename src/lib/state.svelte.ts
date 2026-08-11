@@ -1,0 +1,76 @@
+import { api } from "./api";
+import type { AppErrorPayload, AuthStatus, Overview, SyncReport } from "./types";
+
+function message(e: unknown): string {
+  return (e as AppErrorPayload)?.message ?? String(e);
+}
+
+class Dashboard {
+  auth = $state<AuthStatus | null>(null);
+  overview = $state<Overview | null>(null);
+  rangeDays = $state(90);
+  loading = $state(false);
+  syncing = $state(false);
+  connecting = $state(false);
+  error = $state<string | null>(null);
+  lastSync = $state<SyncReport[]>([]);
+  selectedProject = $state<string | null>(null);
+
+  async refreshAuth() {
+    this.auth = await api.authStatus();
+  }
+
+  /**
+   * Ouvre le navigateur et attend le retour. La commande ne rend la main
+   * qu'une fois la redirection reçue ou le délai dépassé.
+   */
+  async login() {
+    this.connecting = true;
+    this.error = null;
+    try {
+      this.auth = await api.login();
+      await this.sync();
+    } catch (e) {
+      this.error = message(e);
+    } finally {
+      this.connecting = false;
+    }
+  }
+
+  async logout() {
+    this.auth = await api.logout();
+    this.overview = null;
+  }
+
+  async load() {
+    this.loading = true;
+    this.error = null;
+    try {
+      this.overview = await api.overview(this.rangeDays);
+    } catch (e) {
+      this.error = message(e);
+    } finally {
+      this.loading = false;
+    }
+  }
+
+  async setRange(days: number) {
+    this.rangeDays = days;
+    await this.load();
+  }
+
+  async sync() {
+    this.syncing = true;
+    this.error = null;
+    try {
+      this.lastSync = await api.syncNow();
+      await this.load();
+    } catch (e) {
+      this.error = message(e);
+    } finally {
+      this.syncing = false;
+    }
+  }
+}
+
+export const dashboard = new Dashboard();

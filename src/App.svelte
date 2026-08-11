@@ -1,6 +1,13 @@
 <script lang="ts">
   import ThemeToggle from "./lib/components/ThemeToggle.svelte";
   import { dashboard } from "./lib/state.svelte";
+  import CountriesDetail from "./lib/views/detail/CountriesDetail.svelte";
+  import EventsDetail from "./lib/views/detail/EventsDetail.svelte";
+  import LoadersDetail from "./lib/views/detail/LoadersDetail.svelte";
+  import PlatformsDetail from "./lib/views/detail/PlatformsDetail.svelte";
+  import ProjectsDetail from "./lib/views/detail/ProjectsDetail.svelte";
+  import RevenueDetail from "./lib/views/detail/RevenueDetail.svelte";
+  import TimelineDetail from "./lib/views/detail/TimelineDetail.svelte";
   import Login from "./lib/views/Login.svelte";
   import ProjectDetail from "./lib/views/ProjectDetail.svelte";
   import Settings from "./lib/views/Settings.svelte";
@@ -14,6 +21,8 @@
     ready = true;
     dashboard.boot();
   });
+
+  const overview = $derived(dashboard.overview);
 </script>
 
 {#if !dashboard.auth}
@@ -27,7 +36,7 @@
       class:active={view === "vision"}
       onclick={() => {
         view = "vision";
-        dashboard.selectedProject = null;
+        dashboard.closeDetail();
       }}
     >
       Vision
@@ -41,12 +50,31 @@
     {#if dashboard.error}<p class="error">{dashboard.error}</p>{/if}
     {#if view === "settings"}
       <Settings />
-    {:else if dashboard.selectedProject}
-      <ProjectDetail />
     {:else}
       <Vision />
     {/if}
   </main>
+
+  <!-- Vues plein écran, empilées par-dessus la page de vision. -->
+  {#if dashboard.selectedProject}
+    <ProjectDetail />
+  {:else if overview}
+    {#if dashboard.detail === "timeline"}
+      <TimelineDetail {overview} />
+    {:else if dashboard.detail === "countries"}
+      <CountriesDetail countries={overview.countries} />
+    {:else if dashboard.detail === "platforms"}
+      <PlatformsDetail projects={overview.per_project} />
+    {:else if dashboard.detail === "loaders"}
+      <LoadersDetail cells={overview.loaders} />
+    {:else if dashboard.detail === "revenue"}
+      <RevenueDetail {overview} />
+    {:else if dashboard.detail === "events"}
+      <EventsDetail events={overview.events} />
+    {:else if dashboard.detail === "projects"}
+      <ProjectsDetail projects={overview.per_project} />
+    {/if}
+  {/if}
 {/if}
 
 <style>
@@ -54,22 +82,25 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 10px 20px;
+    padding: 11px 22px;
     border-bottom: 1px solid var(--border);
     background: var(--surface);
   }
   nav strong {
-    margin-right: 12px;
+    margin-right: 14px;
+    font-family: var(--font-display);
+    font-size: 1.02rem;
+    letter-spacing: 0.02em;
   }
   nav button {
     background: none;
     border: 0;
     color: var(--text-dim);
     font: inherit;
-    font-size: 0.86rem;
+    font-size: 0.84rem;
     cursor: pointer;
-    padding: 4px 8px;
-    border-radius: 6px;
+    padding: 4px 9px;
+    border-radius: 5px;
   }
   nav button.active,
   nav button:hover {
@@ -79,13 +110,10 @@
   .user {
     margin-left: auto;
     color: var(--text-dim);
-    font-size: 0.82rem;
-  }
-  nav :global(button) {
-    flex-shrink: 0;
+    font-size: 0.8rem;
   }
   main {
-    padding: 18px 20px 40px;
+    padding: 18px 22px 42px;
   }
   .boot {
     padding: 24px;
@@ -93,9 +121,9 @@
   }
   .error {
     background: var(--surface-2);
-    border: 1px solid var(--error);
+    border-left: 2px solid var(--error);
     color: var(--error);
-    border-radius: var(--radius);
+    border-radius: 0 var(--radius) var(--radius) 0;
     padding: 10px 14px;
     font-size: 0.84rem;
   }

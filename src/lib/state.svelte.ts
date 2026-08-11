@@ -1,11 +1,31 @@
 import { api } from "./api";
-import type { AppErrorPayload, AuthStatus, Overview, SyncReport } from "./types";
+import type {
+  AppErrorPayload,
+  AuthStatus,
+  Overview,
+  ProjectDetail,
+  ProjectSummary,
+  SyncReport,
+} from "./types";
 
 function message(e: unknown): string {
   return (e as AppErrorPayload)?.message ?? String(e);
 }
 
+/** Vues plein écran ouvertes depuis une carte de la page de vision. */
+export type DetailView =
+  | "timeline"
+  | "countries"
+  | "platforms"
+  | "loaders"
+  | "revenue"
+  | "events"
+  | "projects";
+
 class Dashboard {
+  detail = $state<DetailView | null>(null);
+  project = $state<ProjectDetail | null>(null);
+  projectLoading = $state(false);
   auth = $state<AuthStatus | null>(null);
   overview = $state<Overview | null>(null);
   rangeDays = $state(90);
@@ -68,6 +88,36 @@ class Dashboard {
   async setRange(days: number) {
     this.rangeDays = days;
     await this.load();
+    if (this.project) await this.openProject(this.project.summary);
+  }
+
+  openDetail(view: DetailView) {
+    this.detail = view;
+  }
+
+  /** Ferme la vue plein écran courante, quelle qu'elle soit. */
+  closeDetail() {
+    this.detail = null;
+    this.project = null;
+    this.selectedProject = null;
+  }
+
+  async openProject(summary: ProjectSummary) {
+    this.selectedProject = summary.key;
+    this.projectLoading = true;
+    this.error = null;
+    try {
+      this.project = await api.projectDetail(
+        summary.modrinth_id,
+        summary.curseforge_id,
+        this.rangeDays,
+      );
+    } catch (e) {
+      this.error = message(e);
+      this.project = null;
+    } finally {
+      this.projectLoading = false;
+    }
   }
 
   async sync() {

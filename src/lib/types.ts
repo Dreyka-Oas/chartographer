@@ -45,6 +45,27 @@ export interface RevenuePoint {
   amount: string;
 }
 
+export interface PayoutPoint {
+  date: string;
+  amount: string;
+  /** Échéance postérieure à aujourd'hui : revenu à venir. */
+  future: boolean;
+}
+
+export interface Payout {
+  available: string;
+  pending: string;
+  withdrawn_lifetime: string;
+  withdrawn_ytd: string;
+  schedule: PayoutPoint[];
+}
+
+export interface RevenueByProject {
+  key: string;
+  title: string;
+  amount: string;
+}
+
 export interface EventRow {
   occurred_at: string;
   kind: string;
@@ -59,13 +80,36 @@ export interface Freshness {
   detail: string;
 }
 
+export interface VersionRow {
+  version_number: string | null;
+  game_versions: string[];
+  loaders: string[];
+  downloads: number;
+  date_published: string | null;
+}
+
+export interface ProjectDetail {
+  summary: ProjectSummary;
+  days: string[];
+  downloads: number[];
+  views: number[];
+  curseforge: number[];
+  revenue: string[];
+  countries: CountryTotal[];
+  versions: VersionRow[];
+}
+
 export interface Overview {
   kpis: Kpis;
+  /** Axe de jours dense : toutes les séries par projet y sont alignées. */
+  days: string[];
   timeline: TimelinePoint[];
   per_project: ProjectSummary[];
   countries: CountryTotal[];
   loaders: LoaderCell[];
   revenue: RevenuePoint[];
+  revenue_by_project: RevenueByProject[];
+  payout: Payout;
   events: EventRow[];
   freshness: Freshness[];
   curseforge_history_days: number;

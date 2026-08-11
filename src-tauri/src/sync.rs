@@ -142,7 +142,18 @@ async fn discover_modrinth(store: &Store, ctx: &SyncContext) -> Result<String> {
         Ok(())
     })?;
 
-    Ok(format!("{} projets", projects.len()))
+    // Le solde détaillé vit sur une route séparée. Son absence ne doit pas
+    // faire échouer la découverte : les projets, eux, sont déjà enregistrés.
+    let payout = match client.payout_balance().await {
+        Ok(balance) => {
+            let raw = serde_json::to_string(&balance)?;
+            store.with(|conn| m::set_meta(conn, "modrinth_payout", &raw))?;
+            format!(", {} $ retirables", balance.available)
+        }
+        Err(_) => String::new(),
+    };
+
+    Ok(format!("{} projets{payout}", projects.len()))
 }
 
 /// Déduit le pseudo auteur CurseForge sans rien demander.

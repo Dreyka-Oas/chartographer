@@ -35,6 +35,7 @@ pub fn run() {
             commands::save_settings,
             commands::sync_now,
             commands::overview,
+            commands::project_detail,
             commands::link_manual,
             commands::unlink,
             commands::unlinked_projects,

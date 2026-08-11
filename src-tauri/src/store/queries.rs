@@ -19,6 +19,28 @@ pub fn shift_day(day: &str, days: i64) -> String {
         .unwrap_or_else(|| day.to_string())
 }
 
+/// Axe de jours dense de `from` inclus à `to` exclu.
+/// Les séries par projet s'alignent dessus, ce qui évite qu'un projet sans
+/// téléchargement un jour donné décale toute sa courbe.
+pub fn day_axis(from: &str, to: &str) -> Vec<String> {
+    let (Ok(start), Ok(end)) = (
+        NaiveDate::parse_from_str(from, "%Y-%m-%d"),
+        NaiveDate::parse_from_str(to, "%Y-%m-%d"),
+    ) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    let mut day = start;
+    while day < end {
+        out.push(day.format("%Y-%m-%d").to_string());
+        day = match day.succ_opt() {
+            Some(next) => next,
+            None => break,
+        };
+    }
+    out
+}
+
 pub fn timeline(conn: &Connection, from: &str, to: &str) -> Result<Vec<TimelinePoint>> {
     let mut per_day: BTreeMap<String, (i64, i64)> = BTreeMap::new();
 
@@ -74,6 +96,13 @@ pub fn per_project(conn: &Connection, from: &str, to: &str) -> Result<Vec<Projec
             .or_insert(0) += downloads;
     }
 
+    let axis = day_axis(from, to);
+    let densify = |series: &BTreeMap<String, i64>| -> Vec<i64> {
+        axis.iter()
+            .map(|day| series.get(day).copied().unwrap_or(0))
+            .collect()
+    };
+
     let cf_deltas = snapshot_deltas(conn)?;
     let mut consumed_cf: Vec<i64> = Vec::new();
     let mut out: Vec<ProjectSummary> = Vec::new();
@@ -110,7 +139,7 @@ pub fn per_project(conn: &Connection, from: &str, to: &str) -> Result<Vec<Projec
             curseforge_downloads: cf.map(|c| c.total_downloads).unwrap_or(0),
             followers: project.followers,
             link_confidence: link.map(|l| l.confidence),
-            spark: spark.into_values().collect(),
+            spark: densify(&spark),
         });
     }
 
@@ -135,7 +164,7 @@ pub fn per_project(conn: &Connection, from: &str, to: &str) -> Result<Vec<Projec
             curseforge_downloads: project.total_downloads,
             followers: 0,
             link_confidence: None,
-            spark: spark.into_values().collect(),
+            spark: densify(&spark),
         });
     }
 
@@ -219,6 +248,73 @@ pub fn revenue(conn: &Connection, from: &str, to: &str) -> Result<Vec<RevenuePoi
         .collect())
 }
 
+/// Revenus cumulés par projet Modrinth sur la fenêtre.
+pub fn revenue_by_project(
+    conn: &Connection,
+    from: &str,
+    to: &str,
+) -> Result<Vec<crate::models::RevenueByProject>> {
+    let mut stmt = conn.prepare(
+        "SELECT p.id, p.title, m.revenue FROM metrics_daily m
+         JOIN projects p ON p.id = m.project_id
+         WHERE m.day >= ?1 AND m.day < ?2 AND m.revenue IS NOT NULL",
+    )?;
+    let mut totals: BTreeMap<(i64, String), Decimal> = BTreeMap::new();
+    for row in stmt.query_map(params![from, to], |r| {
+        Ok((
+            r.get::<_, i64>(0)?,
+            r.get::<_, String>(1)?,
+            r.get::<_, String>(2)?,
+        ))
+    })? {
+        let (id, title, amount) = row?;
+        *totals.entry((id, title)).or_default() += Decimal::from_str(&amount).unwrap_or_default();
+    }
+
+    let mut out: Vec<crate::models::RevenueByProject> = totals
+        .into_iter()
+        .map(|((id, title), amount)| crate::models::RevenueByProject {
+            key: format!("m{id}"),
+            title,
+            amount: amount.normalize().to_string(),
+        })
+        .collect();
+    out.sort_by(|a, b| {
+        Decimal::from_str(&b.amount)
+            .unwrap_or_default()
+            .cmp(&Decimal::from_str(&a.amount).unwrap_or_default())
+    });
+    Ok(out)
+}
+
+/// Relit l'échéancier de reversement stocké au dernier cycle et marque
+/// les échéances postérieures à aujourd'hui comme revenus à venir.
+pub fn payout(conn: &Connection, today: &str) -> Result<crate::models::Payout> {
+    use crate::models::{Payout, PayoutPoint};
+    use crate::providers::modrinth::PayoutBalance;
+
+    let Some(raw) = crate::store::metrics::get_meta(conn, "modrinth_payout")? else {
+        return Ok(Payout::default());
+    };
+    let balance: PayoutBalance = serde_json::from_str(&raw).unwrap_or_default();
+
+    Ok(Payout {
+        available: balance.available,
+        pending: balance.pending,
+        withdrawn_lifetime: balance.withdrawn_lifetime,
+        withdrawn_ytd: balance.withdrawn_ytd,
+        schedule: balance
+            .dates
+            .into_iter()
+            .map(|(date, amount)| PayoutPoint {
+                future: date.get(..10).is_some_and(|d| d > today),
+                date,
+                amount,
+            })
+            .collect(),
+    })
+}
+
 pub fn kpis(conn: &Connection, today: &str) -> Result<Kpis> {
     let window_start = shift_day(today, -30);
     let previous_start = shift_day(today, -60);
@@ -270,21 +366,138 @@ pub fn kpis(conn: &Connection, today: &str) -> Result<Kpis> {
     })
 }
 
+/// Séries détaillées d'un seul projet, alignées sur l'axe dense de la fenêtre.
+pub fn project_detail(
+    conn: &Connection,
+    from: &str,
+    to: &str,
+    modrinth_id: Option<i64>,
+    curseforge_id: Option<i64>,
+) -> Result<crate::models::ProjectDetail> {
+    use crate::models::{ProjectDetail, VersionRow};
+
+    let summary = per_project(conn, from, to)?
+        .into_iter()
+        .find(|p| {
+            (modrinth_id.is_some() && p.modrinth_id == modrinth_id)
+                || (modrinth_id.is_none() && p.curseforge_id == curseforge_id)
+        })
+        .ok_or_else(|| crate::error::AppError::Data("projet introuvable".into()))?;
+
+    let axis = day_axis(from, to);
+    let mut downloads: BTreeMap<String, i64> = BTreeMap::new();
+    let mut views: BTreeMap<String, i64> = BTreeMap::new();
+    let mut revenue: BTreeMap<String, Decimal> = BTreeMap::new();
+
+    if let Some(id) = modrinth_id {
+        let mut stmt = conn.prepare(
+            "SELECT day, COALESCE(downloads, 0), COALESCE(views, 0), revenue
+             FROM metrics_daily WHERE project_id = ?1 AND day >= ?2 AND day < ?3",
+        )?;
+        for row in stmt.query_map(params![id, from, to], |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, i64>(1)?,
+                r.get::<_, i64>(2)?,
+                r.get::<_, Option<String>>(3)?,
+            ))
+        })? {
+            let (day, d, v, rev) = row?;
+            downloads.insert(day.clone(), d);
+            views.insert(day.clone(), v);
+            if let Some(rev) = rev {
+                revenue.insert(day, Decimal::from_str(&rev).unwrap_or_default());
+            }
+        }
+    }
+
+    let mut curseforge: BTreeMap<String, i64> = BTreeMap::new();
+    if let Some(id) = summary.curseforge_id {
+        for ((cf_id, day), delta) in snapshot_deltas(conn)? {
+            if cf_id == id && day.as_str() >= from && day.as_str() < to {
+                curseforge.insert(day, delta);
+            }
+        }
+    }
+
+    let mut countries = Vec::new();
+    if let Some(id) = modrinth_id {
+        let mut stmt = conn.prepare(
+            "SELECT CASE WHEN country IN ('', 'XX') THEN '??' ELSE country END AS code,
+                    SUM(downloads)
+             FROM countries_daily WHERE project_id = ?1 AND day >= ?2 AND day < ?3
+             GROUP BY code ORDER BY SUM(downloads) DESC",
+        )?;
+        countries = stmt
+            .query_map(params![id, from, to], |r| {
+                Ok(CountryTotal {
+                    country: r.get(0)?,
+                    downloads: r.get(1)?,
+                })
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+    }
+
+    let mut versions = Vec::new();
+    if let Some(id) = modrinth_id {
+        let mut stmt = conn.prepare(
+            "SELECT version_number, game_versions, loaders, downloads, date_published
+             FROM versions WHERE project_id = ?1 ORDER BY date_published DESC",
+        )?;
+        versions = stmt
+            .query_map(params![id], |r| {
+                Ok(VersionRow {
+                    version_number: r.get(0)?,
+                    game_versions: serde_json::from_str(&r.get::<_, String>(1)?)
+                        .unwrap_or_default(),
+                    loaders: serde_json::from_str(&r.get::<_, String>(2)?).unwrap_or_default(),
+                    downloads: r.get(3)?,
+                    date_published: r.get(4)?,
+                })
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+    }
+
+    let pick = |m: &BTreeMap<String, i64>| -> Vec<i64> {
+        axis.iter()
+            .map(|d| m.get(d).copied().unwrap_or(0))
+            .collect()
+    };
+
+    Ok(ProjectDetail {
+        summary,
+        downloads: pick(&downloads),
+        views: pick(&views),
+        curseforge: pick(&curseforge),
+        revenue: axis
+            .iter()
+            .map(|d| revenue.get(d).copied().unwrap_or_default().to_string())
+            .collect(),
+        days: axis,
+        countries,
+        versions,
+    })
+}
+
 pub fn overview(conn: &Connection, today: &str, range_days: i64) -> Result<Overview> {
     let from = shift_day(today, -range_days);
     let to = shift_day(today, 1);
     let mut kpis = kpis(conn, today)?;
-    if let Some(balance) = crate::store::metrics::get_meta(conn, "modrinth_balance")? {
-        kpis.revenue_pending = balance;
+    let payout = payout(conn, today)?;
+    if !payout.available.is_empty() {
+        kpis.revenue_pending = payout.available.clone();
     }
 
     Ok(Overview {
         kpis,
+        days: day_axis(&from, &to),
         timeline: timeline(conn, &from, &to)?,
         per_project: per_project(conn, &from, &to)?,
         countries: countries(conn, &from, &to)?,
         loaders: loaders(conn)?,
         revenue: revenue(conn, &from, &to)?,
+        revenue_by_project: revenue_by_project(conn, &from, &to)?,
+        payout,
         events: recent_events(conn, 40)?,
         freshness: freshness(conn)?,
         curseforge_history_days: snapshot_day_count(conn)?,
@@ -370,6 +583,55 @@ mod tests {
         let solo = rows.iter().find(|r| r.title == "Solo").unwrap();
         assert_eq!(solo.curseforge_downloads, 0);
         assert!(solo.curseforge_id.is_none());
+    }
+
+    #[test]
+    fn day_axis_is_dense_and_excludes_the_upper_bound() {
+        let axis = day_axis("2026-08-08", "2026-08-11");
+        assert_eq!(axis, vec!["2026-08-08", "2026-08-09", "2026-08-10"]);
+        assert!(day_axis("pas une date", "2026-08-11").is_empty());
+    }
+
+    #[test]
+    fn spark_is_aligned_on_the_dense_axis() {
+        let (conn, m, _) = seed();
+        upsert_daily(&conn, m, "2026-08-09", Some(7), None, None).unwrap();
+        let rows = per_project(&conn, "2026-08-08", "2026-08-11").unwrap();
+        assert_eq!(
+            rows[0].spark,
+            vec![0, 7, 0],
+            "les jours sans donnee valent zero au lieu d'etre absents"
+        );
+    }
+
+    #[test]
+    fn project_detail_gathers_versions_and_countries() {
+        let (conn, m, c) = seed();
+        upsert_daily(&conn, m, "2026-08-09", Some(7), Some(3), Some("0.25")).unwrap();
+        upsert_country(&conn, m, "2026-08-09", "XX", 4).unwrap();
+        upsert_version(
+            &conn,
+            m,
+            "v1",
+            Some("1.0"),
+            &["1.21".into()],
+            &["fabric".into()],
+            30,
+            Some("2026-08-01T00:00:00Z"),
+        )
+        .unwrap();
+        insert_snapshot(&conn, c, "2026-08-08T00:00:00Z", 100, None).unwrap();
+        insert_snapshot(&conn, c, "2026-08-09T00:00:00Z", 130, None).unwrap();
+
+        let detail = project_detail(&conn, "2026-08-08", "2026-08-11", Some(m), Some(c)).unwrap();
+        assert_eq!(detail.days.len(), 3);
+        assert_eq!(detail.downloads, vec![0, 7, 0]);
+        assert_eq!(detail.views, vec![0, 3, 0]);
+        assert_eq!(detail.curseforge, vec![0, 30, 0]);
+        assert_eq!(detail.revenue[1], "0.25");
+        assert_eq!(detail.versions.len(), 1);
+        assert_eq!(detail.versions[0].loaders, vec!["fabric".to_string()]);
+        assert_eq!(detail.countries[0].country, "??");
     }
 
     #[test]

@@ -76,6 +76,31 @@ pub struct RevenuePoint {
     pub amount: String,
 }
 
+/// Une échéance de l'échéancier de reversement Modrinth.
+#[derive(Debug, Clone, Serialize)]
+pub struct PayoutPoint {
+    pub date: String,
+    pub amount: String,
+    /// Vrai si l'échéance est postérieure à aujourd'hui : revenu à venir.
+    pub future: bool,
+}
+
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct Payout {
+    pub available: String,
+    pub pending: String,
+    pub withdrawn_lifetime: String,
+    pub withdrawn_ytd: String,
+    pub schedule: Vec<PayoutPoint>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RevenueByProject {
+    pub key: String,
+    pub title: String,
+    pub amount: String,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct EventRow {
     pub occurred_at: String,
@@ -93,13 +118,40 @@ pub struct Freshness {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct VersionRow {
+    pub version_number: Option<String>,
+    pub game_versions: Vec<String>,
+    pub loaders: Vec<String>,
+    pub downloads: i64,
+    pub date_published: Option<String>,
+}
+
+/// Tout ce qu'une vue détaillée de projet affiche, aligné sur un axe de jours dense.
+#[derive(Debug, Clone, Serialize)]
+pub struct ProjectDetail {
+    pub summary: ProjectSummary,
+    pub days: Vec<String>,
+    pub downloads: Vec<i64>,
+    pub views: Vec<i64>,
+    pub curseforge: Vec<i64>,
+    pub revenue: Vec<String>,
+    pub countries: Vec<CountryTotal>,
+    pub versions: Vec<VersionRow>,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct Overview {
     pub kpis: Kpis,
+    /// Axe de jours dense couvrant toute la fenêtre, trous compris.
+    /// Toutes les séries par projet sont alignées dessus.
+    pub days: Vec<String>,
     pub timeline: Vec<TimelinePoint>,
     pub per_project: Vec<ProjectSummary>,
     pub countries: Vec<CountryTotal>,
     pub loaders: Vec<LoaderCell>,
     pub revenue: Vec<RevenuePoint>,
+    pub revenue_by_project: Vec<RevenueByProject>,
+    pub payout: Payout,
     pub events: Vec<EventRow>,
     pub freshness: Vec<Freshness>,
     pub curseforge_history_days: i64,

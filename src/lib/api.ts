@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { AuthStatus, Overview, Settings, SyncReport } from "./types";
+import type { AuthStatus, Overview, ProjectDetail, Settings, SyncReport } from "./types";
 
 export const api = {
   authStatus: () => invoke<AuthStatus>("auth_status"),
@@ -11,6 +11,8 @@ export const api = {
     invoke<void>("save_settings", { curseforgeUsername, rangeDays }),
   syncNow: () => invoke<SyncReport[]>("sync_now"),
   overview: (rangeDays: number) => invoke<Overview>("overview", { rangeDays }),
+  projectDetail: (modrinthId: number | null, curseforgeId: number | null, rangeDays: number) =>
+    invoke<ProjectDetail>("project_detail", { modrinthId, curseforgeId, rangeDays }),
   linkManual: (modrinthId: number, curseforgeId: number) =>
     invoke<void>("link_manual", { modrinthId, curseforgeId }),
   unlink: (modrinthId: number, curseforgeId: number) =>

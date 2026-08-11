@@ -120,6 +120,22 @@ pub fn overview(state: State<'_, AppState>, range_days: i64) -> Result<Overview>
 }
 
 #[tauri::command]
+pub fn project_detail(
+    state: State<'_, AppState>,
+    modrinth_id: Option<i64>,
+    curseforge_id: Option<i64>,
+    range_days: i64,
+) -> Result<crate::models::ProjectDetail> {
+    let today = sync::today_utc();
+    let range = range_days.clamp(7, 730);
+    let from = queries::shift_day(&today, -range);
+    let to = queries::shift_day(&today, 1);
+    state
+        .store
+        .with(|conn| queries::project_detail(conn, &from, &to, modrinth_id, curseforge_id))
+}
+
+#[tauri::command]
 pub fn link_manual(state: State<'_, AppState>, modrinth_id: i64, curseforge_id: i64) -> Result<()> {
     state
         .store

@@ -54,6 +54,23 @@ pub struct ModrinthVersion {
     pub date_published: Option<String>,
 }
 
+/// Solde de reversement Modrinth. `available` est retirable immédiatement,
+/// `pending` mûrit encore, et `dates` est l'échéancier mensuel — les entrées
+/// postérieures à aujourd'hui sont donc des revenus à venir.
+#[derive(Debug, Clone, Default, Deserialize, serde::Serialize)]
+pub struct PayoutBalance {
+    #[serde(default)]
+    pub available: String,
+    #[serde(default)]
+    pub pending: String,
+    #[serde(default)]
+    pub withdrawn_lifetime: String,
+    #[serde(default)]
+    pub withdrawn_ytd: String,
+    #[serde(default)]
+    pub dates: BTreeMap<String, String>,
+}
+
 #[derive(Debug, Clone)]
 pub struct Notification {
     pub occurred_at: String,
@@ -109,6 +126,10 @@ pub fn parse_projects(raw: &str) -> Result<Vec<ModrinthProject>> {
 }
 
 pub fn parse_versions(raw: &str) -> Result<Vec<ModrinthVersion>> {
+    Ok(serde_json::from_str(raw)?)
+}
+
+pub fn parse_payout_balance(raw: &str) -> Result<PayoutBalance> {
     Ok(serde_json::from_str(raw)?)
 }
 
@@ -212,6 +233,11 @@ impl ModrinthClient {
             .get_text(&format!("{BASE}/v2/project/{project_id}/version"))
             .await?;
         parse_versions(&body)
+    }
+
+    pub async fn payout_balance(&self) -> Result<PayoutBalance> {
+        let body = self.get_text(&format!("{BASE}/v3/payout/balance")).await?;
+        parse_payout_balance(&body)
     }
 
     pub async fn notifications(&self, user_id: &str) -> Result<Vec<Notification>> {
@@ -349,6 +375,30 @@ mod tests {
         assert_eq!(out[0].slug, "vein-vantage");
         assert_eq!(out[0].downloads, 176_968);
         assert_eq!(out[0].followers, 6);
+    }
+
+    #[test]
+    fn parse_payout_balance_keeps_precision_and_schedule() {
+        let raw = r#"{"available":"12.6251208063540247","pending":"4.84400277701479185061",
+            "withdrawn_lifetime":"70.4200000000000000","withdrawn_ytd":"15.3600000000000000",
+            "dates":{"2026-10-30T00:00:00Z":"0.57035192308093763305",
+                     "2026-08-29T00:00:00Z":"2.54944831105631864138"}}"#;
+        let out = parse_payout_balance(raw).unwrap();
+        assert_eq!(out.available, "12.6251208063540247");
+        assert_eq!(out.pending, "4.84400277701479185061");
+        assert_eq!(out.dates.len(), 2);
+        assert_eq!(
+            out.dates.keys().next().map(String::as_str),
+            Some("2026-08-29T00:00:00Z"),
+            "l'echeancier doit rester trie par date"
+        );
+    }
+
+    #[test]
+    fn parse_payout_balance_tolerates_missing_fields() {
+        let out = parse_payout_balance("{}").unwrap();
+        assert!(out.available.is_empty());
+        assert!(out.dates.is_empty());
     }
 
     #[test]

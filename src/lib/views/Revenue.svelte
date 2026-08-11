@@ -44,7 +44,8 @@
 {:else if !dashboard.platforms.modrinth}
   <p class="notice">
     Modrinth est masqué. Le programme de reversement est propre à cette plateforme : réaffiche-la
-    depuis la pastille en haut de la fenêtre pour retrouver tes revenus.
+    depuis la pastille en haut de la fenêtre pour retrouver tes revenus. La carte CurseForge, elle,
+    reste disponible ci-dessous.
   </p>
 {:else}
   <div class="toolbar">
@@ -143,17 +144,22 @@
     </div>
   </div>
 
-  <div class="grid tail">
-    <div class="wide">
-      <Card
-        title="CurseForge — programme de points"
-        subtitle="Relevé à la main, faute d'interface côté CurseForge"
-      >
-        <CurseforgePoints />
-      </Card>
-    </div>
-  </div>
 {/if}
+
+<!--
+  La carte CurseForge vit hors des conditions ci-dessus : c'est justement quand
+  Modrinth est masqué ou la base vide qu'on vient y chercher son solde.
+-->
+<div class="grid tail">
+  <div class="wide">
+    <Card
+      title="CurseForge — programme de points"
+      subtitle="Connexion à ton compte, puis lecture ou saisie du solde"
+    >
+      <CurseforgePoints />
+    </Card>
+  </div>
+</div>
 
 <style>
   .toolbar {

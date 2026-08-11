@@ -7,7 +7,7 @@ use crate::store::projects::{links, list};
 use chrono::NaiveDate;
 use rusqlite::{params, Connection};
 use rust_decimal::Decimal;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::str::FromStr;
 
 /// Ajoute `days` jours à une date `YYYY-MM-DD`. Renvoie la date inchangée si elle est invalide.
@@ -103,8 +103,18 @@ pub fn per_project(conn: &Connection, from: &str, to: &str) -> Result<Vec<Projec
             .collect()
     };
 
-    let cf_deltas = snapshot_deltas(conn)?;
-    let mut consumed_cf: Vec<i64> = Vec::new();
+    // Les deltas CurseForge arrivent à plat. On les indexe par projet et on
+    // écarte tout de suite les jours hors fenêtre : sans cet index, chaque
+    // projet reparcourait la totalité des deltas, soit un coût quadratique dès
+    // quelques centaines de mods.
+    let mut deltas_by_project: HashMap<i64, Vec<(String, i64)>> = HashMap::new();
+    for ((cf_id, day), delta) in snapshot_deltas(conn)? {
+        if day.as_str() >= from && day.as_str() < to {
+            deltas_by_project.entry(cf_id).or_default().push((day, delta));
+        }
+    }
+
+    let mut consumed_cf: HashSet<i64> = HashSet::new();
     let mut out: Vec<ProjectSummary> = Vec::new();
 
     for project in projects.iter().filter(|p| p.platform == Platform::Modrinth) {
@@ -113,17 +123,15 @@ pub fn per_project(conn: &Connection, from: &str, to: &str) -> Result<Vec<Projec
             .find(|l| l.modrinth_project_id == project.id);
         let cf = link.and_then(|l| by_id.get(&l.cf_project_id).copied());
         if let Some(cf) = cf {
-            consumed_cf.push(cf.id);
+            consumed_cf.insert(cf.id);
         }
         let mut spark: BTreeMap<String, i64> = spark_by_project
             .get(&project.id)
             .cloned()
             .unwrap_or_default();
-        if let Some(cf) = cf {
-            for ((cf_id, day), delta) in &cf_deltas {
-                if *cf_id == cf.id && day.as_str() >= from && day.as_str() < to {
-                    *spark.entry(day.clone()).or_insert(0) += delta;
-                }
+        if let Some(deltas) = cf.and_then(|c| deltas_by_project.get(&c.id)) {
+            for (day, delta) in deltas {
+                *spark.entry(day.clone()).or_insert(0) += delta;
             }
         }
         out.push(ProjectSummary {
@@ -147,13 +155,10 @@ pub fn per_project(conn: &Connection, from: &str, to: &str) -> Result<Vec<Projec
         .iter()
         .filter(|p| p.platform == Platform::CurseForge && !consumed_cf.contains(&p.id))
     {
-        let spark: BTreeMap<String, i64> = cf_deltas
-            .iter()
-            .filter(|((cf_id, day), _)| {
-                *cf_id == project.id && day.as_str() >= from && day.as_str() < to
-            })
-            .map(|((_, day), delta)| (day.clone(), *delta))
-            .collect();
+        let spark: BTreeMap<String, i64> = deltas_by_project
+            .get(&project.id)
+            .map(|deltas| deltas.iter().cloned().collect())
+            .unwrap_or_default();
         out.push(ProjectSummary {
             key: format!("c{}", project.id),
             title: project.title.clone(),

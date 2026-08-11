@@ -89,7 +89,14 @@
     </div>
 
     <div class="panel">
-      <h2>Répartition par mod</h2>
+      <h2>
+        Répartition par mod
+        {#if overview.revenue_by_project.length > byProject.length}
+          <span class="note"
+            >{overview.revenue_by_project.length - byProject.length} autres dans le tableau</span
+          >
+        {/if}
+      </h2>
       {#if byProject.length === 0}
         <p class="empty">Aucun revenu attribué à un mod sur cette période.</p>
       {:else}

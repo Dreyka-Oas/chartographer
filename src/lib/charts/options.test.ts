@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { ProjectSummary } from "../types";
 import { heatmapOption } from "./heatmap";
+import { foldSeriesTail } from "./multiseries";
 import { revenueOption } from "./revenue";
+import { sparklinePath } from "./sparkline";
 import { splitOption } from "./split";
 import { DARK, dayAxis, dayTooltipHtml, monthAxis } from "./theme";
 import { timelineOption } from "./timeline";
@@ -41,6 +43,43 @@ describe("timelineOption", () => {
   it("désempile quand le mode comparaison est actif", () => {
     const option = timelineOption(points, false);
     expect(option.series[0].stack).toBeUndefined();
+  });
+});
+
+describe("foldSeriesTail", () => {
+  const series = [
+    { name: "a", values: [5, 5] },
+    { name: "b", values: [3, 0] },
+    { name: "c", values: [1, 2] },
+    { name: "d", values: [1, 1] },
+  ];
+
+  it("laisse la liste intacte sous le plafond", () => {
+    expect(foldSeriesTail(series, 4)).toBe(series);
+  });
+
+  it("somme la queue jour par jour sans rien perdre", () => {
+    const folded = foldSeriesTail(series, 2);
+    expect(folded).toHaveLength(3);
+    expect(folded[2].name).toBe("2 autres mods");
+    expect(folded[2].values).toEqual([2, 3]);
+  });
+});
+
+describe("sparklinePath", () => {
+  it("normalise sur le maximum et referme l'aire sur la ligne de base", () => {
+    const { line, area } = sparklinePath([0, 5, 10], 100, 30);
+    expect(line).toBe("M0,30L50,15L100,0");
+    expect(area).toBe("M0,30L50,15L100,0L100,30L0,30Z");
+  });
+
+  it("aplatit une série entièrement nulle au lieu de diviser par zéro", () => {
+    expect(sparklinePath([0, 0, 0], 100, 30).line).toBe("M0,30L50,30L100,30");
+  });
+
+  it("ne trace rien sous deux points", () => {
+    expect(sparklinePath([7]).line).toBe("");
+    expect(sparklinePath([]).area).toBe("");
   });
 });
 

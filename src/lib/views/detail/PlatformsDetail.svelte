@@ -59,6 +59,10 @@
   />
 
   <div class="panel">
+    <h2>
+      Quinze premiers par volume
+      {#if rows.length > 15}<span class="note">{rows.length - 15} autres dans le tableau</span>{/if}
+    </h2>
     <Chart {option} height={Math.max(320, Math.min(rows.length, 15) * 30 + 100)} />
   </div>
 

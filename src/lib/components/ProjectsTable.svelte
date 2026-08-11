@@ -1,13 +1,18 @@
 <script lang="ts">
-  import Chart from "../charts/Chart.svelte";
-  import { sparklineOption } from "../charts/sparkline";
-  import { palette } from "../charts/theme";
   import { compactNumber } from "../format";
-  import { theme } from "../theme.svelte";
   import type { ProjectSummary } from "../types";
+  import Sparkline from "./Sparkline.svelte";
 
-  let { projects, onselect }: { projects: ProjectSummary[]; onselect: (key: string) => void } =
-    $props();
+  let {
+    projects,
+    onselect,
+    maxHeight = 0,
+  }: {
+    projects: ProjectSummary[];
+    onselect: (key: string) => void;
+    /** Hauteur maximale avant défilement interne. `0` laisse la table s'étendre. */
+    maxHeight?: number;
+  } = $props();
 
   type Column = "title" | "total" | "modrinth" | "curseforge" | "followers";
   let sortBy = $state<Column>("total");
@@ -43,48 +48,56 @@
   }
 </script>
 
-<table>
-  <thead>
-    <tr>
-      <th><button onclick={() => sort("title")}>Projet</button></th>
-      <th class="spark">Tendance</th>
-      <th><button onclick={() => sort("modrinth")}>Modrinth</button></th>
-      <th><button onclick={() => sort("curseforge")}>CurseForge</button></th>
-      <th><button onclick={() => sort("total")}>Total</button></th>
-      <th><button onclick={() => sort("followers")}>Followers</button></th>
-    </tr>
-  </thead>
-  <tbody>
-    {#each rows as row (row.key)}
-      <tr onclick={() => onselect(row.key)}>
-        <td class="name">
-          <span class="cell">
-            {#if row.icon_url}<img src={row.icon_url} alt="" />{/if}
-            <span class="label">{row.title}</span>
-            {#if row.link_confidence !== null && row.link_confidence < 1}
-              <em title="Appariement automatique incertain">
-                lien ~{Math.round(row.link_confidence * 100)} %
-              </em>
-            {/if}
-            {#if row.curseforge_id === null}<em class="solo">Modrinth seul</em>{/if}
-            {#if row.modrinth_id === null}<em class="solo">CurseForge seul</em>{/if}
-          </span>
-        </td>
-        <td class="spark">
-          {#if row.spark.length > 1}
-            <Chart option={sparklineOption(row.spark, palette(theme.dark))} height={32} />
-          {/if}
-        </td>
-        <td>{compactNumber(row.modrinth_downloads)}</td>
-        <td>{compactNumber(row.curseforge_downloads)}</td>
-        <td><b>{compactNumber(row.modrinth_downloads + row.curseforge_downloads)}</b></td>
-        <td>{row.followers}</td>
+<div class="scroller" style={maxHeight > 0 ? `max-height: ${maxHeight}px` : ""}>
+  <table>
+    <thead>
+      <tr>
+        <th><button onclick={() => sort("title")}>Projet</button></th>
+        <th class="spark">Tendance</th>
+        <th><button onclick={() => sort("modrinth")}>Modrinth</button></th>
+        <th><button onclick={() => sort("curseforge")}>CurseForge</button></th>
+        <th><button onclick={() => sort("total")}>Total</button></th>
+        <th><button onclick={() => sort("followers")}>Followers</button></th>
       </tr>
-    {/each}
-  </tbody>
-</table>
+    </thead>
+    <tbody>
+      {#each rows as row (row.key)}
+        <tr onclick={() => onselect(row.key)}>
+          <td class="name">
+            <span class="cell">
+              {#if row.icon_url}<img src={row.icon_url} alt="" loading="lazy" />{/if}
+              <span class="label">{row.title}</span>
+              {#if row.link_confidence !== null && row.link_confidence < 1}
+                <em title="Appariement automatique incertain">
+                  lien ~{Math.round(row.link_confidence * 100)} %
+                </em>
+              {/if}
+              {#if row.curseforge_id === null}<em class="solo">Modrinth seul</em>{/if}
+              {#if row.modrinth_id === null}<em class="solo">CurseForge seul</em>{/if}
+            </span>
+          </td>
+          <td class="spark">
+            <Sparkline values={row.spark} />
+          </td>
+          <td>{compactNumber(row.modrinth_downloads)}</td>
+          <td>{compactNumber(row.curseforge_downloads)}</td>
+          <td><b>{compactNumber(row.modrinth_downloads + row.curseforge_downloads)}</b></td>
+          <td>{row.followers}</td>
+        </tr>
+      {/each}
+    </tbody>
+  </table>
+</div>
 
 <style>
+  /*
+   * La table défile chez elle quand on lui donne une hauteur : avec plusieurs
+   * centaines de projets, la page entière ferait sinon des milliers de pixels.
+   */
+  .scroller {
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
   table {
     width: 100%;
     border-collapse: collapse;
@@ -103,8 +116,13 @@
   th {
     text-align: right;
     padding: 7px 10px;
-    border-bottom: 1px solid var(--border);
     vertical-align: middle;
+    /* L'en-tête reste lisible pendant le défilement interne. */
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--surface);
+    box-shadow: inset 0 -1px 0 var(--border);
   }
   th:first-child,
   td:first-child {

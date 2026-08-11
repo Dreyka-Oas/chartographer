@@ -1,6 +1,6 @@
 <script lang="ts">
   import Chart from "../../charts/Chart.svelte";
-  import { stackedProjectsOption } from "../../charts/multiseries";
+  import { foldSeriesTail, stackedProjectsOption } from "../../charts/multiseries";
   import { palette } from "../../charts/theme";
   import { timelineOption } from "../../charts/timeline";
   import StatRow from "../../components/StatRow.svelte";
@@ -15,15 +15,19 @@
   let mode = $state<"projects" | "platforms">("projects");
   let stacked = $state(true);
 
-  const series = $derived(
+  /** Au-delà, la légende déborde et le rendu s'effondre : la queue est repliée. */
+  const MAX_SERIES = 12;
+
+  const active = $derived(
     [...overview.per_project]
       .filter((p) => p.spark.some((v) => v > 0))
       .sort(
-        (a, b) =>
-          b.spark.reduce((s, v) => s + v, 0) - a.spark.reduce((s, v) => s + v, 0),
+        (a, b) => b.spark.reduce((s, v) => s + v, 0) - a.spark.reduce((s, v) => s + v, 0),
       )
       .map((p) => ({ name: p.title, values: p.spark })),
   );
+  const series = $derived(foldSeriesTail(active, MAX_SERIES));
+  const folded = $derived(Math.max(0, active.length - MAX_SERIES));
 
   const option = $derived(
     mode === "projects"
@@ -50,7 +54,9 @@
 
 <DetailShell
   title="Téléchargements par jour"
-  subtitle="{overview.days.length} jours · {series.length} projets actifs"
+  subtitle="{overview.days.length} jours · {active.length} projets actifs{folded > 0
+    ? ` · les ${folded} plus petits regroupés en une courbe`
+    : ''}"
 >
   {#snippet actions()}
     <div class="switch">

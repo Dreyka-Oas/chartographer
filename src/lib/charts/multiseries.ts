@@ -27,6 +27,24 @@ export function seriesColor(index: number): string {
   return SERIES_COLORS[index % SERIES_COLORS.length];
 }
 
+/**
+ * Garde les `max` premières séries et replie toutes les autres en une seule,
+ * jour par jour. Au-delà d'une douzaine de courbes la légende devient illisible
+ * et le rendu s'effondre ; le total reste juste puisque la queue est sommée.
+ * L'appelant reçoit la série de repli nommée, à lui de l'annoncer.
+ */
+export function foldSeriesTail(series: NamedSeries[], max: number): NamedSeries[] {
+  if (series.length <= max) return series;
+  const head = series.slice(0, max);
+  const tail = series.slice(max);
+  const length = series[0]?.values.length ?? 0;
+  const merged = new Array<number>(length).fill(0);
+  for (const item of tail) {
+    for (let i = 0; i < length; i += 1) merged[i] += item.values[i] ?? 0;
+  }
+  return [...head, { name: `${tail.length} autres mods`, values: merged }];
+}
+
 /** Aire empilée par projet, sur un axe de jours déjà dense. */
 export function stackedProjectsOption(
   days: string[],

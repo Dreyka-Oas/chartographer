@@ -98,6 +98,7 @@
     >
       <ProjectsTable
         projects={overview.per_project}
+        maxHeight={520}
         onselect={(key) => {
           const found = overview.per_project.find((p) => p.key === key);
           if (found) dashboard.openProject(found);

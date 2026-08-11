@@ -46,7 +46,7 @@
     <ThemeToggle />
   </nav>
 
-  <main>
+  <main class:fixed={view === "settings"}>
     {#if dashboard.error}<p class="error">{dashboard.error}</p>{/if}
     {#if view === "settings"}
       <Settings />
@@ -85,6 +85,7 @@
     padding: 11px 18px;
     border-bottom: 1px solid var(--border);
     background: var(--surface);
+    flex-shrink: 0;
   }
   nav strong {
     margin-right: 14px;
@@ -113,7 +114,16 @@
     font-size: 0.8rem;
   }
   main {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
     padding: 16px 18px 36px;
+  }
+  /* La vue des réglages gère son propre défilement, colonne par colonne. */
+  main.fixed {
+    overflow: hidden;
+    padding-bottom: 16px;
   }
   .boot {
     padding: 24px;

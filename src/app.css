@@ -107,6 +107,19 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/*
+ * Fenêtre applicative : la hauteur est celle de l'écran, et c'est la zone de
+ * contenu qui défile. La barre de navigation, elle, ne bouge jamais.
+ */
+body,
+#app {
+  height: 100%;
+}
+#app {
+  display: flex;
+  flex-direction: column;
+}
+
 /* Libellés de légende : petites capitales espacées, comme sur une carte. */
 .legend-label {
   font-size: 0.68rem;

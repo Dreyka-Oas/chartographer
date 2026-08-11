@@ -14,14 +14,30 @@
   let rightId = $state<number | null>(null);
   let loaded = $state(false);
 
+  function report(e: unknown) {
+    dashboard.error = (e as AppErrorPayload)?.message ?? String(e);
+  }
+
   $effect(() => {
     if (loaded) return;
     loaded = true;
-    api.getSettings().then((value) => {
-      saved = value;
-      draft = { ...value };
-    });
-    api.unlinkedProjects().then((value) => (unlinked = value));
+    api
+      .getSettings()
+      .then((value) => {
+        saved = value;
+        draft = { ...value };
+      })
+      .catch(report);
+  });
+
+  // La liste des orphelins est relue après chaque cycle de synchronisation :
+  // les appariements automatiques sont recalculés à ce moment-là.
+  $effect(() => {
+    dashboard.lastSync;
+    api
+      .unlinkedProjects()
+      .then((value) => (unlinked = value))
+      .catch(report);
   });
 
   const dirty = $derived(
@@ -218,33 +234,46 @@
           <div class="text">
             <span class="name">Projets sans jumeau</span>
             <span class="desc">
-              Rapproche-les à la main pour que leurs deux plateformes soient comptées ensemble.
+              Ces projets n'ont pas trouvé d'équivalent sur l'autre plateforme : soit ils n'y sont
+              pas publiés, soit leurs titres diffèrent trop pour être rapprochés automatiquement.
+              Sélectionne un projet de chaque colonne pour les apparier à la main.
             </span>
           </div>
           <div class="orphans">
             <div>
-              <span class="legend-label">Modrinth</span>
-              <ul>
-                {#each modrinthOrphans as [id, , title] (id)}
-                  <li>
-                    <button class:active={leftId === id} onclick={() => (leftId = id)}>
-                      {title}
-                    </button>
-                  </li>
-                {/each}
-              </ul>
+              <span class="legend-label">Modrinth · {modrinthOrphans.length}</span>
+              {#if modrinthOrphans.length === 0}
+                <p class="none">Aucun projet Modrinth en attente.</p>
+              {:else}
+                <ul>
+                  {#each modrinthOrphans as [id, , title] (id)}
+                    <li>
+                      <button class:active={leftId === id} onclick={() => (leftId = id)}>
+                        {title}
+                      </button>
+                    </li>
+                  {/each}
+                </ul>
+              {/if}
             </div>
             <div>
-              <span class="legend-label">CurseForge</span>
-              <ul>
-                {#each curseforgeOrphans as [id, , title] (id)}
-                  <li>
-                    <button class:active={rightId === id} onclick={() => (rightId = id)}>
-                      {title}
-                    </button>
-                  </li>
-                {/each}
-              </ul>
+              <span class="legend-label">CurseForge · {curseforgeOrphans.length}</span>
+              {#if curseforgeOrphans.length === 0}
+                <p class="none">
+                  Aucun projet CurseForge en attente : les projets ci-contre n'existent
+                  vraisemblablement pas sur CurseForge, et resteront comptés sur Modrinth seul.
+                </p>
+              {:else}
+                <ul>
+                  {#each curseforgeOrphans as [id, , title] (id)}
+                    <li>
+                      <button class:active={rightId === id} onclick={() => (rightId = id)}>
+                        {title}
+                      </button>
+                    </li>
+                  {/each}
+                </ul>
+              {/if}
             </div>
           </div>
           <button
@@ -274,15 +303,20 @@
 {/if}
 
 <style>
+  /*
+   * Seule la colonne des panneaux défile : le sommaire et le titre restent en
+   * place, comme la barre de navigation au-dessus.
+   */
   .layout {
     display: grid;
     grid-template-columns: 200px minmax(0, 1fr);
     gap: 28px;
-    align-items: start;
+    align-items: stretch;
+    height: 100%;
+    min-height: 0;
   }
   aside {
-    position: sticky;
-    top: 18px;
+    align-self: start;
   }
   h1 {
     font-family: var(--font-display);
@@ -319,8 +353,12 @@
     display: flex;
     flex-direction: column;
     gap: 16px;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-right: 4px;
     /* La barre d'enregistrement flotte au-dessus du bas de page. */
-    padding-bottom: 56px;
+    padding-bottom: 64px;
   }
   section {
     background: var(--surface);
@@ -417,8 +455,14 @@
   }
   .orphans {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
     gap: 16px;
+  }
+  .none {
+    margin: 6px 0 0;
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    line-height: 1.45;
   }
   ul {
     list-style: none;

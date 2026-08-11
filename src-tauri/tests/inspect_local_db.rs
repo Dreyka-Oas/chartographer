@@ -72,6 +72,59 @@ fn resume_local_database() {
         None => println!("\npayout            : jamais releve"),
     }
 
+    let mut orphan_stmt = conn
+        .prepare(
+            "SELECT p.id, p.platform, p.title, p.slug FROM projects p
+             WHERE (p.platform = 'modrinth'
+                    AND p.id NOT IN (SELECT modrinth_project_id FROM links))
+                OR (p.platform = 'curseforge'
+                    AND p.id NOT IN (SELECT cf_project_id FROM links))
+             ORDER BY p.platform, p.title",
+        )
+        .unwrap();
+    println!("\nprojets sans jumeau :");
+    for row in orphan_stmt
+        .query_map([], |r| {
+            Ok((
+                r.get::<_, i64>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, String>(2)?,
+                r.get::<_, Option<String>>(3)?,
+            ))
+        })
+        .unwrap()
+    {
+        let (id, platform, title, slug) = row.unwrap();
+        println!("  {id:4} {platform:12} {title:24} {}", slug.unwrap_or_default());
+    }
+
+    // Reproduit exactement ce que la commande `unlinked_projects` renvoie au
+    // front, pour vérifier que la page des réglages reçoit bien la liste.
+    {
+        use chartographer_lib::models::Platform;
+        use chartographer_lib::store::projects as p;
+
+        let link_rows = p::links(&conn).unwrap();
+        let payload: Vec<(i64, String, String)> = p::list(&conn)
+            .unwrap()
+            .into_iter()
+            .filter(|project| match project.platform {
+                Platform::Modrinth => !link_rows
+                    .iter()
+                    .any(|l| l.modrinth_project_id == project.id),
+                Platform::CurseForge => !link_rows.iter().any(|l| l.cf_project_id == project.id),
+            })
+            .map(|project| {
+                (
+                    project.id,
+                    project.platform.as_str().to_string(),
+                    project.title,
+                )
+            })
+            .collect();
+        println!("\nunlinked_projects renvoie : {payload:?}");
+    }
+
     let mut stmt = conn
         .prepare("SELECT provider, status, detail FROM sync_runs ORDER BY id DESC LIMIT 6")
         .unwrap();

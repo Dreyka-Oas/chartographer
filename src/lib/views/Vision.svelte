@@ -6,28 +6,24 @@
   import LoaderHeatmap from "../components/LoaderHeatmap.svelte";
   import PlatformSplit from "../components/PlatformSplit.svelte";
   import ProjectsTable from "../components/ProjectsTable.svelte";
+  import RangePicker from "../components/RangePicker.svelte";
   import RevenueChart from "../components/RevenueChart.svelte";
   import Timeline from "../components/Timeline.svelte";
   import WorldMap from "../components/WorldMap.svelte";
   import { dashboard } from "../state.svelte";
 
-  const RANGES = [30, 90, 180, 365];
   const overview = $derived(dashboard.overview);
 </script>
 
 {#if overview}
   <div class="toolbar">
-    <div class="ranges">
-      {#each RANGES as days (days)}
-        <button class:active={dashboard.rangeDays === days} onclick={() => dashboard.setRange(days)}>
-          {days} j
-        </button>
-      {/each}
+    <RangePicker />
+    <div class="state">
+      <FreshnessBadge entries={overview.freshness} />
+      <button class="sync" onclick={() => dashboard.sync()} disabled={dashboard.syncing}>
+        {dashboard.syncing ? "Synchronisation…" : "Synchroniser"}
+      </button>
     </div>
-    <FreshnessBadge entries={overview.freshness} />
-    <button class="sync" onclick={() => dashboard.sync()} disabled={dashboard.syncing}>
-      {dashboard.syncing ? "Synchronisation…" : "Synchroniser"}
-    </button>
   </div>
 
   <KpiBand kpis={overview.kpis} />
@@ -115,19 +111,21 @@
   .toolbar {
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: 14px 20px;
     flex-wrap: wrap;
-    margin-bottom: 14px;
+    margin-bottom: 16px;
   }
-  .ranges {
+  .state {
+    margin-left: auto;
     display: flex;
-    gap: 4px;
+    align-items: center;
+    gap: 12px;
   }
   button {
     background: var(--surface);
     border: 1px solid var(--border);
     color: var(--text-dim);
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     padding: 5px 12px;
     font: inherit;
     font-size: 0.8rem;
@@ -136,13 +134,11 @@
       color 120ms ease,
       border-color 120ms ease;
   }
-  button.active,
   button:hover {
     color: var(--text);
     border-color: var(--accent);
   }
   .sync {
-    margin-left: auto;
     color: var(--text);
   }
   .sync:disabled {
@@ -151,9 +147,18 @@
   }
   .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(460px, 1fr));
-    gap: 14px;
-    margin-top: 14px;
+    /*
+     * Deux colonnes larges plutôt que quatre étroites : au-delà, les graphiques
+     * deviennent illisibles et la dernière rangée reste à moitié vide.
+     */
+    grid-template-columns: repeat(auto-fit, minmax(560px, 1fr));
+    /*
+     * Rangées de hauteur régulière : les cartes d'une même ligne se répondent,
+     * et leur contenu s'étire pour occuper la place au lieu de laisser du vide.
+     */
+    grid-auto-rows: minmax(340px, auto);
+    gap: 18px;
+    margin-top: 18px;
   }
   .wide {
     grid-column: 1 / -1;

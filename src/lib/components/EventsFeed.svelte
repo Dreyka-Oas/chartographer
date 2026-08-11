@@ -27,8 +27,11 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
-    max-height: 380px;
+    flex: 1;
+    min-height: 0;
     overflow-y: auto;
+    /* La liste bute net : plus de rebond qui déborde sur la page derrière. */
+    overscroll-behavior: contain;
   }
   li {
     display: grid;

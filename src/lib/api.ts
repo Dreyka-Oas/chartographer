@@ -10,9 +10,15 @@ export const api = {
   saveSettings: (curseforgeUsername: string | null, rangeDays: number) =>
     invoke<void>("save_settings", { curseforgeUsername, rangeDays }),
   syncNow: () => invoke<SyncReport[]>("sync_now"),
-  overview: (rangeDays: number) => invoke<Overview>("overview", { rangeDays }),
-  projectDetail: (modrinthId: number | null, curseforgeId: number | null, rangeDays: number) =>
-    invoke<ProjectDetail>("project_detail", { modrinthId, curseforgeId, rangeDays }),
+  overview: (rangeDays: number, from: string | null, to: string | null) =>
+    invoke<Overview>("overview", { rangeDays, from, to }),
+  projectDetail: (
+    modrinthId: number | null,
+    curseforgeId: number | null,
+    rangeDays: number,
+    from: string | null,
+    to: string | null,
+  ) => invoke<ProjectDetail>("project_detail", { modrinthId, curseforgeId, rangeDays, from, to }),
   linkManual: (modrinthId: number, curseforgeId: number) =>
     invoke<void>("link_manual", { modrinthId, curseforgeId }),
   unlink: (modrinthId: number, curseforgeId: number) =>

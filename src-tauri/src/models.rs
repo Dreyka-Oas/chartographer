@@ -142,6 +142,13 @@ pub struct ProjectDetail {
 #[derive(Debug, Clone, Serialize)]
 pub struct Overview {
     pub kpis: Kpis,
+    /// Bornes effectives de la fenêtre affichée, toutes deux incluses.
+    /// Le front les reprend telles quelles : il n'a jamais à recalculer de date.
+    pub from: String,
+    pub to: String,
+    /// Mois `YYYY-MM` pour lesquels la base contient au moins une mesure.
+    /// Alimente le filtre par mois, indépendamment de la fenêtre affichée.
+    pub available_months: Vec<String>,
     /// Axe de jours dense couvrant toute la fenêtre, trous compris.
     /// Toutes les séries par projet sont alignées dessus.
     pub days: Vec<String>,

@@ -1,14 +1,17 @@
 import type { TimelinePoint } from "../types";
-import { axisStyle, BASE_GRID, DARK, tooltip, type Palette } from "./theme";
+import { axisStyle, BASE_GRID, DARK, dayAxis, dayTooltip, type Palette } from "./theme";
 
 export function timelineOption(points: TimelinePoint[], stacked: boolean, p: Palette = DARK) {
   const stack = stacked ? "downloads" : undefined;
   const axis = axisStyle(p);
   return {
     grid: BASE_GRID,
-    tooltip: { trigger: "axis", ...tooltip(p) },
+    tooltip: dayTooltip(p),
     legend: { data: ["Modrinth", "CurseForge"], textStyle: { color: p.textDim }, top: 0 },
-    xAxis: { type: "category", data: points.map((x) => x.day), ...axis },
+    xAxis: dayAxis(
+      points.map((x) => x.day),
+      p,
+    ),
     yAxis: { type: "value", ...axis },
     dataZoom: [
       { type: "inside", start: 0, end: 100 },

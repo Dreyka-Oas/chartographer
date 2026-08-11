@@ -1,5 +1,5 @@
 import type { PayoutPoint } from "../types";
-import { axisStyle, BASE_GRID, DARK, tooltip, type Palette } from "./theme";
+import { axisStyle, BASE_GRID, DARK, monthAxis, tooltip, type Palette } from "./theme";
 
 /**
  * Échéancier de reversement. Les échéances déjà mûres et celles à venir
@@ -17,12 +17,10 @@ export function scheduleOption(points: PayoutPoint[], p: Palette = DARK) {
       ...tooltip(p),
       valueFormatter: (v: number) => `${v.toFixed(2)} $`,
     },
-    xAxis: {
-      type: "category",
-      data: points.map((x) => x.date.slice(0, 7)),
-      ...axis,
-      axisLabel: { color: p.textDim, rotate: 45 },
-    },
+    xAxis: monthAxis(
+      points.map((x) => x.date.slice(0, 7)),
+      p,
+    ),
     yAxis: { type: "value", ...axis },
     series: [
       {

@@ -12,7 +12,7 @@
 {#if cells.length === 0}
   <p class="empty">Aucune version indexée. Lance une synchronisation.</p>
 {:else}
-  <Chart {option} height={300} />
+  <Chart {option} height="fill" />
 {/if}
 
 <style>

@@ -40,7 +40,7 @@
   const top = $derived(countries.filter((c) => c.country !== "??").slice(0, 6));
 </script>
 
-<Chart {option} height={380} />
+<Chart {option} height="fill" />
 
 <div class="side">
   <ul>

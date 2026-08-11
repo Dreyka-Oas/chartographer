@@ -1,4 +1,4 @@
-import { axisStyle, BASE_GRID, DARK, tooltip, type Palette } from "./theme";
+import { axisStyle, BASE_GRID, DARK, dayAxis, dayTooltip, tooltip, type Palette } from "./theme";
 
 export interface NamedSeries {
   name: string;
@@ -37,14 +37,14 @@ export function stackedProjectsOption(
   const axis = axisStyle(p);
   return {
     grid: { ...BASE_GRID, top: 40, bottom: 72 },
-    tooltip: { trigger: "axis", ...tooltip(p), order: "valueDesc", confine: true },
+    tooltip: { ...dayTooltip(p), order: "valueDesc" },
     legend: {
       type: "scroll",
       data: series.map((s) => s.name),
       textStyle: { color: p.textDim },
       top: 0,
     },
-    xAxis: { type: "category", data: days, ...axis },
+    xAxis: dayAxis(days, p),
     yAxis: { type: "value", ...axis },
     dataZoom: [
       { type: "inside", start: 0, end: 100 },

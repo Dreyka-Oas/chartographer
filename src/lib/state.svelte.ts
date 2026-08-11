@@ -1,4 +1,5 @@
 import { api } from "./api";
+import { lastDayOfMonth } from "./format";
 import type {
   AppErrorPayload,
   AuthStatus,
@@ -22,6 +23,11 @@ export type DetailView =
   | "events"
   | "projects";
 
+/** Au-delà de ce délai, les données sont considérées périmées et resynchronisées. */
+const STALE_AFTER_MS = 6 * 60 * 60 * 1000;
+/** Cadence du réveil qui vérifie la péremption. */
+const AUTO_SYNC_TICK_MS = 15 * 60 * 1000;
+
 class Dashboard {
   detail = $state<DetailView | null>(null);
   project = $state<ProjectDetail | null>(null);
@@ -29,29 +35,69 @@ class Dashboard {
   auth = $state<AuthStatus | null>(null);
   overview = $state<Overview | null>(null);
   rangeDays = $state(90);
+  /** Bornes explicites. Nulles, la fenêtre glisse sur `rangeDays` jours. */
+  rangeFrom = $state<string | null>(null);
+  rangeTo = $state<string | null>(null);
   loading = $state(false);
   syncing = $state(false);
   connecting = $state(false);
   error = $state<string | null>(null);
   lastSync = $state<SyncReport[]>([]);
   selectedProject = $state<string | null>(null);
+  private timer: ReturnType<typeof setInterval> | null = null;
+
+  /** Horodatage du dernier cycle terminé, toutes sources confondues. */
+  get lastSyncAt(): string | null {
+    const stamps = (this.overview?.freshness ?? [])
+      .map((f) => f.finished_at)
+      .filter((value): value is string => value !== null);
+    return stamps.length === 0 ? null : stamps.reduce((a, b) => (a > b ? a : b));
+  }
+
+  /** Âge des données en millisecondes, `null` si aucun cycle n'a jamais abouti. */
+  get dataAgeMs(): number | null {
+    const last = this.lastSyncAt;
+    if (last === null) return null;
+    const parsed = Date.parse(last);
+    return Number.isNaN(parsed) ? null : Date.now() - parsed;
+  }
 
   async refreshAuth() {
     this.auth = await api.authStatus();
   }
 
   /**
-   * Démarrage : si un token est déjà enregistré, on charge la base, et si elle
-   * est encore vide on lance la première synchronisation sans rien demander.
+   * Démarrage : si un token est déjà enregistré, on charge la base, on
+   * synchronise si les données sont périmées, puis on arme le réveil
+   * périodique qui entretiendra les snapshots quotidiens CurseForge.
    */
   async boot() {
     await this.refreshAuth();
     if (!this.auth?.connected) return;
     await this.load();
-    if (!this.overview) return;
-    // Base vide, ou échéancier de reversement jamais relevé : on synchronise.
+    await this.autoSync();
+    this.startAutoSync();
+  }
+
+  /** Arme le réveil de synchronisation. Sans effet s'il tourne déjà. */
+  startAutoSync() {
+    if (this.timer !== null) return;
+    this.timer = setInterval(() => void this.autoSync(), AUTO_SYNC_TICK_MS);
+  }
+
+  /**
+   * Synchronise si — et seulement si — les données le méritent : base vide,
+   * échéancier de reversement jamais relevé, ou dernier cycle trop ancien.
+   */
+  async autoSync() {
+    if (this.syncing || !this.auth?.connected) return;
+    const age = this.dataAgeMs;
     const stale =
-      this.overview.per_project.length === 0 || this.overview.payout.available === "";
+      this.overview === null ||
+      this.overview.per_project.length === 0 ||
+      this.overview.payout.available === "" ||
+      age === null ||
+      age > STALE_AFTER_MS;
     if (stale) await this.sync();
   }
 
@@ -65,6 +111,7 @@ class Dashboard {
     try {
       this.auth = await api.connect(token);
       await this.sync();
+      this.startAutoSync();
     } catch (e) {
       this.error = message(e);
     } finally {
@@ -81,7 +128,7 @@ class Dashboard {
     this.loading = true;
     this.error = null;
     try {
-      this.overview = await api.overview(this.rangeDays);
+      this.overview = await api.overview(this.rangeDays, this.rangeFrom, this.rangeTo);
     } catch (e) {
       this.error = message(e);
     } finally {
@@ -89,10 +136,33 @@ class Dashboard {
     }
   }
 
-  async setRange(days: number) {
-    this.rangeDays = days;
+  /** Recharge la vue courante, page de vision comme détail de mod. */
+  private async reload() {
     await this.load();
     if (this.project) await this.openProject(this.project.summary);
+  }
+
+  /** Fenêtre glissante de `days` jours se terminant aujourd'hui. */
+  async setRange(days: number) {
+    this.rangeDays = days;
+    this.rangeFrom = null;
+    this.rangeTo = null;
+    await this.reload();
+  }
+
+  /** Mois calendaire complet, `month` au format `YYYY-MM`. */
+  async setMonth(month: string) {
+    this.rangeFrom = `${month}-01`;
+    this.rangeTo = lastDayOfMonth(month);
+    await this.reload();
+  }
+
+  /** Plage libre, bornes incluses. */
+  async setCustomRange(from: string, to: string) {
+    if (!from || !to) return;
+    this.rangeFrom = from;
+    this.rangeTo = to;
+    await this.reload();
   }
 
   openDetail(view: DetailView) {
@@ -115,6 +185,8 @@ class Dashboard {
         summary.modrinth_id,
         summary.curseforge_id,
         this.rangeDays,
+        this.rangeFrom,
+        this.rangeTo,
       );
     } catch (e) {
       this.error = message(e);

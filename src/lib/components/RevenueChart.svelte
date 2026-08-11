@@ -12,7 +12,7 @@
 {#if points.length === 0}
   <p class="empty">Aucun revenu sur la période.</p>
 {:else}
-  <Chart {option} height={280} />
+  <Chart {option} height="fill" />
 {/if}
 
 <style>

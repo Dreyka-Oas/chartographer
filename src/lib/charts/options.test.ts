@@ -3,6 +3,7 @@ import type { ProjectSummary } from "../types";
 import { heatmapOption } from "./heatmap";
 import { revenueOption } from "./revenue";
 import { splitOption } from "./split";
+import { DARK, dayAxis, dayTooltipHtml, monthAxis } from "./theme";
 import { timelineOption } from "./timeline";
 import { worldMapOption } from "./worldmap";
 
@@ -40,6 +41,32 @@ describe("timelineOption", () => {
   it("désempile quand le mode comparaison est actif", () => {
     const option = timelineOption(points, false);
     expect(option.series[0].stack).toBeUndefined();
+  });
+});
+
+describe("dayAxis", () => {
+  it("garde les dates ISO en données et n'affiche que jour et mois", () => {
+    const axis = dayAxis(["2026-08-09", "2026-08-10"], DARK);
+    expect(axis.data).toEqual(["2026-08-09", "2026-08-10"]);
+    expect(axis.axisLabel.formatter("2026-08-09")).toBe("9 août");
+  });
+});
+
+describe("monthAxis", () => {
+  it("écrit les mois en toutes lettres", () => {
+    const axis = monthAxis(["2026-08"], DARK);
+    expect(axis.axisLabel.formatter("2026-08")).toBe("août 2026");
+  });
+});
+
+describe("dayTooltipHtml", () => {
+  it("titre la bulle avec la date complète", () => {
+    const html = dayTooltipHtml([
+      { axisValue: "2026-08-09", marker: "●", seriesName: "Modrinth", value: 1776 },
+    ]);
+    expect(html).toContain("9 août 2026");
+    expect(html).toContain("Modrinth");
+    expect(html.replace(/\s/g, " ")).toContain("1,8 k");
   });
 });
 

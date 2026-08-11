@@ -14,7 +14,7 @@
   <input type="checkbox" bind:checked={stacked} />
   Empiler les plateformes
 </label>
-<Chart {option} height={340} />
+<Chart {option} height="fill" />
 
 <style>
   label {

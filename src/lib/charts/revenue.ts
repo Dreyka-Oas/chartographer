@@ -1,5 +1,6 @@
+import { formatMoney } from "../format";
 import type { RevenuePoint } from "../types";
-import { axisStyle, BASE_GRID, DARK, tooltip, type Palette } from "./theme";
+import { axisStyle, BASE_GRID, DARK, dayAxis, dayTooltip, type Palette } from "./theme";
 
 export function revenueOption(points: RevenuePoint[], p: Palette = DARK) {
   const daily = points.map((x) => Number.parseFloat(x.amount) || 0);
@@ -12,9 +13,12 @@ export function revenueOption(points: RevenuePoint[], p: Palette = DARK) {
 
   return {
     grid: BASE_GRID,
-    tooltip: { trigger: "axis", ...tooltip(p) },
+    tooltip: dayTooltip(p, (value) => formatMoney(String(value))),
     legend: { data: ["Journalier", "Cumulé"], textStyle: { color: p.textDim }, top: 0 },
-    xAxis: { type: "category", data: points.map((x) => x.day), ...axis },
+    xAxis: dayAxis(
+      points.map((x) => x.day),
+      p,
+    ),
     yAxis: [
       { type: "value", ...axis },
       { type: "value", ...axis },

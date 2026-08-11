@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { compactNumber, countryLabel, deltaPercent, formatDay, formatMoney } from "./format";
+import {
+  compactNumber,
+  countryLabel,
+  deltaPercent,
+  formatAge,
+  formatDay,
+  formatDayLong,
+  formatMonth,
+  formatMoney,
+  formatRange,
+  lastDayOfMonth,
+} from "./format";
 
 const plain = (value: string) => value.replace(/\s/g, " ");
 
@@ -34,6 +45,44 @@ describe("formatMoney", () => {
 describe("formatDay", () => {
   it("rend un jour ISO en jour court", () => {
     expect(formatDay("2026-08-11")).toBe("11 août");
+  });
+});
+
+describe("formatDayLong", () => {
+  it("ajoute l'année au jour court", () => {
+    expect(formatDayLong("2026-08-11")).toBe("11 août 2026");
+  });
+});
+
+describe("formatMonth", () => {
+  it("écrit le mois en toutes lettres", () => {
+    expect(formatMonth("2026-08")).toBe("août 2026");
+    expect(formatMonth("2026-02")).toBe("févr. 2026");
+  });
+});
+
+describe("lastDayOfMonth", () => {
+  it("trouve la fin de mois, années bissextiles comprises", () => {
+    expect(lastDayOfMonth("2026-08")).toBe("2026-08-31");
+    expect(lastDayOfMonth("2026-02")).toBe("2026-02-28");
+    expect(lastDayOfMonth("2024-02")).toBe("2024-02-29");
+    expect(lastDayOfMonth("2026-12")).toBe("2026-12-31");
+  });
+});
+
+describe("formatRange", () => {
+  it("décrit une fenêtre bornes incluses", () => {
+    expect(formatRange("2026-08-01", "2026-08-31")).toBe("1 août → 31 août 2026");
+  });
+});
+
+describe("formatAge", () => {
+  it("échelonne l'ancienneté", () => {
+    expect(formatAge(null)).toBe("jamais");
+    expect(formatAge(30_000)).toBe("à l'instant");
+    expect(formatAge(25 * 60_000)).toBe("il y a 25 min");
+    expect(formatAge(3 * 3_600_000)).toBe("il y a 3 h");
+    expect(formatAge(50 * 3_600_000)).toBe("il y a 2 j");
   });
 });
 

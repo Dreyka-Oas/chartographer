@@ -16,12 +16,8 @@
 </script>
 
 <section class:clickable={onexpand !== null}>
-  <!-- Repères d'angle : les marques de calage d'une planche de carte. -->
-  <span class="tick tl" aria-hidden="true"></span>
-  <span class="tick br" aria-hidden="true"></span>
-
   <header>
-    <div>
+    <div class="titles">
       <h2>{title}</h2>
       {#if subtitle}<p>{subtitle}</p>{/if}
     </div>
@@ -32,12 +28,22 @@
     {/if}
   </header>
 
-  {@render children()}
+  <!--
+    Le contenu occupe toute la hauteur restante : sans cela, une carte étirée par
+    sa voisine de rangée laissait une bande vide sous son graphique.
+  -->
+  <div class="content">
+    {@render children()}
+  </div>
 </section>
 
 <style>
   section {
     position: relative;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius);
@@ -52,33 +58,23 @@
     box-shadow: var(--lift);
     transform: translateY(-1px);
   }
-  .tick {
-    position: absolute;
-    width: 9px;
-    height: 9px;
-    border: 1px solid var(--rule);
-    opacity: 0.85;
-    pointer-events: none;
-  }
-  .tl {
-    top: -1px;
-    left: -1px;
-    border-right: 0;
-    border-bottom: 0;
-  }
-  .br {
-    right: -1px;
-    bottom: -1px;
-    border-left: 0;
-    border-top: 0;
-  }
   header {
     display: flex;
     align-items: flex-start;
     gap: 12px;
-    margin-bottom: 14px;
+    margin-bottom: 16px;
     padding-bottom: 10px;
     border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .titles {
+    min-width: 0;
+  }
+  .content {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
   }
   h2 {
     margin: 0;
@@ -98,7 +94,7 @@
     background: none;
     border: 1px solid transparent;
     color: var(--text-dim);
-    border-radius: 5px;
+    border-radius: var(--radius-sm);
     padding: 3px 9px;
     font: inherit;
     font-size: 0.72rem;

@@ -479,9 +479,53 @@ pub fn project_detail(
     })
 }
 
-pub fn overview(conn: &Connection, today: &str, range_days: i64) -> Result<Overview> {
-    let from = shift_day(today, -range_days);
-    let to = shift_day(today, 1);
+/// Vrai si la chaîne est une date `YYYY-MM-DD` réelle.
+fn valid_day(day: &str) -> bool {
+    NaiveDate::parse_from_str(day, "%Y-%m-%d").is_ok()
+}
+
+/// Résout la fenêtre demandée en bornes internes `(début inclus, fin exclue)`.
+///
+/// L'interface raisonne en dates incluses : choisir « du 1er au 31 août » doit
+/// contenir le 31. Les requêtes, elles, comparent avec `day < to`. La conversion
+/// se fait ici, à un seul endroit. Sans bornes explicites on retombe sur la
+/// fenêtre glissante de `range_days` jours qui se termine aujourd'hui.
+pub fn resolve_range(
+    today: &str,
+    range_days: i64,
+    from: Option<&str>,
+    to: Option<&str>,
+) -> (String, String) {
+    let start = from
+        .filter(|d| valid_day(d))
+        .map(|d| d.to_string())
+        .unwrap_or_else(|| shift_day(today, -range_days));
+    let end = to
+        .filter(|d| valid_day(d))
+        .map(|d| shift_day(d, 1))
+        .unwrap_or_else(|| shift_day(today, 1));
+    if end <= start {
+        let repaired = shift_day(&start, 1);
+        return (start, repaired);
+    }
+    (start, end)
+}
+
+/// Mois `YYYY-MM` couverts par au moins une mesure, toutes sources confondues.
+pub fn available_months(conn: &Connection) -> Result<Vec<String>> {
+    let mut stmt = conn.prepare(
+        "SELECT DISTINCT substr(day, 1, 7) AS month FROM metrics_daily
+         UNION SELECT DISTINCT substr(taken_at, 1, 7) FROM cf_snapshots
+         ORDER BY month",
+    )?;
+    let rows = stmt
+        .query_map([], |r| r.get::<_, String>(0))?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(rows)
+}
+
+pub fn overview(conn: &Connection, today: &str, from: &str, to: &str) -> Result<Overview> {
+    let (from, to) = (from.to_string(), to.to_string());
     let mut kpis = kpis(conn, today)?;
     let payout = payout(conn, today)?;
     if !payout.available.is_empty() {
@@ -490,6 +534,11 @@ pub fn overview(conn: &Connection, today: &str, range_days: i64) -> Result<Overv
 
     Ok(Overview {
         kpis,
+        // La borne haute est exclue en interne : on la ramène au dernier jour
+        // réellement affiché avant de la rendre à l'interface.
+        to: shift_day(&to, -1),
+        from: from.clone(),
+        available_months: available_months(conn)?,
         days: day_axis(&from, &to),
         timeline: timeline(conn, &from, &to)?,
         per_project: per_project(conn, &from, &to)?,
@@ -583,6 +632,47 @@ mod tests {
         let solo = rows.iter().find(|r| r.title == "Solo").unwrap();
         assert_eq!(solo.curseforge_downloads, 0);
         assert!(solo.curseforge_id.is_none());
+    }
+
+    #[test]
+    fn resolve_range_falls_back_on_the_sliding_window() {
+        let (from, to) = resolve_range("2026-08-11", 30, None, None);
+        assert_eq!(from, "2026-07-12");
+        assert_eq!(to, "2026-08-12");
+    }
+
+    #[test]
+    fn resolve_range_includes_the_chosen_last_day() {
+        let (from, to) = resolve_range("2026-08-11", 30, Some("2026-08-01"), Some("2026-08-31"));
+        assert_eq!(from, "2026-08-01");
+        // Borne haute exclue : le 31 doit rester dans la fenêtre.
+        assert_eq!(to, "2026-09-01");
+    }
+
+    #[test]
+    fn resolve_range_ignores_malformed_bounds() {
+        let (from, to) = resolve_range("2026-08-11", 7, Some("hier"), Some(""));
+        assert_eq!(from, "2026-08-04");
+        assert_eq!(to, "2026-08-12");
+    }
+
+    #[test]
+    fn resolve_range_repairs_an_inverted_window() {
+        let (from, to) = resolve_range("2026-08-11", 30, Some("2026-08-20"), Some("2026-08-01"));
+        assert_eq!(from, "2026-08-20");
+        assert_eq!(to, "2026-08-21");
+    }
+
+    #[test]
+    fn available_months_merges_both_sources() {
+        let (conn, m, c) = seed();
+        upsert_daily(&conn, m, "2026-07-30", Some(12), None, None).unwrap();
+        upsert_daily(&conn, m, "2026-08-02", Some(9), None, None).unwrap();
+        // Le mois de juin n'apparaît que côté CurseForge : il doit remonter aussi.
+        insert_snapshot(&conn, c, "2026-06-28T00:00:00Z", 100, None).unwrap();
+
+        let months = available_months(&conn).unwrap();
+        assert_eq!(months, vec!["2026-06", "2026-07", "2026-08"]);
     }
 
     #[test]

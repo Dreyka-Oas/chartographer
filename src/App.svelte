@@ -100,7 +100,7 @@
     font-size: 0.84rem;
     cursor: pointer;
     padding: 4px 9px;
-    border-radius: 5px;
+    border-radius: var(--radius-sm);
   }
   nav button.active,
   nav button:hover {
@@ -113,6 +113,9 @@
     font-size: 0.8rem;
   }
   main {
+    /* Au-delà, les cartes s'étirent en bandes trop larges pour être lisibles. */
+    max-width: 1760px;
+    margin: 0 auto;
     padding: 18px 22px 42px;
   }
   .boot {

@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
+  import RangePicker from "../../components/RangePicker.svelte";
   import { dashboard } from "../../state.svelte";
 
   let {
@@ -15,8 +16,6 @@
     actions?: Snippet;
     children: Snippet;
   } = $props();
-
-  const RANGES = [30, 90, 180, 365];
 
   function onkeydown(event: KeyboardEvent) {
     if (event.key === "Escape") dashboard.closeDetail();
@@ -41,21 +40,14 @@
 
     <div class="tools">
       {#if actions}{@render actions()}{/if}
-      <div class="ranges">
-        {#each RANGES as days (days)}
-          <button
-            class:active={dashboard.rangeDays === days}
-            onclick={() => dashboard.setRange(days)}
-          >
-            {days} j
-          </button>
-        {/each}
-      </div>
+      <RangePicker />
     </div>
   </header>
 
   <div class="body">
-    {@render children()}
+    <div class="sheet">
+      {@render children()}
+    </div>
   </div>
 </section>
 
@@ -119,11 +111,9 @@
     margin-left: auto;
     display: flex;
     align-items: center;
-    gap: 12px;
-  }
-  .ranges {
-    display: flex;
-    gap: 4px;
+    gap: 12px 16px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
   button {
     background: var(--surface-2);
@@ -136,8 +126,7 @@
     cursor: pointer;
     white-space: nowrap;
   }
-  button:hover,
-  button.active {
+  button:hover {
     color: var(--text);
     border-color: var(--accent);
   }
@@ -146,7 +135,15 @@
   }
   .body {
     flex: 1;
+    min-height: 0;
     overflow-y: auto;
+    /* Le défilement bute net et ne se propage pas à la page de vision dessous. */
+    overscroll-behavior: contain;
     padding: 20px 24px 40px;
+  }
+  /* Même largeur utile que la page de vision : les colonnes se répondent. */
+  .sheet {
+    max-width: 1760px;
+    margin: 0 auto;
   }
 </style>

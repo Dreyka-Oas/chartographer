@@ -110,13 +110,21 @@ pub async fn sync_now(state: State<'_, AppState>) -> Result<Vec<SyncReport>> {
     Ok(sync::full(&state.store, &ctx).await)
 }
 
+/// `from` et `to` sont des dates incluses `YYYY-MM-DD`. Absentes, on retombe sur
+/// la fenêtre glissante de `range_days` jours qui se termine aujourd'hui.
 #[tauri::command]
-pub fn overview(state: State<'_, AppState>, range_days: i64) -> Result<Overview> {
+pub fn overview(
+    state: State<'_, AppState>,
+    range_days: i64,
+    from: Option<String>,
+    to: Option<String>,
+) -> Result<Overview> {
     let today = sync::today_utc();
     let range = range_days.clamp(7, 730);
+    let (from, to) = queries::resolve_range(&today, range, from.as_deref(), to.as_deref());
     state
         .store
-        .with(|conn| queries::overview(conn, &today, range))
+        .with(|conn| queries::overview(conn, &today, &from, &to))
 }
 
 #[tauri::command]
@@ -125,11 +133,12 @@ pub fn project_detail(
     modrinth_id: Option<i64>,
     curseforge_id: Option<i64>,
     range_days: i64,
+    from: Option<String>,
+    to: Option<String>,
 ) -> Result<crate::models::ProjectDetail> {
     let today = sync::today_utc();
     let range = range_days.clamp(7, 730);
-    let from = queries::shift_day(&today, -range);
-    let to = queries::shift_day(&today, 1);
+    let (from, to) = queries::resolve_range(&today, range, from.as_deref(), to.as_deref());
     state
         .store
         .with(|conn| queries::project_detail(conn, &from, &to, modrinth_id, curseforge_id))

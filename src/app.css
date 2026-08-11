@@ -25,10 +25,11 @@
   --warn: #93650f;
   --error: #b2352f;
   --on-accent: #fbf9f5;
-  --graticule: rgba(22, 33, 31, 0.045);
+  --halo: rgba(13, 122, 98, 0.07);
   --lift: 0 1px 2px rgba(22, 33, 31, 0.06), 0 8px 24px -14px rgba(22, 33, 31, 0.35);
 
-  --radius: 6px;
+  --radius: 12px;
+  --radius-sm: 8px;
   --font-display: "Iowan Old Style", "Palatino Linotype", Georgia, "Times New Roman", serif;
   --font-ui: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
   --font-mono: "Cascadia Mono", Consolas, "SF Mono", ui-monospace, monospace;
@@ -52,7 +53,7 @@
     --warn: #e6b268;
     --error: #f0736c;
     --on-accent: #05100d;
-    --graticule: rgba(226, 236, 233, 0.04);
+    --halo: rgba(70, 203, 165, 0.07);
     --lift: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 30px -16px rgba(0, 0, 0, 0.8);
   }
 }
@@ -72,7 +73,7 @@
   --warn: #e6b268;
   --error: #f0736c;
   --on-accent: #05100d;
-  --graticule: rgba(226, 236, 233, 0.04);
+  --halo: rgba(70, 203, 165, 0.07);
   --lift: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 30px -16px rgba(0, 0, 0, 0.8);
 }
 
@@ -80,15 +81,29 @@
   box-sizing: border-box;
 }
 
+/*
+ * `overscroll-behavior: none` supprime le rebond élastique en bout de course :
+ * dans une fenêtre applicative, la page doit buter net, pas flotter.
+ */
+html {
+  height: 100%;
+  overscroll-behavior: none;
+}
+
 body {
   margin: 0;
+  min-height: 100%;
+  overscroll-behavior: none;
   color: var(--text);
   background-color: var(--bg);
-  /* Graticule : le quadrillage d'une carte, à peine perceptible. */
-  background-image:
-    linear-gradient(var(--graticule) 1px, transparent 1px),
-    linear-gradient(90deg, var(--graticule) 1px, transparent 1px);
-  background-size: 56px 56px;
+  /*
+   * Un halo unique en haut de page plutôt qu'un quadrillage : les lignes ne se
+   * calaient sur rien et venaient buter contre les bords des cartes. Le
+   * dégradé est fixe, donc il ne défile pas et ne recoupe jamais un contenu.
+   */
+  background-image: radial-gradient(120% 70% at 50% -10%, var(--halo), transparent 70%);
+  background-attachment: fixed;
+  background-repeat: no-repeat;
   -webkit-font-smoothing: antialiased;
 }
 

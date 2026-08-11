@@ -101,6 +101,11 @@ export interface ProjectDetail {
 
 export interface Overview {
   kpis: Kpis;
+  /** Bornes de la fenêtre affichée, toutes deux incluses. */
+  from: string;
+  to: string;
+  /** Mois `YYYY-MM` disponibles en base, pour le filtre par mois. */
+  available_months: string[];
   /** Axe de jours dense : toutes les séries par projet y sont alignées. */
   days: string[];
   timeline: TimelinePoint[];

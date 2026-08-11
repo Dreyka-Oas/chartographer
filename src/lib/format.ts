@@ -16,10 +16,40 @@ export function deltaPercent(current: number, previous: number): number | null {
   return Math.round(((current - previous) / previous) * 100);
 }
 
+/** Symboles des devises proposées ; le code sert de repli pour les autres. */
+const SYMBOLS: Record<string, string> = {
+  USD: "$",
+  EUR: "€",
+  GBP: "£",
+  CHF: "CHF",
+  CAD: "$ CA",
+  JPY: "¥",
+};
+
+/**
+ * Devise d'affichage et taux du dollar vers celle-ci. Les deux plateformes
+ * paient en dollars : tout montant reçu est converti au moment de l'écrire.
+ */
+let money = { code: "USD", rate: 1, symbol: "$" };
+
+export function setCurrency(code: string, rate: number) {
+  const upper = (code || "USD").toUpperCase();
+  money = {
+    code: upper,
+    rate: Number.isFinite(rate) && rate > 0 ? rate : 1,
+    symbol: SYMBOLS[upper] ?? upper,
+  };
+}
+
+export function currencyCode(): string {
+  return money.code;
+}
+
 export function formatMoney(raw: string): string {
   const value = Number.parseFloat(raw);
   const safe = Number.isFinite(value) ? value : 0;
-  return `${safe.toFixed(2).replace(".", ",")}${THIN_SPACE}$`;
+  const converted = safe * money.rate;
+  return `${converted.toFixed(2).replace(".", ",")}${THIN_SPACE}${money.symbol}`;
 }
 
 const MONTHS = [

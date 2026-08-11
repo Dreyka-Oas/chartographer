@@ -226,6 +226,8 @@ pub fn per_project(
                 .or_else(|| cf.and_then(|c| c.icon_url.clone())),
             modrinth_id: Some(project.id),
             curseforge_id: cf.map(|c| c.id),
+            modrinth_ext_id: Some(project.ext_id.clone()),
+            curseforge_ext_id: cf.and_then(|c| c.ext_id.parse().ok()),
             modrinth_downloads: if filter.modrinth {
                 project.total_downloads
             } else {
@@ -256,6 +258,8 @@ pub fn per_project(
                 icon_url: project.icon_url.clone(),
                 modrinth_id: None,
                 curseforge_id: Some(project.id),
+                modrinth_ext_id: None,
+                curseforge_ext_id: project.ext_id.parse().ok(),
                 modrinth_downloads: 0,
                 curseforge_downloads: project.total_downloads,
                 followers: 0,
@@ -785,6 +789,9 @@ pub fn overview(
         } else {
             crate::models::CfRevenue::default()
         },
+        // La devise choisie vit dans les réglages, hors de la base : la commande
+        // qui appelle cette vue la complète avant de la rendre à l'interface.
+        currency: crate::models::CurrencyView::default(),
     })
 }
 

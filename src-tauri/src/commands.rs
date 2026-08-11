@@ -113,9 +113,25 @@ pub fn open_token_page(app: tauri::AppHandle) -> Result<()> {
         .map_err(|e| AppError::Config(format!("ouverture du navigateur : {e}")))
 }
 
+/// Réglages tels que l'interface les voit : le jeton d'envoi n'en sort jamais,
+/// seule sa présence est annoncée.
+#[derive(Debug, Serialize)]
+pub struct SettingsView {
+    pub curseforge_username: Option<String>,
+    pub range_days: i64,
+    pub currency: String,
+    pub curseforge_token_ready: bool,
+}
+
 #[tauri::command]
-pub fn get_settings(state: State<'_, AppState>) -> Settings {
-    config::load_settings(&state.data_dir)
+pub fn get_settings(state: State<'_, AppState>) -> SettingsView {
+    let settings = config::load_settings(&state.data_dir);
+    SettingsView {
+        curseforge_username: settings.curseforge_username,
+        range_days: settings.range_days,
+        currency: settings.currency,
+        curseforge_token_ready: settings.curseforge_upload_token.is_some(),
+    }
 }
 
 #[tauri::command]
@@ -123,12 +139,21 @@ pub fn save_settings(
     state: State<'_, AppState>,
     curseforge_username: Option<String>,
     range_days: i64,
+    currency: Option<String>,
 ) -> Result<()> {
+    // Le jeton d'envoi est relevé par l'application, jamais saisi : on garde
+    // celui qui existe déjà plutôt que de l'écraser au premier enregistrement.
+    let previous = config::load_settings(&state.data_dir);
     let settings = Settings {
         curseforge_username: curseforge_username
             .map(|v| v.trim().to_string())
             .filter(|v| !v.is_empty()),
         range_days: range_days.clamp(7, 730),
+        currency: currency
+            .map(|v| v.trim().to_uppercase())
+            .filter(|v| v.len() == 3)
+            .unwrap_or(previous.currency),
+        curseforge_upload_token: previous.curseforge_upload_token,
     };
     config::save_settings(&state.data_dir, &settings)
 }
@@ -153,9 +178,58 @@ pub fn overview(
     let range = range_days.clamp(7, 730);
     let (from, to) = queries::resolve_range(&today, range, from.as_deref(), to.as_deref());
     let filter = queries::PlatformFilter::from_names(platforms.as_deref());
+    let mut overview = state
+        .store
+        .with(|conn| queries::overview(conn, &today, &from, &to, filter))?;
+    overview.currency = currency_view(&state);
+    Ok(overview)
+}
+
+/// Devise choisie et dernier taux relevé pour elle.
+///
+/// Un taux qui manque ou qui vise une autre devise vaut mieux ignoré qu'appliqué
+/// de travers : on retombe alors sur le dollar, la monnaie des deux plateformes.
+fn currency_view(state: &AppState) -> crate::models::CurrencyView {
+    let code = config::load_settings(&state.data_dir).currency;
+    if code == "USD" {
+        return crate::models::CurrencyView::default();
+    }
+    let stored = state
+        .store
+        .with(|conn| crate::store::metrics::get_meta(conn, "fx_rate"))
+        .ok()
+        .flatten()
+        .and_then(|raw| serde_json::from_str::<crate::providers::rates::Rate>(&raw).ok())
+        .filter(|rate| rate.currency == code);
+    match stored {
+        Some(rate) => crate::models::CurrencyView {
+            code,
+            rate: rate.rate,
+            day: rate.day,
+        },
+        None => crate::models::CurrencyView::default(),
+    }
+}
+
+/// Relève le taux du dollar vers la devise choisie et le conserve.
+///
+/// Appelée au démarrage et après chaque changement de devise : sans elle,
+/// l'interface afficherait des euros au cours du dollar.
+#[tauri::command]
+pub async fn refresh_exchange_rate(
+    state: State<'_, AppState>,
+) -> Result<crate::models::CurrencyView> {
+    let code = config::load_settings(&state.data_dir).currency;
+    let rate = crate::providers::rates::usd_to(&code).await?;
+    let raw = serde_json::to_string(&rate)?;
     state
         .store
-        .with(|conn| queries::overview(conn, &today, &from, &to, filter))
+        .with(|conn| crate::store::metrics::set_meta(conn, "fx_rate", &raw))?;
+    Ok(crate::models::CurrencyView {
+        code: rate.currency,
+        rate: rate.rate,
+        day: rate.day,
+    })
 }
 
 #[tauri::command]
@@ -393,7 +467,7 @@ const READ_SCRIPT: &str = r#"(function () {
 ///
 /// La collecte doit se faire seule : une fenêtre absente — jamais ouverte, ou
 /// refermée entre deux relevés — se rouvre au lieu d'interrompre le travail.
-async fn cf_window(app: &tauri::AppHandle) -> Result<tauri::WebviewWindow> {
+pub(crate) async fn cf_window(app: &tauri::AppHandle) -> Result<tauri::WebviewWindow> {
     if let Some(window) = app.get_webview_window(CF_WINDOW) {
         return Ok(window);
     }
@@ -409,7 +483,7 @@ async fn cf_window(app: &tauri::AppHandle) -> Result<tauri::WebviewWindow> {
 ///
 /// Son temps de chargement varie du simple au triple selon le réseau : sonder
 /// la page vaut mieux qu'une attente fixe, trop courte un jour et perdue l'autre.
-async fn wait_until_loaded(window: &tauri::WebviewWindow) {
+pub(crate) async fn wait_until_loaded(window: &tauri::WebviewWindow) {
     const READY: &str = r#"(function () {
       var body = document.body ? document.body.innerText : '';
       return document.readyState + '|' + body.length;
@@ -442,7 +516,7 @@ async fn wait_until_loaded(window: &tauri::WebviewWindow) {
 }
 
 /// Exécute un script dans la fenêtre CurseForge et rend son résultat.
-async fn eval_in_window(app: &tauri::AppHandle, script: &str) -> Result<String> {
+pub(crate) async fn eval_in_window(app: &tauri::AppHandle, script: &str) -> Result<String> {
     let window = cf_window(app).await?;
     eval_raw(&window, script).await
 }
@@ -559,16 +633,20 @@ pub async fn probe_curseforge(app: tauri::AppHandle) {
         Err(_) => return,
     };
 
-    let mut builder =
-        tauri::WebviewWindowBuilder::new(&app, CF_WINDOW, tauri::WebviewUrl::External(url))
-            .title("CurseForge — sonde")
-            .inner_size(1180.0, 860.0);
-    if armed_early {
-        builder = builder.initialization_script(CAPTURE_SCRIPT);
-    }
-    if let Err(error) = builder.build() {
-        eprintln!("PROBE: ouverture impossible : {error}");
-        return;
+    // La collecte ordinaire ouvre la même fenêtre au démarrage : on la reprend
+    // si elle est déjà là plutôt que d'échouer sur un nom déjà pris.
+    if app.get_webview_window(CF_WINDOW).is_none() {
+        let mut builder =
+            tauri::WebviewWindowBuilder::new(&app, CF_WINDOW, tauri::WebviewUrl::External(url))
+                .title("CurseForge — sonde")
+                .inner_size(1180.0, 860.0);
+        if armed_early {
+            builder = builder.initialization_script(CAPTURE_SCRIPT);
+        }
+        if let Err(error) = builder.build() {
+            eprintln!("PROBE: ouverture impossible : {error}");
+            return;
+        }
     }
 
     let mut report = String::new();

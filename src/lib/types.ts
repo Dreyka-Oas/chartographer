@@ -30,6 +30,9 @@ export interface ProjectSummary {
   icon_url: string | null;
   modrinth_id: number | null;
   curseforge_id: number | null;
+  /** Identifiants connus des plateformes, seuls utilisables pour leur parler. */
+  modrinth_ext_id: string | null;
+  curseforge_ext_id: number | null;
   modrinth_downloads: number;
   curseforge_downloads: number;
   followers: number;
@@ -127,6 +130,7 @@ export interface Overview {
   freshness: Freshness[];
   curseforge_history_days: number;
   curseforge_revenue: CfRevenue;
+  currency: CurrencyView;
 }
 
 /** Un mois de revenus relevé sur le tableau de bord CurseForge. */
@@ -160,6 +164,51 @@ export interface AuthStatus {
 export interface Settings {
   curseforge_username: string | null;
   range_days: number;
+  /** Devise d'affichage, code ISO à trois lettres. */
+  currency: string;
+  /** Vrai quand le jeton d'envoi CurseForge a été relevé. Le jeton lui-même
+   * ne quitte jamais l'application. */
+  curseforge_token_ready: boolean;
+}
+
+/** Devise d'affichage et taux appliqué aux montants, tous reçus en dollars. */
+export interface CurrencyView {
+  code: string;
+  rate: number;
+  /** Jour du taux, vide tant qu'aucun n'a été relevé. */
+  day: string;
+}
+
+/** Une entrée du catalogue des versions de jeu CurseForge. */
+export interface GameVersion {
+  id: number;
+  name: string;
+  slug: string;
+  type_id: number;
+}
+
+/** Une version prête à partir, décrite une fois pour les deux plateformes. */
+export interface PublishDraft {
+  modrinth_project_id: string | null;
+  curseforge_project_id: number | null;
+  name: string;
+  version_number: string;
+  changelog: string;
+  game_versions: string[];
+  loaders: string[];
+  release_type: string;
+  manual_release: boolean;
+}
+
+export interface PublishOutcome {
+  platform: string;
+  ok: boolean;
+  id: string | null;
+  detail: string;
+}
+
+export interface PublishReport {
+  outcomes: PublishOutcome[];
 }
 
 export interface PairingEntry {

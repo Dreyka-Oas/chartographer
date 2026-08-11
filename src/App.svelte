@@ -10,11 +10,12 @@
   import TimelineDetail from "./lib/views/detail/TimelineDetail.svelte";
   import Login from "./lib/views/Login.svelte";
   import ProjectDetail from "./lib/views/ProjectDetail.svelte";
+  import Publish from "./lib/views/Publish.svelte";
   import Revenue from "./lib/views/Revenue.svelte";
   import Settings from "./lib/views/Settings.svelte";
   import Vision from "./lib/views/Vision.svelte";
 
-  let view = $state<"vision" | "revenue" | "settings">("vision");
+  let view = $state<"vision" | "revenue" | "publish" | "settings">("vision");
   let ready = $state(false);
 
   $effect(() => {
@@ -51,6 +52,15 @@
     >
       Revenus
     </button>
+    <button
+      class:active={view === "publish"}
+      onclick={() => {
+        view = "publish";
+        dashboard.closeDetail();
+      }}
+    >
+      Publication
+    </button>
     <button class:active={view === "settings"} onclick={() => (view = "settings")}>Réglages</button>
     <span class="user">{dashboard.auth.username}</span>
     <PlatformBadge
@@ -76,6 +86,8 @@
       <Settings />
     {:else if view === "revenue"}
       <Revenue />
+    {:else if view === "publish"}
+      <Publish />
     {:else}
       <Vision />
     {/if}

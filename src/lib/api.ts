@@ -5,9 +5,14 @@ import type {
   CfCollect,
   CfPointEntry,
   CfScrape,
+  CurrencyView,
+  GameVersion,
   Overview,
   PairingEntry,
   ProjectDetail,
+  PublishDraft,
+  PublishOutcome,
+  PublishReport,
   Settings,
   SyncReport,
 } from "./types";
@@ -18,8 +23,9 @@ export const api = {
   logout: () => invoke<AuthStatus>("logout"),
   openTokenPage: () => invoke<void>("open_token_page"),
   getSettings: () => invoke<Settings>("get_settings"),
-  saveSettings: (curseforgeUsername: string | null, rangeDays: number) =>
-    invoke<void>("save_settings", { curseforgeUsername, rangeDays }),
+  saveSettings: (curseforgeUsername: string | null, rangeDays: number, currency?: string) =>
+    invoke<void>("save_settings", { curseforgeUsername, rangeDays, currency }),
+  refreshExchangeRate: () => invoke<CurrencyView>("refresh_exchange_rate"),
   syncNow: () => invoke<SyncReport[]>("sync_now"),
   overview: (rangeDays: number, from: string | null, to: string | null, platforms: string[]) =>
     invoke<Overview>("overview", { rangeDays, from, to, platforms }),
@@ -50,4 +56,30 @@ export const api = {
   importCurseforgeSeries: (curseforgeId: number, text: string) =>
     invoke<number>("import_curseforge_series", { curseforgeId, text }),
   pairingState: () => invoke<PairingEntry[]>("pairing_state"),
+
+  // Publication
+  curseforgeGameVersions: () => invoke<GameVersion[]>("curseforge_game_versions"),
+  captureCurseforgeToken: () => invoke<boolean>("capture_curseforge_token"),
+  publishVersion: (draft: PublishDraft, filePath: string) =>
+    invoke<PublishReport>("publish_version", { draft, filePath }),
+  createModrinthProject: (
+    slug: string,
+    title: string,
+    description: string,
+    body: string,
+    projectType: string,
+    categories: string[],
+  ) =>
+    invoke<PublishOutcome>("create_modrinth_project", {
+      slug,
+      title,
+      description,
+      body,
+      projectType,
+      categories,
+    }),
+  deleteModrinthVersion: (versionId: string) =>
+    invoke<PublishOutcome>("delete_modrinth_version", { versionId }),
+  deleteModrinthProject: (projectId: string) =>
+    invoke<PublishOutcome>("delete_modrinth_project", { projectId }),
 };

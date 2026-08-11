@@ -18,10 +18,23 @@ pub struct Settings {
     pub curseforge_username: Option<String>,
     #[serde(default = "default_range_days")]
     pub range_days: i64,
+    /// Devise d'affichage, en code ISO à trois lettres. Les deux plateformes
+    /// paient en dollars : tout autre choix passe par un taux de change relevé
+    /// automatiquement.
+    #[serde(default = "default_currency")]
+    pub currency: String,
+    /// Jeton d'envoi CurseForge, relevé sur le compte de l'auteur. Il ne repart
+    /// jamais vers l'interface : les commandes ne disent que sa présence.
+    #[serde(default)]
+    pub curseforge_upload_token: Option<String>,
 }
 
 fn default_range_days() -> i64 {
     90
+}
+
+fn default_currency() -> String {
+    "USD".into()
 }
 
 impl Default for Settings {
@@ -29,6 +42,8 @@ impl Default for Settings {
         Settings {
             curseforge_username: None,
             range_days: default_range_days(),
+            currency: default_currency(),
+            curseforge_upload_token: None,
         }
     }
 }
@@ -122,12 +137,32 @@ mod tests {
         assert_eq!(defaults.range_days, 90);
         assert!(defaults.curseforge_username.is_none());
 
+        assert_eq!(defaults.currency, "USD");
+
         let updated = Settings {
             curseforge_username: Some("DreykaOas_official".into()),
             range_days: 180,
+            currency: "EUR".into(),
+            curseforge_upload_token: Some("jeton".into()),
         };
         save_settings(&dir, &updated).unwrap();
         assert_eq!(load_settings(&dir), updated);
+    }
+
+    #[test]
+    fn an_old_settings_file_keeps_working() {
+        // Fichier écrit par une version antérieure, sans devise ni jeton.
+        let dir = tmp("legacy");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            settings_path(&dir),
+            r#"{"curseforge_username":"DreykaOas_official","range_days":30}"#,
+        )
+        .unwrap();
+        let loaded = load_settings(&dir);
+        assert_eq!(loaded.range_days, 30);
+        assert_eq!(loaded.currency, "USD");
+        assert!(loaded.curseforge_upload_token.is_none());
     }
 
     #[test]

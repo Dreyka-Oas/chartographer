@@ -216,6 +216,88 @@ impl ModrinthClient {
         Ok(body)
     }
 
+    /// Envoi en plusieurs parties, pour créer une version ou un projet.
+    ///
+    /// La réponse est rendue telle quelle, corps et état : l'appelant sait mieux
+    /// que ce client ce qu'un refus signifie pour lui. Une seule tentative,
+    /// contrairement aux lectures — un envoi rejoué déposerait deux fois le même
+    /// fichier, et le refus se lit dans le corps plutôt que dans une erreur
+    /// d'authentification muette.
+    async fn post_multipart(
+        &self,
+        url: &str,
+        form: reqwest::multipart::Form,
+    ) -> Result<(u16, String)> {
+        let response = self
+            .http
+            .post(url)
+            .header("Authorization", &self.token)
+            .multipart(form)
+            .send()
+            .await
+            .map_err(|e| AppError::remote(PROVIDER, e.to_string()))?;
+        let status = response.status().as_u16();
+        let body = response
+            .text()
+            .await
+            .map_err(|e| AppError::remote(PROVIDER, e.to_string()))?;
+        Ok((status, body))
+    }
+
+    /// Crée une version sur un projet existant. Le fichier voyage sous le nom
+    /// `file`, celui que le corps `data` annonce dans `file_parts`.
+    pub async fn create_version(
+        &self,
+        data: &str,
+        file_name: &str,
+        bytes: &[u8],
+    ) -> Result<(u16, String)> {
+        let part = reqwest::multipart::Part::bytes(bytes.to_vec())
+            .file_name(file_name.to_string())
+            .mime_str("application/java-archive")
+            .map_err(|e| AppError::remote(PROVIDER, e.to_string()))?;
+        let form = reqwest::multipart::Form::new()
+            .text("data", data.to_string())
+            .part("file", part);
+        self.post_multipart(&format!("{BASE}/v2/version"), form)
+            .await
+    }
+
+    /// Crée un projet. L'icône est facultative.
+    pub async fn create_project(&self, data: &str) -> Result<(u16, String)> {
+        let form = reqwest::multipart::Form::new().text("data", data.to_string());
+        self.post_multipart(&format!("{BASE}/v2/project"), form)
+            .await
+    }
+
+    /// Supprime une version. Rend l'état et le corps, vide en cas de succès.
+    pub async fn delete_version(&self, version_id: &str) -> Result<(u16, String)> {
+        self.delete(&format!("{BASE}/v2/version/{version_id}"))
+            .await
+    }
+
+    /// Supprime un projet, avec tout ce qu'il contient.
+    pub async fn delete_project(&self, project_id: &str) -> Result<(u16, String)> {
+        self.delete(&format!("{BASE}/v2/project/{project_id}"))
+            .await
+    }
+
+    async fn delete(&self, url: &str) -> Result<(u16, String)> {
+        let response = self
+            .http
+            .delete(url)
+            .header("Authorization", &self.token)
+            .send()
+            .await
+            .map_err(|e| AppError::remote(PROVIDER, e.to_string()))?;
+        let status = response.status().as_u16();
+        let body = response
+            .text()
+            .await
+            .map_err(|e| AppError::remote(PROVIDER, e.to_string()))?;
+        Ok((status, body))
+    }
+
     pub async fn me(&self) -> Result<ModrinthUser> {
         let body = self.get_text(&format!("{BASE}/v2/user")).await?;
         Ok(serde_json::from_str(&body)?)

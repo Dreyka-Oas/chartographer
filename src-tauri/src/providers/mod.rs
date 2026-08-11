@@ -1,5 +1,7 @@
 pub mod curseforge;
+pub mod curseforge_upload;
 pub mod modrinth;
+pub mod rates;
 
 use crate::error::{AppError, Result};
 

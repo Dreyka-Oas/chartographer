@@ -62,6 +62,10 @@ pub struct ProjectSummary {
     pub icon_url: Option<String>,
     pub modrinth_id: Option<i64>,
     pub curseforge_id: Option<i64>,
+    /// Identifiants tels que les plateformes les connaissent : ceux-là seuls
+    /// servent à leur parler, les précédents ne valent qu'en base.
+    pub modrinth_ext_id: Option<String>,
+    pub curseforge_ext_id: Option<i64>,
     pub modrinth_downloads: i64,
     pub curseforge_downloads: i64,
     pub followers: i64,
@@ -164,6 +168,27 @@ pub struct CfRevenue {
     pub monthly: Vec<crate::store::metrics::CfRevenueEntry>,
 }
 
+/// Devise d'affichage et taux appliqué, pour que l'interface écrive les
+/// montants dans la monnaie choisie sans jamais recalculer de conversion.
+#[derive(Debug, Clone, Serialize)]
+pub struct CurrencyView {
+    pub code: String,
+    /// Combien vaut un dollar dans cette devise.
+    pub rate: f64,
+    /// Jour du taux, vide tant que rien n'a été relevé.
+    pub day: String,
+}
+
+impl Default for CurrencyView {
+    fn default() -> Self {
+        CurrencyView {
+            code: "USD".into(),
+            rate: 1.0,
+            day: String::new(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct Overview {
     pub kpis: Kpis,
@@ -188,6 +213,7 @@ pub struct Overview {
     pub freshness: Vec<Freshness>,
     pub curseforge_history_days: i64,
     pub curseforge_revenue: CfRevenue,
+    pub currency: CurrencyView,
 }
 
 #[cfg(test)]

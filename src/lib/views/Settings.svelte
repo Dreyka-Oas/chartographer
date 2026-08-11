@@ -7,8 +7,14 @@
   import type { AppErrorPayload, PairingEntry, Settings } from "../types";
 
   /** Valeurs enregistrées, pour détecter ce qui a été modifié depuis. */
-  let saved = $state<Settings>({ curseforge_username: null, range_days: 90 });
-  let draft = $state<Settings>({ curseforge_username: null, range_days: 90 });
+  const BLANK: Settings = {
+    curseforge_username: null,
+    range_days: 90,
+    currency: "USD",
+    curseforge_token_ready: false,
+  };
+  let saved = $state<Settings>({ ...BLANK });
+  let draft = $state<Settings>({ ...BLANK });
   let entries = $state<PairingEntry[]>([]);
   let message = $state("");
   let leftId = $state<number | null>(null);
@@ -109,13 +115,19 @@
   }
 
   const dirty = $derived(
-    draft.curseforge_username !== saved.curseforge_username || draft.range_days !== saved.range_days,
+    draft.curseforge_username !== saved.curseforge_username ||
+      draft.range_days !== saved.range_days ||
+      draft.currency !== saved.currency,
   );
 
   async function save() {
     try {
-      await api.saveSettings(draft.curseforge_username, draft.range_days);
+      await api.saveSettings(draft.curseforge_username, draft.range_days, draft.currency);
+      const changedCurrency = draft.currency !== saved.currency;
       saved = { ...draft };
+      // Changer de devise ne veut rien dire sans son taux : on le relève dans
+      // la foulée, puis on redessine les montants déjà à l'écran.
+      if (changedCurrency) await dashboard.refreshCurrency();
       message = "Réglages enregistrés.";
       // La confirmation s'efface seule : elle n'a rien à faire à l'écran ensuite.
       setTimeout(() => (message = ""), 3000);
@@ -128,6 +140,40 @@
     draft = { ...saved };
     message = "";
   }
+
+  let capturing = $state(false);
+
+  /**
+   * Va chercher le jeton d'envoi sur le compte CurseForge. La fenêtre reste
+   * cachée : elle ne s'ouvre que si la session a expiré.
+   */
+  async function captureToken() {
+    capturing = true;
+    try {
+      const ready = await api.captureCurseforgeToken();
+      saved = { ...saved, curseforge_token_ready: ready };
+      draft = { ...draft, curseforge_token_ready: ready };
+      message = ready
+        ? "Jeton d'envoi relevé."
+        : "Aucun jeton lisible : reconnecte-toi à CurseForge puis réessaie.";
+      setTimeout(() => (message = ""), 4000);
+    } catch (e) {
+      report(e);
+    } finally {
+      capturing = false;
+    }
+  }
+
+  /** Devises proposées. Les deux plateformes paient en dollars ; les autres
+   * passent par le taux de référence relevé chaque jour. */
+  const CURRENCIES = [
+    { code: "USD", label: "Dollar américain ($)" },
+    { code: "EUR", label: "Euro (€)" },
+    { code: "GBP", label: "Livre sterling (£)" },
+    { code: "CHF", label: "Franc suisse (CHF)" },
+    { code: "CAD", label: "Dollar canadien ($ CA)" },
+    { code: "JPY", label: "Yen (¥)" },
+  ];
 
   const THEMES: { mode: ThemeMode; label: string }[] = [
     { mode: "auto", label: "Automatique" },
@@ -243,6 +289,21 @@
           />
         </div>
       </div>
+      <div class="row">
+        <div class="text">
+          <span class="name">Jeton d'envoi</span>
+          <span class="desc">
+            Nécessaire pour publier un fichier. L'application le relève elle-même sur ton compte,
+            avec la session déjà ouverte, et ne l'affiche jamais.
+          </span>
+        </div>
+        <div class="control">
+          <span class="value">{saved.curseforge_token_ready ? "en place" : "absent"}</span>
+          <button onclick={captureToken} disabled={capturing}>
+            {capturing ? "Relevé en cours…" : "Relever"}
+          </button>
+        </div>
+      </div>
       <div class="row column">
         <div class="text">
           <span class="name">Compte CurseForge et solde de points</span>
@@ -261,6 +322,26 @@
         <div class="control">
           <input type="number" min="7" max="730" bind:value={draft.range_days} />
           <span class="unit">jours</span>
+        </div>
+      </div>
+      <div class="row">
+        <div class="text">
+          <span class="name">Devise</span>
+          <span class="desc">
+            Les deux plateformes paient en dollars. Choisir une autre monnaie convertit les montants
+            au taux de référence de la Banque centrale européenne, relevé automatiquement.
+            {#if dashboard.overview?.currency.day}
+              Dernier taux : 1 $ = {dashboard.overview.currency.rate.toFixed(4).replace(".", ",")}
+              {dashboard.overview.currency.code}, au {formatDayLong(dashboard.overview.currency.day)}.
+            {/if}
+          </span>
+        </div>
+        <div class="control">
+          <select bind:value={draft.currency}>
+            {#each CURRENCIES as entry (entry.code)}
+              <option value={entry.code}>{entry.label}</option>
+            {/each}
+          </select>
         </div>
       </div>
       <div class="row">

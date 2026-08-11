@@ -21,6 +21,8 @@ function project(partial: Partial<ProjectSummary>): ProjectSummary {
     icon_url: null,
     modrinth_id: 1,
     curseforge_id: 2,
+    modrinth_ext_id: "AABBCCDD",
+    curseforge_ext_id: 1002185,
     modrinth_downloads: 0,
     curseforge_downloads: 0,
     followers: 0,

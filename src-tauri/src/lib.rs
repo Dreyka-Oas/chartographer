@@ -5,6 +5,8 @@ pub mod error;
 pub mod matching;
 pub mod models;
 pub mod providers;
+pub mod publish;
+pub mod publish_api;
 pub mod scrape;
 pub mod store;
 pub mod sync;
@@ -74,6 +76,13 @@ pub fn run() {
             commands::import_curseforge_capture,
             commands::analyze_curseforge_text,
             commands::import_curseforge_series,
+            commands::refresh_exchange_rate,
+            publish_api::capture_curseforge_token,
+            publish_api::curseforge_game_versions,
+            publish_api::publish_version,
+            publish_api::create_modrinth_project,
+            publish_api::delete_modrinth_version,
+            publish_api::delete_modrinth_project,
         ])
         .run(tauri::generate_context!())
         .expect("erreur au démarrage de Tauri");

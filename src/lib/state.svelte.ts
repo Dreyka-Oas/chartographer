@@ -1,5 +1,5 @@
 import { api } from "./api";
-import { lastDayOfMonth } from "./format";
+import { lastDayOfMonth, setCurrency } from "./format";
 import type {
   AppErrorPayload,
   AuthStatus,
@@ -162,6 +162,9 @@ class Dashboard {
         this.rangeTo,
         this.visiblePlatforms,
       );
+      // Les montants arrivent en dollars : la mise en forme applique la devise
+      // choisie et son taux, une fois pour toute la page.
+      setCurrency(this.overview.currency.code, this.overview.currency.rate);
     } catch (e) {
       this.error = message(e);
     } finally {
@@ -242,6 +245,19 @@ class Dashboard {
       this.error = message(e);
     } finally {
       this.syncing = false;
+    }
+  }
+
+  /**
+   * Relève le taux de change de la devise choisie, puis redessine la page avec.
+   * Sans taux, un montant en euros serait un montant en dollars mal habillé.
+   */
+  async refreshCurrency() {
+    try {
+      await api.refreshExchangeRate();
+      await this.load();
+    } catch (e) {
+      this.error = message(e);
     }
   }
 

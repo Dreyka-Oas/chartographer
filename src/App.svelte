@@ -31,18 +31,17 @@
   const motion = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 200;
 
   /**
-   * Repli latéral : le bloc s'efface en glissant vers le haut *et* en rendant
-   * sa largeur. Sans cette largeur animée, le reste de la barre sauterait d'un
-   * coup à la fin de la disparition.
+   * Repli latéral, en ligne droite : le bloc rend sa largeur et s'efface, sans
+   * jamais quitter son axe. Sans cette largeur animée, le reste de la barre
+   * sauterait d'un coup à la fin de la disparition.
    */
   function retract(node: Element, { duration = motion }: { duration?: number } = {}) {
     const width = node.getBoundingClientRect().width;
     return {
       duration,
       easing: cubicOut,
-      css: (t: number, u: number) =>
-        `opacity:${t}; transform: translateY(${-8 * u}px); width:${t * width}px;` +
-        `overflow:hidden; white-space:nowrap;`,
+      css: (t: number) =>
+        `opacity:${t}; width:${t * width}px; overflow:hidden; white-space:nowrap;`,
     };
   }
 </script>

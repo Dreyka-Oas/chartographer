@@ -71,12 +71,21 @@ describe("foldSeriesTail", () => {
 describe("sparklinePath", () => {
   it("normalise sur le maximum et referme l'aire sur la ligne de base", () => {
     const { line, area } = sparklinePath([0, 5, 10], 100, 30);
-    expect(line).toBe("M0,30L50,15L100,0");
-    expect(area).toBe("M0,30L50,15L100,0L100,30L0,30Z");
+    expect(line.startsWith("M0,30C")).toBe(true);
+    expect(line).toContain("100,0");
+    expect(area).toBe(`${line}L100,30L0,30Z`);
   });
 
   it("aplatit une série entièrement nulle au lieu de diviser par zéro", () => {
-    expect(sparklinePath([0, 0, 0], 100, 30).line).toBe("M0,30L50,30L100,30");
+    const { line } = sparklinePath([0, 0, 0], 100, 30);
+    expect(line).toBe("M0,30C8.33,30 33.33,30 50,30C66.67,30 91.67,30 100,30");
+  });
+
+  it("garde la courbe dans la boîte malgré un pic isolé", () => {
+    const { line } = sparklinePath([0, 0, 10, 0, 0], 100, 30);
+    const ys = [...line.matchAll(/-?[\d.]+,(-?[\d.]+)/g)].map((m) => Number(m[1]));
+    expect(Math.min(...ys)).toBeGreaterThanOrEqual(0);
+    expect(Math.max(...ys)).toBeLessThanOrEqual(30);
   });
 
   it("ne trace rien sous deux points", () => {

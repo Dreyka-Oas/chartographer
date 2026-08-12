@@ -35,6 +35,7 @@
     fill: none;
     stroke-width: 1.4;
     stroke-linejoin: round;
+    stroke-linecap: round;
     /* Sans cela, l'étirement horizontal du viewBox déformerait l'épaisseur. */
     vector-effect: non-scaling-stroke;
   }

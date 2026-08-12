@@ -135,22 +135,34 @@
     });
   }
 
-  /** Un clic ailleurs, un défilement ou un redimensionnement referme. */
+  /** Un clic ailleurs, un défilement de la page ou un redimensionnement referme.
+   *
+   * L'écoute du défilement est posée en capture pour attraper celui des
+   * colonnes intérieures : il faut donc écarter explicitement le défilement de
+   * la liste elle-même, sinon elle se referme dès qu'on la parcourt. */
   $effect(() => {
     if (!open) return;
+    const inside = (event: Event) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return false;
+      return trigger?.contains(target) === true || panel?.contains(target) === true;
+    };
     const away = (event: MouseEvent) => {
-      const target = event.target as Node;
-      if (trigger?.contains(target) || panel?.contains(target)) return;
+      if (inside(event)) return;
       open = false;
     };
-    const follow = () => (open = false);
+    const rolled = (event: Event) => {
+      if (inside(event)) return;
+      open = false;
+    };
+    const resized = () => (open = false);
     window.addEventListener("mousedown", away, true);
-    window.addEventListener("scroll", follow, true);
-    window.addEventListener("resize", follow);
+    window.addEventListener("scroll", rolled, true);
+    window.addEventListener("resize", resized);
     return () => {
       window.removeEventListener("mousedown", away, true);
-      window.removeEventListener("scroll", follow, true);
-      window.removeEventListener("resize", follow);
+      window.removeEventListener("scroll", rolled, true);
+      window.removeEventListener("resize", resized);
     };
   });
 </script>

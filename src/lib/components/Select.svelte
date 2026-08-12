@@ -77,11 +77,7 @@
       place();
       // Le panneau n'existe qu'une fois ouvert : on attend qu'il soit là pour
       // amener l'entrée courante sous les yeux.
-      requestAnimationFrame(() => {
-        panel?.querySelector<HTMLElement>("[data-active='true']")?.scrollIntoView({
-          block: "nearest",
-        });
-      });
+      requestAnimationFrame(() => bring(active));
     }
   }
 
@@ -127,12 +123,28 @@
     }
   }
 
+  /**
+   * Amène une entrée dans la partie visible du panneau.
+   *
+   * `scrollIntoView` s'en chargerait, mais il remonte toute la chaîne des
+   * ancêtres : quand l'entrée tenait déjà dans le panneau, il faisait tout de
+   * même défiler la page derrière. Le bouton partait alors sous le panneau,
+   * resté fixe. On ne touche donc qu'au défilement du panneau.
+   */
+  function bring(index: number) {
+    const item = panel?.querySelectorAll<HTMLElement>("[role='option']")[index];
+    if (!panel || !item) return;
+    const top = item.offsetTop;
+    const bottom = top + item.offsetHeight;
+    if (top < panel.scrollTop) {
+      panel.scrollTop = top;
+    } else if (bottom > panel.scrollTop + panel.clientHeight) {
+      panel.scrollTop = bottom - panel.clientHeight;
+    }
+  }
+
   function reveal() {
-    requestAnimationFrame(() => {
-      panel
-        ?.querySelectorAll<HTMLElement>("[role='option']")
-        [active]?.scrollIntoView({ block: "nearest" });
-    });
+    requestAnimationFrame(() => bring(active));
   }
 
   /** Un clic ailleurs, un défilement de la page ou un redimensionnement referme.
@@ -269,16 +281,19 @@
   .chevron {
     width: 7px;
     height: 7px;
-    margin-top: -3px;
     border-right: 1.5px solid var(--text-dim);
     border-bottom: 1.5px solid var(--text-dim);
-    transform: rotate(45deg);
+    /*
+     * Le recentrage passe par le transform, jamais par une marge : une marge
+     * qui change entre les deux états relance la mise en page du bouton, et le
+     * libellé sautait d'un cran à l'ouverture.
+     */
+    transform: translateY(-2px) rotate(45deg);
     transition: transform 140ms ease;
     flex: none;
   }
   .trigger.open .chevron {
-    transform: rotate(-135deg);
-    margin-top: 2px;
+    transform: translateY(2px) rotate(-135deg);
   }
   .panel {
     position: fixed;

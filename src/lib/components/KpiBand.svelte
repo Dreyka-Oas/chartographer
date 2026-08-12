@@ -108,10 +108,22 @@
 </div>
 
 <style>
+  /* Quatre tuiles : 1, 2 ou 4 colonnes, jamais 3, sinon la dernière rangée
+   * n'en porte qu'une et laisse deux tiers de blanc. */
   .band {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    grid-template-columns: 1fr;
     gap: 12px;
+  }
+  @media (min-width: 560px) {
+    .band {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  @media (min-width: 1100px) {
+    .band {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
   }
   article {
     background: var(--surface);

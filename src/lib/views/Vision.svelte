@@ -168,10 +168,11 @@
   .grid {
     display: grid;
     /*
-     * Deux colonnes larges plutôt que quatre étroites : au-delà, les graphiques
-     * deviennent illisibles et la dernière rangée reste à moitié vide.
+     * Une colonne par défaut, deux dès qu'un graphique y reste lisible. Jamais
+     * trois : au-delà les courbes deviennent illisibles et la dernière rangée
+     * laisse d'autant plus de trous.
      */
-    grid-template-columns: repeat(auto-fit, minmax(520px, 1fr));
+    grid-template-columns: 1fr;
     /*
      * Hauteur commune et bornée : le contenu s'étire pour la remplir, et une
      * liste plus longue défile chez elle au lieu d'étirer toute la rangée.
@@ -179,6 +180,19 @@
     grid-auto-rows: 420px;
     gap: 16px;
     margin-top: 16px;
+  }
+  @media (min-width: 1100px) {
+    .grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    /*
+     * Nombre impair de cartes : la dernière prend les deux colonnes au lieu de
+     * laisser un blanc à côté d'elle. Le compte change selon les plateformes
+     * masquées, la règle vaut donc pour tous les cas sans être recalculée.
+     */
+    .grid > :global(section:last-child:nth-child(odd)) {
+      grid-column: 1 / -1;
+    }
   }
   .full {
     margin-top: 16px;

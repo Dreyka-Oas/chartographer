@@ -151,9 +151,17 @@
       if (inside(event)) return;
       open = false;
     };
+    // Un défilement extérieur ne referme plus : le panneau suit le bouton. Il
+    // ne se referme que si le bouton a quitté l'écran, faute de quoi la liste
+    // flotterait toute seule.
     const rolled = (event: Event) => {
       if (inside(event)) return;
-      open = false;
+      const rect = trigger?.getBoundingClientRect();
+      if (!rect || rect.bottom < 0 || rect.top > window.innerHeight) {
+        open = false;
+        return;
+      }
+      place();
     };
     const resized = () => (open = false);
     window.addEventListener("mousedown", away, true);

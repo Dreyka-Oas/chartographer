@@ -1041,9 +1041,21 @@ async fn read_author_followers(
 ) -> Option<i64> {
     let page = format!("https://www.curseforge.com/members/{account}/projects");
     navigate(app, window, &page, "/members/").await.ok()?;
-    let raw = eval_in_window(app, PAGE_TEXT).await.ok()?;
-    let text: String = serde_json::from_str(&raw).unwrap_or(raw);
-    let found = crate::collect::parse_author_followers(&text);
+    // L'adresse change avant que la page ne soit peinte : lire une seule fois
+    // revenait à jouer sur la vitesse du réseau, et un relevé manqué laissait
+    // les abonnés à zéro jusqu'à la synchronisation suivante. On relit tant que
+    // le compte n'est pas là.
+    let mut found = None;
+    for _ in 0..12 {
+        if let Ok(raw) = eval_in_window(app, PAGE_TEXT).await {
+            let text: String = serde_json::from_str(&raw).unwrap_or(raw);
+            found = crate::collect::parse_author_followers(&text);
+            if found.is_some() {
+                break;
+            }
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    }
     let _ = navigate(app, window, CF_AUTHOR_PAGE, "authors.curseforge.com").await;
     found
 }
@@ -1215,7 +1227,10 @@ pub async fn collect_curseforge(
         .with(|conn| crate::store::metrics::get_meta(conn, "curseforge_account"))?
         .or(state
             .store
-            .with(|conn| crate::store::metrics::get_meta(conn, "curseforge_author"))?);
+            .with(|conn| crate::store::metrics::get_meta(conn, "curseforge_author"))?)
+        .or(state
+            .store
+            .with(|conn| crate::store::metrics::get_meta(conn, "curseforge_username"))?);
     if let Some(account) = account.filter(|name| !name.is_empty()) {
         match read_author_followers(&app, &window, &account).await {
             Some(count) => {

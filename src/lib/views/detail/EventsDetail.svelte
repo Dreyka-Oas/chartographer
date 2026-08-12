@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Select from "../../components/Select.svelte";
   import StatRow from "../../components/StatRow.svelte";
   import type { EventRow } from "../../types";
   import DetailShell from "./DetailShell.svelte";
@@ -29,10 +30,18 @@
 <DetailShell title="Évènements" subtitle="Notifications Modrinth, du plus récent au plus ancien">
   {#snippet actions()}
     <input bind:value={search} placeholder="Rechercher…" />
-    <select bind:value={kind}>
-      <option value="">Tous les types</option>
-      {#each kinds as k (k)}<option value={k}>{k}</option>{/each}
-    </select>
+    <div class="list">
+      <Select
+        bind:value={kind}
+        label="Type d'évènement"
+        align="end"
+        compact
+        options={[
+          { value: "", label: "Tous les types" },
+          ...kinds.map((k) => ({ value: k, label: k })),
+        ]}
+      />
+    </div>
   {/snippet}
 
   <StatRow
@@ -73,10 +82,7 @@
 </DetailShell>
 
 <style>
-  input,
-  select {
-    /* Raccourci `background` évité : il effacerait le chevron dessiné par la
-     * feuille globale. */
+  input {
     background-color: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: 6px;
@@ -85,8 +91,9 @@
     font: inherit;
     font-size: 0.8rem;
   }
-  select {
-    padding-right: 26px;
+  /* Largeur fixe : les types sont de longueurs très inégales. */
+  .list {
+    width: 170px;
   }
   input {
     width: 180px;

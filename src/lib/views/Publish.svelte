@@ -2,6 +2,7 @@
   import { getCurrentWebview } from "@tauri-apps/api/webview";
   import { api } from "../api";
   import Card from "../components/Card.svelte";
+  import Select from "../components/Select.svelte";
   import { dashboard } from "../state.svelte";
   import type { AppErrorPayload, CfGesture, ProjectSummary, PublishOutcome } from "../types";
 
@@ -222,15 +223,17 @@
       subtitle="Un même fichier part sur les deux plateformes, avec les mêmes informations"
     >
       <div class="form">
-        <label class="field">
+        <div class="field">
           <span class="legend-label">Mod</span>
-          <select bind:value={selectedKey}>
-            <option value={null}>choisir un mod…</option>
-            {#each projects as entry (entry.key)}
-              <option value={entry.key}>{entry.title}</option>
-            {/each}
-          </select>
-        </label>
+          <Select
+            bind:value={selectedKey}
+            label="Mod à publier"
+            options={[
+              { value: null, label: "choisir un mod…" },
+              ...projects.map((entry) => ({ value: entry.key, label: entry.title })),
+            ]}
+          />
+        </div>
 
         <div class="field">
           <span class="legend-label">Fichier</span>
@@ -254,14 +257,18 @@
           <input bind:value={displayName} placeholder="repris du numéro si vide" />
         </label>
 
-        <label class="field">
+        <div class="field">
           <span class="legend-label">Type</span>
-          <select bind:value={releaseType}>
-            <option value="release">Version stable</option>
-            <option value="beta">Bêta</option>
-            <option value="alpha">Alpha</option>
-          </select>
-        </label>
+          <Select
+            bind:value={releaseType}
+            label="Type de version"
+            options={[
+              { value: "release", label: "Version stable" },
+              { value: "beta", label: "Bêta" },
+              { value: "alpha", label: "Alpha" },
+            ]}
+          />
+        </div>
 
         <label class="field wide-field">
           <span class="legend-label">Journal des changements</span>
@@ -481,10 +488,7 @@
     grid-column: 1 / -1;
   }
   input,
-  select,
   textarea {
-    /* `background-color` seul : le raccourci effacerait le chevron posé par la
-     * feuille globale sur les listes déroulantes. */
     background-color: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
@@ -493,9 +497,6 @@
     font-size: 0.86rem;
     padding: 7px 9px;
     width: 100%;
-  }
-  select {
-    padding-right: 30px;
   }
   textarea {
     resize: vertical;

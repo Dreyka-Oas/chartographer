@@ -1,6 +1,7 @@
 <script lang="ts">
   import { api } from "../api";
   import CurseforgePoints from "../components/CurseforgePoints.svelte";
+  import Select from "../components/Select.svelte";
   import { formatAge, formatDayLong } from "../format";
   import { dashboard } from "../state.svelte";
   import { theme, type ThemeMode } from "../theme.svelte";
@@ -278,11 +279,14 @@
           </span>
         </div>
         <div class="control">
-          <select bind:value={draft.currency}>
-            {#each CURRENCIES as entry (entry.code)}
-              <option value={entry.code}>{entry.label}</option>
-            {/each}
-          </select>
+          <div class="picker">
+            <Select
+              bind:value={draft.currency}
+              label="Devise d'affichage"
+              align="end"
+              options={CURRENCIES.map((entry) => ({ value: entry.code, label: entry.label }))}
+            />
+          </div>
         </div>
       </div>
       <div class="row">
@@ -532,6 +536,11 @@
     gap: 8px;
     flex-wrap: wrap;
     justify-content: flex-end;
+  }
+  /* La liste déroulante prend une largeur fixe : le champ ne doit pas changer
+   * de taille au gré du nom de la devise choisie. */
+  .picker {
+    width: 210px;
   }
   .value {
     font-family: var(--font-mono);

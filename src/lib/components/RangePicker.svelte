@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Select from "./Select.svelte";
   import { formatMonth, formatRange, lastDayOfMonth } from "../format";
   import { dashboard } from "../state.svelte";
 
@@ -50,15 +51,21 @@
     {/each}
   </div>
 
-  <label class="month">
+  <div class="month">
     <span class="legend-label">Mois</span>
-    <select value={activeMonth} onchange={(e) => pickMonth(e.currentTarget.value)}>
-      <option value="">Tous</option>
-      {#each months as month (month)}
-        <option value={month}>{formatMonth(month)}</option>
-      {/each}
-    </select>
-  </label>
+    <div class="list">
+      <Select
+        value={activeMonth}
+        label="Mois relevé"
+        compact
+        onchange={(value) => pickMonth(value ?? "")}
+        options={[
+          { value: "", label: "Tous" },
+          ...months.map((month) => ({ value: month, label: formatMonth(month) })),
+        ]}
+      />
+    </div>
+  </div>
 
   <label class="days">
     <span class="legend-label">Du</span>
@@ -90,16 +97,18 @@
     display: flex;
     gap: 4px;
   }
-  label {
+  label,
+  .month {
     display: flex;
     align-items: center;
     gap: 6px;
   }
+  /* La liste des mois garde une largeur constante : les intitulés varient. */
+  .list {
+    width: 148px;
+  }
   button,
-  select,
   input {
-    /* `background-color` et non le raccourci : le chevron des listes
-     * déroulantes est un fond d'image posé par la feuille globale. */
     background-color: var(--surface);
     border: 1px solid var(--border);
     color: var(--text-dim);
@@ -112,17 +121,12 @@
       color 120ms ease,
       border-color 120ms ease;
   }
-  select,
   input {
     color: var(--text);
     font-variant-numeric: tabular-nums;
   }
-  select {
-    padding-right: 26px;
-  }
   button.active,
   button:hover:not(:disabled),
-  select:hover,
   input:hover {
     color: var(--text);
     border-color: var(--accent);

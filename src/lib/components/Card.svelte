@@ -50,13 +50,13 @@
     padding: 16px 18px 18px;
     transition:
       border-color 140ms ease,
-      box-shadow 140ms ease,
-      transform 140ms ease;
+      box-shadow 140ms ease;
   }
+  /* La carte ne bouge pas au survol : le liseré et l'ombre suffisent à dire
+   * qu'elle s'ouvre, sans faire sauter le contenu sous le curseur. */
   .clickable:hover {
     border-color: var(--accent);
     box-shadow: var(--lift);
-    transform: translateY(-1px);
   }
   header {
     display: flex;

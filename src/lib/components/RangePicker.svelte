@@ -30,6 +30,17 @@
     to = overview.to;
   });
 
+  /**
+   * Les bornes s'appliquent dès qu'elles sont complètes : un bouton de plus ne
+   * disait rien que la date choisie ne disait déjà. Le champ n'émet `change`
+   * qu'une fois la date entière, jamais sur une saisie à moitié faite.
+   */
+  function applyDates() {
+    if (!from || !to || from > to) return;
+    if (from === overview?.from && to === overview?.to) return;
+    dashboard.setCustomRange(from, to);
+  }
+
   function pickMonth(value: string) {
     if (value === "") {
       dashboard.setRange(dashboard.rangeDays);
@@ -69,16 +80,9 @@
 
   <label class="days">
     <span class="legend-label">Du</span>
-    <input type="date" bind:value={from} max={to} />
+    <input type="date" bind:value={from} max={to} onchange={applyDates} />
     <span class="legend-label">au</span>
-    <input type="date" bind:value={to} min={from} />
-    <button
-      class="apply"
-      disabled={!from || !to || (from === overview?.from && to === overview?.to)}
-      onclick={() => dashboard.setCustomRange(from, to)}
-    >
-      Appliquer
-    </button>
+    <input type="date" bind:value={to} min={from} onchange={applyDates} />
   </label>
 
   {#if overview}

@@ -23,10 +23,22 @@ export type DetailView =
   | "events"
   | "projects";
 
-/** Au-delà de ce délai, les données sont considérées périmées et resynchronisées. */
-const STALE_AFTER_MS = 6 * 60 * 60 * 1000;
-/** Cadence du réveil qui vérifie la péremption. */
-const AUTO_SYNC_TICK_MS = 15 * 60 * 1000;
+/**
+ * Cadence par défaut, en minutes, tant que les réglages n'ont pas répondu.
+ * Le plancher réel est imposé côté Rust (`clamp_auto_sync`).
+ */
+const DEFAULT_AUTO_SYNC_MINUTES = 10;
+
+/**
+ * Dispersion appliquée à chaque attente, en fraction de la cadence.
+ *
+ * Un relevé qui tombe à la seconde près, indéfiniment, est la signature d'un
+ * automate — et CurseForge ne se lit qu'à travers une session de navigateur,
+ * donc sous les mêmes yeux qu'un visiteur. L'attente varie de plus ou moins un
+ * quart, ce qui suffit à casser la régularité sans changer la fréquence
+ * moyenne demandée.
+ */
+const JITTER = 0.25;
 
 class Dashboard {
   detail = $state<DetailView | null>(null);
@@ -34,7 +46,7 @@ class Dashboard {
   projectLoading = $state(false);
   auth = $state<AuthStatus | null>(null);
   overview = $state<Overview | null>(null);
-  rangeDays = $state(90);
+  rangeDays = $state(30);
   /** Bornes explicites. Nulles, la fenêtre glisse sur `rangeDays` jours. */
   rangeFrom = $state<string | null>(null);
   rangeTo = $state<string | null>(null);
@@ -46,7 +58,9 @@ class Dashboard {
   error = $state<string | null>(null);
   lastSync = $state<SyncReport[]>([]);
   selectedProject = $state<string | null>(null);
-  private timer: ReturnType<typeof setInterval> | null = null;
+  /** Cadence des relevés automatiques, telle que les réglages l'ont fixée. */
+  autoSyncMinutes = $state(DEFAULT_AUTO_SYNC_MINUTES);
+  private timer: ReturnType<typeof setTimeout> | null = null;
 
   /** Horodatage du dernier cycle terminé, toutes sources confondues. */
   get lastSyncAt(): string | null {
@@ -76,6 +90,13 @@ class Dashboard {
   async boot() {
     await this.refreshAuth();
     if (!this.auth?.connected) return;
+    // La cadence vient des réglages : la lire avant d'armer le réveil évite un
+    // premier cycle à la mauvaise fréquence.
+    try {
+      this.autoSyncMinutes = (await api.getSettings()).auto_sync_minutes;
+    } catch {
+      this.autoSyncMinutes = DEFAULT_AUTO_SYNC_MINUTES;
+    }
     await this.load();
     const synced = await this.autoSync();
     // La collecte CurseForge n'attend pas la péremption générale : elle est la
@@ -88,10 +109,42 @@ class Dashboard {
     this.startAutoSync();
   }
 
-  /** Arme le réveil de synchronisation. Sans effet s'il tourne déjà. */
+  /** Cadence en millisecondes, plancher de dix minutes comme côté Rust. */
+  get autoSyncMs(): number {
+    return Math.max(10, this.autoSyncMinutes) * 60_000;
+  }
+
+  /** Attente jusqu'au prochain réveil, dispersée autour de la cadence. */
+  private nextDelayMs(): number {
+    const spread = this.autoSyncMs * JITTER;
+    return this.autoSyncMs + (Math.random() * 2 - 1) * spread;
+  }
+
+  /**
+   * Arme le réveil de synchronisation. Sans effet s'il tourne déjà.
+   *
+   * Chaque attente est retirée au sort plutôt que fixée une fois pour toutes :
+   * un `setInterval` rendrait les relevés parfaitement périodiques.
+   */
   startAutoSync() {
     if (this.timer !== null) return;
-    this.timer = setInterval(() => void this.autoSync(), AUTO_SYNC_TICK_MS);
+    const arm = () => {
+      this.timer = setTimeout(() => {
+        this.timer = null;
+        void this.autoSync().finally(arm);
+      }, this.nextDelayMs());
+    };
+    arm();
+  }
+
+  /** Coupe le réveil, puis le réarme sur la cadence courante. */
+  restartAutoSync(minutes: number) {
+    this.autoSyncMinutes = minutes;
+    if (this.timer !== null) {
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
+    this.startAutoSync();
   }
 
   /**
@@ -107,7 +160,7 @@ class Dashboard {
       this.overview.per_project.length === 0 ||
       this.overview.payout.available === "" ||
       age === null ||
-      age > STALE_AFTER_MS;
+      age > this.autoSyncMs;
     if (stale) await this.sync();
     return stale;
   }

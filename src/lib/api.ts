@@ -26,8 +26,12 @@ export const api = {
   openAccountPage: (platform: string, username: string) =>
     invoke<void>("open_account_page", { platform, username }),
   getSettings: () => invoke<Settings>("get_settings"),
-  saveSettings: (curseforgeUsername: string | null, rangeDays: number, currency?: string) =>
-    invoke<void>("save_settings", { curseforgeUsername, rangeDays, currency }),
+  saveSettings: (
+    curseforgeUsername: string | null,
+    rangeDays: number,
+    currency?: string,
+    autoSyncMinutes?: number,
+  ) => invoke<void>("save_settings", { curseforgeUsername, rangeDays, currency, autoSyncMinutes }),
   refreshExchangeRate: () => invoke<CurrencyView>("refresh_exchange_rate"),
   syncNow: () => invoke<SyncReport[]>("sync_now"),
   overview: (rangeDays: number, from: string | null, to: string | null, platforms: string[]) =>

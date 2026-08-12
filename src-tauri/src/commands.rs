@@ -158,6 +158,7 @@ pub struct SettingsView {
     pub curseforge_username: Option<String>,
     pub range_days: i64,
     pub currency: String,
+    pub auto_sync_minutes: i64,
     pub curseforge_token_ready: bool,
 }
 
@@ -168,6 +169,7 @@ pub fn get_settings(state: State<'_, AppState>) -> SettingsView {
         curseforge_username: settings.curseforge_username,
         range_days: settings.range_days,
         currency: settings.currency,
+        auto_sync_minutes: config::clamp_auto_sync(settings.auto_sync_minutes),
         curseforge_token_ready: settings.curseforge_upload_token.is_some(),
     }
 }
@@ -178,6 +180,7 @@ pub fn save_settings(
     curseforge_username: Option<String>,
     range_days: i64,
     currency: Option<String>,
+    auto_sync_minutes: Option<i64>,
 ) -> Result<()> {
     // Le jeton d'envoi est relevé par l'application, jamais saisi : on garde
     // celui qui existe déjà plutôt que de l'écraser au premier enregistrement.
@@ -191,6 +194,9 @@ pub fn save_settings(
             .map(|v| v.trim().to_uppercase())
             .filter(|v| v.len() == 3)
             .unwrap_or(previous.currency),
+        auto_sync_minutes: config::clamp_auto_sync(
+            auto_sync_minutes.unwrap_or(previous.auto_sync_minutes),
+        ),
         curseforge_upload_token: previous.curseforge_upload_token,
     };
     config::save_settings(&state.data_dir, &settings)
@@ -1231,7 +1237,16 @@ pub async fn collect_curseforge(
         .or(state
             .store
             .with(|conn| crate::store::metrics::get_meta(conn, "curseforge_username"))?);
-    if let Some(account) = account.filter(|name| !name.is_empty()) {
+    // La fiche publique n'est visitée qu'une fois par jour : le nombre d'abonnés
+    // bouge de quelques unités par mois, et une visite à chaque relevé ferait
+    // dix passages quotidiens sur une page qui n'a aucune raison d'en recevoir
+    // autant.
+    let followers_fresh = state
+        .store
+        .with(|conn| crate::store::metrics::get_meta(conn, "curseforge_followers_at"))?
+        .and_then(|stamp| chrono::DateTime::parse_from_rfc3339(&stamp).ok())
+        .is_some_and(|when| Utc::now().signed_duration_since(when).num_hours() < 24);
+    if let Some(account) = account.filter(|name| !name.is_empty() && !followers_fresh) {
         match read_author_followers(&app, &window, &account).await {
             Some(count) => {
                 tracing::debug!(count, "abonnés CurseForge relevés");
@@ -1240,6 +1255,11 @@ pub async fn collect_curseforge(
                         conn,
                         "curseforge_followers",
                         &count.to_string(),
+                    )?;
+                    crate::store::metrics::set_meta(
+                        conn,
+                        "curseforge_followers_at",
+                        &Utc::now().to_rfc3339(),
                     )
                 })?;
             }

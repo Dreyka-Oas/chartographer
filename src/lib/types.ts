@@ -176,6 +176,8 @@ export interface Settings {
   range_days: number;
   /** Devise d'affichage, code ISO à trois lettres. */
   currency: string;
+  /** Minutes entre deux relevés automatiques, jamais moins de dix. */
+  auto_sync_minutes: number;
   /** Vrai quand le jeton d'envoi CurseForge a été relevé. Le jeton lui-même
    * ne quitte jamais l'application. */
   curseforge_token_ready: boolean;

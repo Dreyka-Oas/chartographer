@@ -23,6 +23,12 @@ pub struct Settings {
     /// automatiquement.
     #[serde(default = "default_currency")]
     pub currency: String,
+    /// Minutes entre deux relevés automatiques. Le plancher n'est pas
+    /// cosmétique : CurseForge n'a pas d'interface publique et ne se lit qu'à
+    /// travers une session de navigateur, qu'un martèlement régulier ferait
+    /// remarquer. Voir `clamp_auto_sync`.
+    #[serde(default = "default_auto_sync_minutes")]
+    pub auto_sync_minutes: i64,
     /// Jeton d'envoi CurseForge, relevé sur le compte de l'auteur. Il ne repart
     /// jamais vers l'interface : les commandes ne disent que sa présence.
     #[serde(default)]
@@ -30,11 +36,24 @@ pub struct Settings {
 }
 
 fn default_range_days() -> i64 {
-    90
+    30
 }
 
 fn default_currency() -> String {
     "USD".into()
+}
+
+fn default_auto_sync_minutes() -> i64 {
+    10
+}
+
+/// Cadence retenue pour les relevés automatiques.
+///
+/// Le plancher de dix minutes tient à CurseForge : ses chiffres ne se lisent
+/// que dans une session de navigateur, et une horloge plus rapide se verrait.
+/// Le plafond d'une journée évite qu'un réglage extrême ne fige les données.
+pub fn clamp_auto_sync(minutes: i64) -> i64 {
+    minutes.clamp(10, 1440)
 }
 
 impl Default for Settings {
@@ -43,6 +62,7 @@ impl Default for Settings {
             curseforge_username: None,
             range_days: default_range_days(),
             currency: default_currency(),
+            auto_sync_minutes: default_auto_sync_minutes(),
             curseforge_upload_token: None,
         }
     }
@@ -134,19 +154,30 @@ mod tests {
     fn settings_default_when_absent_then_persist() {
         let dir = tmp("settings");
         let defaults = load_settings(&dir);
-        assert_eq!(defaults.range_days, 90);
+        assert_eq!(defaults.range_days, 30);
         assert!(defaults.curseforge_username.is_none());
 
         assert_eq!(defaults.currency, "USD");
+        assert_eq!(defaults.auto_sync_minutes, 10);
 
         let updated = Settings {
             curseforge_username: Some("DreykaOas_official".into()),
             range_days: 180,
             currency: "EUR".into(),
+            auto_sync_minutes: 30,
             curseforge_upload_token: Some("jeton".into()),
         };
         save_settings(&dir, &updated).unwrap();
         assert_eq!(load_settings(&dir), updated);
+    }
+
+    #[test]
+    fn auto_sync_never_goes_below_ten_minutes() {
+        assert_eq!(clamp_auto_sync(1), 10);
+        assert_eq!(clamp_auto_sync(0), 10);
+        assert_eq!(clamp_auto_sync(-5), 10);
+        assert_eq!(clamp_auto_sync(45), 45);
+        assert_eq!(clamp_auto_sync(99_999), 1440);
     }
 
     #[test]
@@ -162,6 +193,7 @@ mod tests {
         let loaded = load_settings(&dir);
         assert_eq!(loaded.range_days, 30);
         assert_eq!(loaded.currency, "USD");
+        assert_eq!(loaded.auto_sync_minutes, 10);
         assert!(loaded.curseforge_upload_token.is_none());
     }
 

@@ -10,8 +10,9 @@
   /** Valeurs enregistrées, pour détecter ce qui a été modifié depuis. */
   const BLANK: Settings = {
     curseforge_username: null,
-    range_days: 90,
+    range_days: 30,
     currency: "USD",
+    auto_sync_minutes: 10,
     curseforge_token_ready: false,
   };
   let saved = $state<Settings>({ ...BLANK });
@@ -35,15 +36,34 @@
       .catch(report);
   });
 
-  const dirty = $derived(draft.range_days !== saved.range_days || draft.currency !== saved.currency);
+  const dirty = $derived(
+    draft.range_days !== saved.range_days ||
+      draft.currency !== saved.currency ||
+      draft.auto_sync_minutes !== saved.auto_sync_minutes,
+  );
 
   async function save() {
     try {
       // Le pseudo CurseForge n'est plus saisi : il se relève tout seul. On
       // repasse celui qui est enregistré pour ne pas l'effacer.
-      await api.saveSettings(saved.curseforge_username, draft.range_days, draft.currency);
+      await api.saveSettings(
+        saved.curseforge_username,
+        draft.range_days,
+        draft.currency,
+        draft.auto_sync_minutes,
+      );
       const changedCurrency = draft.currency !== saved.currency;
-      saved = { ...saved, range_days: draft.range_days, currency: draft.currency };
+      // La cadence change tout de suite : attendre le prochain réveil, réglé
+      // sur l'ancienne valeur, contredirait ce qui vient d'être enregistré.
+      if (draft.auto_sync_minutes !== saved.auto_sync_minutes) {
+        dashboard.restartAutoSync(draft.auto_sync_minutes);
+      }
+      saved = {
+        ...saved,
+        range_days: draft.range_days,
+        currency: draft.currency,
+        auto_sync_minutes: draft.auto_sync_minutes,
+      };
       // Changer de devise ne veut rien dire sans son taux : on le relève dans
       // la foulée, puis on redessine les montants déjà à l'écran.
       if (changedCurrency) await dashboard.refreshCurrency();
@@ -264,6 +284,20 @@
         <div class="control">
           <input type="number" min="7" max="730" bind:value={draft.range_days} />
           <span class="unit">jours</span>
+        </div>
+      </div>
+      <div class="row">
+        <div class="text">
+          <span class="name">Relevé automatique</span>
+          <span class="desc">
+            Délai entre deux relevés. L'attente réelle varie d'un quart autour de cette valeur :
+            des relevés parfaitement réguliers se remarqueraient, et CurseForge ne se lit qu'à
+            travers une session de navigateur. Dix minutes au plus court.
+          </span>
+        </div>
+        <div class="control">
+          <input type="number" min="10" max="1440" bind:value={draft.auto_sync_minutes} />
+          <span class="unit">minutes</span>
         </div>
       </div>
       <div class="row">

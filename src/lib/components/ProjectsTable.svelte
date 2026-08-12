@@ -176,8 +176,19 @@
   tbody tr {
     cursor: pointer;
   }
-  tbody tr:hover {
-    background: var(--surface-2);
+  /*
+   * Survol : un voile d'accent et un liseré à gauche, au lieu de la plaque
+   * opaque qui écrasait la courbe de tendance. Le liseré est posé en ombre
+   * intérieure, donc la ligne ne se décale pas.
+   */
+  tbody td {
+    transition: background-color 120ms ease;
+  }
+  tbody tr:hover td {
+    background: color-mix(in srgb, var(--accent) 9%, transparent);
+  }
+  tbody tr:hover td:first-child {
+    box-shadow: inset 2px 0 0 var(--accent);
   }
   .cell {
     display: flex;

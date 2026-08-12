@@ -4,7 +4,7 @@
   import { formatAge, formatDayLong } from "../format";
   import { dashboard } from "../state.svelte";
   import { theme, type ThemeMode } from "../theme.svelte";
-  import type { AppErrorPayload, PairingEntry, Settings } from "../types";
+  import type { AppErrorPayload, Settings } from "../types";
 
   /** Valeurs enregistrées, pour détecter ce qui a été modifié depuis. */
   const BLANK: Settings = {
@@ -15,10 +15,7 @@
   };
   let saved = $state<Settings>({ ...BLANK });
   let draft = $state<Settings>({ ...BLANK });
-  let entries = $state<PairingEntry[]>([]);
   let message = $state("");
-  let leftId = $state<number | null>(null);
-  let rightId = $state<number | null>(null);
   let loaded = $state(false);
 
   function report(e: unknown) {
@@ -37,94 +34,15 @@
       .catch(report);
   });
 
-  // L'état d'appariement est relu après chaque cycle de synchronisation :
-  // les rapprochements automatiques sont recalculés à ce moment-là.
-  $effect(() => {
-    dashboard.lastSync;
-    refreshPairing();
-  });
-
-  function refreshPairing() {
-    api
-      .pairingState()
-      .then((value) => (entries = value))
-      .catch(report);
-  }
-
-  /** Projets d'une plateforme : ceux qui réclament une action d'abord. */
-  function column(platform: string) {
-    const rank = (e: PairingEntry) => (e.linked_id !== null ? 2 : e.solo ? 1 : 0);
-    return entries
-      .filter((e) => e.platform === platform)
-      .sort((a, b) => rank(a) - rank(b) || a.title.localeCompare(b.title));
-  }
-
-  const modrinthList = $derived(column("modrinth"));
-  const curseforgeList = $derived(column("curseforge"));
-  const pending = $derived(entries.filter((e) => e.linked_id === null && !e.solo).length);
-
-  const leftEntry = $derived(entries.find((e) => e.id === leftId) ?? null);
-  const rightEntry = $derived(entries.find((e) => e.id === rightId) ?? null);
-  /** Une seule sélection : les actions solo et détacher s'y appliquent. */
-  const single = $derived(leftEntry !== null && rightEntry === null ? leftEntry : rightEntry !== null && leftEntry === null ? rightEntry : null);
-
-  async function afterChange() {
-    leftId = null;
-    rightId = null;
-    refreshPairing();
-    await dashboard.load();
-  }
-
-  async function pair() {
-    if (leftId === null || rightId === null) return;
-    try {
-      await api.linkManual(leftId, rightId);
-      await afterChange();
-    } catch (e) {
-      report(e);
-    }
-  }
-
-  async function detach(entry: PairingEntry) {
-    if (entry.linked_id === null) return;
-    const [modrinthId, curseforgeId] =
-      entry.platform === "modrinth" ? [entry.id, entry.linked_id] : [entry.linked_id, entry.id];
-    try {
-      await api.unlink(modrinthId, curseforgeId);
-      await afterChange();
-    } catch (e) {
-      report(e);
-    }
-  }
-
-  async function toggleSolo(entry: PairingEntry) {
-    try {
-      await api.setSolo(entry.id, !entry.solo);
-      await afterChange();
-    } catch (e) {
-      report(e);
-    }
-  }
-
-  function select(entry: PairingEntry) {
-    if (entry.platform === "modrinth") {
-      leftId = leftId === entry.id ? null : entry.id;
-    } else {
-      rightId = rightId === entry.id ? null : entry.id;
-    }
-  }
-
-  const dirty = $derived(
-    draft.curseforge_username !== saved.curseforge_username ||
-      draft.range_days !== saved.range_days ||
-      draft.currency !== saved.currency,
-  );
+  const dirty = $derived(draft.range_days !== saved.range_days || draft.currency !== saved.currency);
 
   async function save() {
     try {
-      await api.saveSettings(draft.curseforge_username, draft.range_days, draft.currency);
+      // Le pseudo CurseForge n'est plus saisi : il se relève tout seul. On
+      // repasse celui qui est enregistré pour ne pas l'effacer.
+      await api.saveSettings(saved.curseforge_username, draft.range_days, draft.currency);
       const changedCurrency = draft.currency !== saved.currency;
-      saved = { ...draft };
+      saved = { ...saved, range_days: draft.range_days, currency: draft.currency };
       // Changer de devise ne veut rien dire sans son taux : on le relève dans
       // la foulée, puis on redessine les montants déjà à l'écran.
       if (changedCurrency) await dashboard.refreshCurrency();
@@ -186,10 +104,29 @@
     { id: "synchronisation", label: "Synchronisation" },
     { id: "curseforge", label: "CurseForge" },
     { id: "affichage", label: "Affichage" },
-    { id: "appariements", label: "Appariements" },
   ];
 
   const freshness = $derived(dashboard.overview?.freshness ?? []);
+
+  /**
+   * Les comptes en service, un par plateforme. Rien n'oblige les deux sites à
+   * porter le même pseudo : celui de Modrinth vient du token, celui de
+   * CurseForge du tableau de bord relevé.
+   */
+  const accounts = $derived([
+    {
+      platform: "Modrinth",
+      name: dashboard.auth?.username ?? null,
+      count: dashboard.auth?.modrinth_projects ?? 0,
+      tone: "modrinth",
+    },
+    {
+      platform: "CurseForge",
+      name: dashboard.auth?.curseforge_username ?? null,
+      count: dashboard.auth?.curseforge_projects ?? 0,
+      tone: "curseforge",
+    },
+  ]);
 </script>
 
 <div class="layout">
@@ -200,12 +137,18 @@
         <a href="#{section.id}">{section.label}</a>
       {/each}
     </nav>
-    {#if dashboard.auth?.connected}
-      <p class="who">
-        <span class="legend-label">Connecté</span>
-        <b>{dashboard.auth.username}</b>
-      </p>
-    {/if}
+    <div class="accounts">
+      <span class="legend-label">Comptes reliés</span>
+      {#each accounts as account (account.platform)}
+        <div class="account" class:off={account.name === null}>
+          <span class="tick {account.tone}"></span>
+          <span class="who">
+            <b>{account.name ?? "non détecté"}</b>
+            <span>{account.platform} · {account.count} projets</span>
+          </span>
+        </div>
+      {/each}
+    </div>
   </aside>
 
   <div class="panels">
@@ -275,22 +218,6 @@
       <h2>CurseForge</h2>
       <div class="row">
         <div class="text">
-          <span class="name">Pseudo auteur</span>
-          <span class="desc">
-            Détecté seul en interrogeant CurseForge avec les identifiants de tes projets Modrinth.
-            Ne le renseigne que si la détection échoue.
-          </span>
-        </div>
-        <div class="control">
-          <input
-            value={draft.curseforge_username ?? ""}
-            oninput={(e) => (draft.curseforge_username = e.currentTarget.value || null)}
-            placeholder="détection automatique"
-          />
-        </div>
-      </div>
-      <div class="row">
-        <div class="text">
           <span class="name">Jeton d'envoi</span>
           <span class="desc">
             Nécessaire pour publier un fichier. L'application en demande un à ton compte lors de sa
@@ -306,9 +233,6 @@
         </div>
       </div>
       <div class="row column">
-        <div class="text">
-          <span class="name">Compte CurseForge et solde de points</span>
-        </div>
         <CurseforgePoints />
       </div>
     </section>
@@ -359,98 +283,6 @@
             </button>
           {/each}
         </div>
-      </div>
-    </section>
-
-    <section id="appariements">
-      <h2>Appariements <span class="count">{pending}</span></h2>
-
-      <div class="row column">
-        <div class="text">
-          <span class="name">Rapprocher un mod de son jumeau</span>
-          <span class="desc">
-            Les deux colonnes listent tous tes projets. Clique un projet à gauche et son équivalent
-            à droite, puis Apparier : leurs téléchargements seront additionnés. Un mod publié sur un
-            seul site se marque « sans équivalent » — il cesse d'être signalé et reste compté sur sa
-            plateforme.
-          </span>
-        </div>
-
-        <div class="orphans">
-          <div>
-            <span class="legend-label">Modrinth · {modrinthList.length}</span>
-            <ul>
-              {#each modrinthList as entry (entry.id)}
-                <li>
-                  <button
-                    class:active={leftId === entry.id}
-                    class:linked={entry.linked_id !== null}
-                    class:solo={entry.solo}
-                    title={entry.linked_to
-                      ? `Apparié à ${entry.linked_to}`
-                      : entry.solo
-                        ? "Déclaré sans équivalent sur CurseForge"
-                        : "En attente d'appariement"}
-                    onclick={() => select(entry)}
-                  >
-                    {entry.title}
-                  </button>
-                </li>
-              {/each}
-            </ul>
-          </div>
-          <div>
-            <span class="legend-label">CurseForge · {curseforgeList.length}</span>
-            {#if curseforgeList.length === 0}
-              <p class="none">Aucun projet CurseForge relevé.</p>
-            {:else}
-              <ul>
-                {#each curseforgeList as entry (entry.id)}
-                  <li>
-                    <button
-                      class:active={rightId === entry.id}
-                      class:linked={entry.linked_id !== null}
-                      class:solo={entry.solo}
-                      title={entry.linked_to
-                        ? `Apparié à ${entry.linked_to}`
-                        : entry.solo
-                          ? "Déclaré sans équivalent sur Modrinth"
-                          : "En attente d'appariement"}
-                      onclick={() => select(entry)}
-                    >
-                      {entry.title}
-                    </button>
-                  </li>
-                {/each}
-              </ul>
-            {/if}
-          </div>
-        </div>
-
-        <div class="actions">
-          <button class="primary" disabled={leftId === null || rightId === null} onclick={pair}>
-            Apparier les deux sélections
-          </button>
-          {#if single}
-            {#if single.linked_id !== null}
-              <button onclick={() => detach(single)}>
-                Détacher « {single.title} » de {single.linked_to}
-              </button>
-            {:else}
-              <button onclick={() => toggleSolo(single)}>
-                {single.solo
-                  ? `Remettre « ${single.title} » en attente`
-                  : `« ${single.title} » n'existe pas sur l'autre plateforme`}
-              </button>
-            {/if}
-          {/if}
-        </div>
-
-        <p class="legend">
-          <span class="dot pending"></span> en attente
-          <span class="dot linked"></span> apparié
-          <span class="dot solo"></span> sans équivalent
-        </p>
       </div>
     </section>
   </div>
@@ -506,13 +338,54 @@
     color: var(--text);
     border-left-color: var(--accent);
   }
-  .who {
-    margin: 18px 0 0;
+  /*
+   * Les deux plateformes n'ont aucune raison de porter le même pseudo : elles
+   * s'affichent l'une sous l'autre, chacune avec sa couleur et son compte de
+   * projets, pour qu'un nom manquant se voie tout de suite.
+   */
+  .accounts {
+    margin: 20px 0 0;
     padding-left: 12px;
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 8px;
+  }
+  .account {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .tick {
+    width: 3px;
+    align-self: stretch;
+    min-height: 26px;
+    border-radius: 2px;
+  }
+  .tick.modrinth {
+    background: var(--modrinth);
+  }
+  .tick.curseforge {
+    background: var(--curseforge);
+  }
+  .account.off .tick {
+    background: var(--border);
+  }
+  .who {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .who b {
     font-size: 0.86rem;
+    overflow-wrap: anywhere;
+  }
+  .account.off .who b {
+    color: var(--text-dim);
+    font-weight: 400;
+  }
+  .who span {
+    font-size: 0.72rem;
+    color: var(--text-dim);
   }
   .panels {
     display: flex;
@@ -540,14 +413,6 @@
     display: flex;
     align-items: center;
     gap: 8px;
-  }
-  .count {
-    font-family: var(--font-mono);
-    font-size: 0.72rem;
-    color: var(--text-dim);
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    padding: 1px 8px;
   }
   /* Une rangée de réglage : intitulé à gauche, contrôle à droite, filet entre. */
   .row {
@@ -601,45 +466,30 @@
   .sources {
     max-width: 60%;
   }
+  /*
+   * Le nom de la source et son heure n'ont pas la même fonte : sans hauteur de
+   * ligne commune ni centrage, l'heure retombait sous le texte.
+   */
   .chip {
     font-size: 0.72rem;
+    line-height: 1.6;
     border: 1px solid var(--border);
     border-radius: 999px;
     padding: 2px 10px;
     color: var(--text-dim);
     display: inline-flex;
+    align-items: center;
     gap: 6px;
   }
   .chip b {
     font-family: var(--font-mono);
+    font-size: 0.7rem;
+    line-height: 1.6;
     color: var(--text);
   }
   .chip.ko {
     border-color: var(--error);
     color: var(--error);
-  }
-  .orphans {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-    gap: 16px;
-  }
-  .none {
-    margin: 6px 0 0;
-    font-size: 0.78rem;
-    color: var(--text-dim);
-    line-height: 1.45;
-  }
-  ul {
-    list-style: none;
-    margin: 6px 0 0;
-    padding: 0;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    max-height: 220px;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    align-content: flex-start;
   }
   input {
     background: var(--surface-2);
@@ -653,9 +503,6 @@
   }
   input[type="number"] {
     width: 92px;
-  }
-  input:not([type="number"]) {
-    width: 240px;
   }
   button {
     background: var(--surface-2);
@@ -688,64 +535,11 @@
     border-color: var(--accent);
     color: var(--accent);
   }
-  /*
-   * Trois états lisibles d'un coup d'œil : en attente (neutre), apparié (vert),
-   * sans équivalent (estompé). La sélection ajoute un cerclage plein.
-   */
-  li button {
-    font-size: 0.78rem;
-    padding: 4px 10px;
-    color: var(--text);
-  }
-  li button.linked {
-    border-color: var(--modrinth);
-    color: var(--modrinth);
-  }
-  li button.solo {
-    color: var(--text-dim);
-    border-style: dashed;
-  }
-  li button.active {
-    outline: 2px solid var(--accent);
-    outline-offset: 1px;
-    color: var(--accent);
-  }
-  .actions {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-  }
-  .legend {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin: 0;
-    font-size: 0.74rem;
-    color: var(--text-dim);
-  }
-  .dot {
-    width: 9px;
-    height: 9px;
-    border-radius: 3px;
-    border: 1px solid var(--border);
-    margin-left: 8px;
-  }
-  .dot:first-child {
-    margin-left: 0;
-  }
-  .dot.linked {
-    border-color: var(--modrinth);
-    background: var(--modrinth);
-  }
-  .dot.solo {
-    border-style: dashed;
-  }
   .primary {
     background: var(--accent);
     color: var(--on-accent);
     border-color: var(--accent);
     font-weight: 600;
-    align-self: flex-start;
   }
   .bar {
     position: fixed;

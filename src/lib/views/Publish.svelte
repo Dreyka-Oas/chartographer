@@ -483,7 +483,9 @@
   input,
   select,
   textarea {
-    background: var(--surface-2);
+    /* `background-color` seul : le raccourci effacerait le chevron posé par la
+     * feuille globale sur les listes déroulantes. */
+    background-color: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     color: var(--text);
@@ -491,6 +493,9 @@
     font-size: 0.86rem;
     padding: 7px 9px;
     width: 100%;
+  }
+  select {
+    padding-right: 30px;
   }
   textarea {
     resize: vertical;

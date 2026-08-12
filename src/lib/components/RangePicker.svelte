@@ -98,7 +98,9 @@
   button,
   select,
   input {
-    background: var(--surface);
+    /* `background-color` et non le raccourci : le chevron des listes
+     * déroulantes est un fond d'image posé par la feuille globale. */
+    background-color: var(--surface);
     border: 1px solid var(--border);
     color: var(--text-dim);
     border-radius: var(--radius-sm);
@@ -114,6 +116,9 @@
   input {
     color: var(--text);
     font-variant-numeric: tabular-nums;
+  }
+  select {
+    padding-right: 26px;
   }
   button.active,
   button:hover:not(:disabled),

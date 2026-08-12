@@ -116,7 +116,7 @@
         {#if summary.link_confidence === null}
           <p class="note">
             Ce projet n'existe que sur une plateforme, ou son jumeau n'a pas été retrouvé
-            automatiquement. Tu peux l'apparier à la main depuis les réglages.
+            automatiquement. Le rapprochement est retenté à chaque synchronisation.
           </p>
         {:else}
           <p class="big">{Math.round(summary.link_confidence * 100)} %</p>

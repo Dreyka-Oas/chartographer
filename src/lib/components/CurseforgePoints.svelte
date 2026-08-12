@@ -5,7 +5,6 @@
   import type { AppErrorPayload, CfPointEntry } from "../types";
 
   let entries = $state<CfPointEntry[]>([]);
-  let running = $state(false);
   let loaded = $state(false);
   /** Compte rendu de la dernière collecte, qu'elle vienne d'une synchronisation
    * automatique ou d'une relance manuelle. */
@@ -15,76 +14,76 @@
     dashboard.error = (e as AppErrorPayload)?.message ?? String(e);
   }
 
-  function refresh() {
+  $effect(() => {
+    if (loaded) return;
+    loaded = true;
     api
       .curseforgePoints()
       .then((value) => (entries = value))
       .catch(fail);
-  }
-
-  $effect(() => {
-    if (loaded) return;
-    loaded = true;
-    refresh();
   });
 
   const latest = $derived(entries.length > 0 ? entries[entries.length - 1] : null);
   const previous = $derived(entries.length > 1 ? entries[entries.length - 2] : null);
   const delta = $derived(latest && previous ? latest.points - previous.points : null);
 
-  /**
-   * Une seule action : l'application ouvre le tableau de bord, parcourt les
-   * pages et importe ce qu'elle y trouve. La fenêtre ne s'affiche que si la
-   * connexion manque.
-   */
-  async function collect() {
-    running = true;
-    try {
-      await dashboard.collectCurseforge();
-      refresh();
-      await dashboard.load();
-    } catch (e) {
-      fail(e);
-    } finally {
-      running = false;
-    }
-  }
+  /** Un relevé n'est un problème que s'il a échoué alors qu'aucun solde n'a
+   * jamais été enregistré : le reste du temps, l'écran a de quoi s'afficher. */
+  const trouble = $derived(
+    report?.needs_login === true || (report?.failed === true && latest === null),
+  );
 </script>
 
-<p class="note">
-  CurseForge n'expose ni son programme de points ni l'historique de son tableau de bord, et son
-  filtre anti-robot refuse toute requête faite hors d'un navigateur. L'application interroge donc
-  l'interface du tableau de bord depuis une fenêtre invisible, avec ta session : téléchargements
-  quotidiens par mod, solde de points et revenus estimés arrivent à chaque synchronisation, sans
-  que tu aies rien à faire. Tu ne verras cette fenêtre que si la session expire.
-</p>
+<div class="head">
+  <div class="figure">
+    <span class="legend-label">Solde CurseForge</span>
+    {#if latest}
+      <strong>{formatMoney(latest.value_usd)}</strong>
+      <span class="hint">
+        {latest.points} points · relevé le {formatDayLong(latest.day)}
+        {#if delta !== null}
+          · {delta >= 0 ? "+" : ""}{delta} depuis la fois précédente
+        {/if}
+      </span>
+    {:else}
+      <strong class="void">—</strong>
+      <span class="hint">Aucun solde relevé pour l'instant.</span>
+    {/if}
+  </div>
 
-<div class="assist">
-  <button onclick={collect} disabled={running}>
-    {running ? "Collecte en cours…" : "Relever maintenant"}
-  </button>
-  {#if report?.needs_login}
+  <p class="note">
+    Ni le programme de points ni l'historique du tableau de bord n'ont d'interface publique, et le
+    filtre anti-robot refuse toute requête faite hors d'un navigateur. L'application lit donc le
+    tableau de bord depuis une fenêtre invisible, avec ta session : téléchargements quotidiens,
+    solde et revenus arrivent à chaque synchronisation. Cette fenêtre ne se montre que si la
+    session expire.
+  </p>
+</div>
+
+{#if trouble}
+  <div class="alert">
+    <span>
+      {#if report?.needs_login}
+        Ta session CurseForge a expiré : identifie-toi une fois, la collecte reprend seule ensuite.
+      {:else}
+        Le dernier relevé n'a rien rapporté. Une reconnexion suffit le plus souvent.
+      {/if}
+    </span>
     <button class="primary" onclick={() => api.openCurseforgeWindow().catch(fail)}>
       Se reconnecter à CurseForge
     </button>
-  {/if}
-</div>
+  </div>
+{/if}
 
 {#if report}
-  <div class="read" class:miss={report.needs_login || report.failed || report.imported.length === 0}>
-    {#if report.needs_login}
-      <span>
-        Ta session CurseForge a expiré. Ouvre la fenêtre ci-dessus, identifie-toi une fois : la
-        collecte reprendra seule ensuite, sans jamais réafficher cette page.
-      </span>
-    {:else if report.failed}
-      <span>La collecte n'a pas pu aboutir. Rien n'a été relevé.</span>
-    {:else}
-      {#if report.points !== null}
-        <span>Solde relevé : <b>{report.points} points</b>.</span>
+  <details>
+    <summary>Détail du dernier relevé</summary>
+    <div class="detail">
+      <span class="source">{report.detail}</span>
+      {#if report.visited.length > 0}
+        <span class="source">Pages parcourues : {report.visited.join(" · ")}</span>
       {/if}
       {#if report.imported.length > 0}
-        <span class="legend-label">Historiques importés</span>
         <table>
           <thead>
             <tr><th class="left">Mod</th><th>Jours</th><th>Période</th></tr>
@@ -99,79 +98,105 @@
             {/each}
           </tbody>
         </table>
-      {:else}
-        <span>
-          Aucune série n'a pu être rattachée à un de tes mods. Le détail ci-dessous dit ce qui a été
-          parcouru ; envoie-le-moi si le compte n'y est pas.
-        </span>
       {/if}
-    {/if}
-    <span class="source">{report.detail}</span>
-    {#if report.visited.length > 0}
-      <span class="source">Pages parcourues : {report.visited.join(" · ")}</span>
-    {/if}
-  </div>
+    </div>
+  </details>
 {/if}
 
-{#if latest}
-  <div class="summary">
-    <span class="legend-label">Dernier solde relevé</span>
-    <strong>{formatMoney(latest.value_usd)}</strong>
-    <span class="hint">
-      {latest.points} points · {formatDayLong(latest.day)}
-      {#if delta !== null}
-        · {delta >= 0 ? "+" : ""}{delta} depuis le relevé précédent
-      {/if}
-    </span>
-  </div>
-
-  {#if entries.length > 1}
-    <table>
-      <thead>
-        <tr><th class="left">Relevé</th><th>Points</th><th>Valeur</th></tr>
-      </thead>
-      <tbody>
-        {#each [...entries].reverse().slice(0, 10) as entry (entry.day)}
-          <tr>
-            <td class="left">{formatDayLong(entry.day)}</td>
-            <td>{entry.points}</td>
-            <td>{formatMoney(entry.value_usd)}</td>
-          </tr>
-        {/each}
-      </tbody>
-    </table>
-  {/if}
-{:else}
-  <p class="empty">Aucun solde relevé pour l'instant.</p>
+{#if entries.length > 1}
+  <details>
+    <summary>Historique des soldes · {entries.length} relevés</summary>
+    <div class="detail">
+      <table>
+        <thead>
+          <tr><th class="left">Relevé</th><th>Points</th><th>Valeur</th></tr>
+        </thead>
+        <tbody>
+          {#each [...entries].reverse().slice(0, 12) as entry (entry.day)}
+            <tr>
+              <td class="left">{formatDayLong(entry.day)}</td>
+              <td>{entry.points}</td>
+              <td>{formatMoney(entry.value_usd)}</td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    </div>
+  </details>
 {/if}
 
 <style>
-  .note {
-    margin: 0 0 14px;
-    font-size: 0.8rem;
-    color: var(--text-dim);
-    line-height: 1.5;
-    max-width: 82ch;
-  }
-  .assist {
+  /*
+   * Le chiffre d'abord, l'explication à côté : la carte n'a plus de bouton
+   * esseulé en bas, puisque le relevé se fait tout seul. Ce qui reste — le
+   * détail technique, l'historique — se déplie à la demande.
+   */
+  .head {
     display: flex;
-    gap: 8px;
+    gap: 24px;
+    align-items: flex-start;
     flex-wrap: wrap;
-    margin-bottom: 14px;
   }
-  .read {
+  .figure {
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    margin: 0 0 14px;
+    gap: 3px;
+    min-width: 190px;
+  }
+  strong {
+    font-family: var(--font-mono);
+    font-size: 1.6rem;
+    font-weight: 600;
+    line-height: 1.2;
+  }
+  .void {
+    color: var(--text-dim);
+  }
+  .hint {
+    font-size: 0.76rem;
+    color: var(--text-dim);
+  }
+  .note {
+    flex: 1 1 320px;
+    margin: 0;
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    line-height: 1.5;
+    max-width: 68ch;
+  }
+  .alert {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 14px;
     padding: 10px 12px;
-    border-left: 2px solid var(--modrinth);
+    border-left: 2px solid var(--warn);
     background: var(--surface-2);
     border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
     font-size: 0.82rem;
   }
-  .read.miss {
-    border-left-color: var(--warn);
+  .alert span {
+    flex: 1 1 260px;
+  }
+  details {
+    margin-top: 12px;
+    border-top: 1px solid var(--border);
+    padding-top: 10px;
+  }
+  summary {
+    cursor: pointer;
+    font-size: 0.78rem;
+    color: var(--text-dim);
+  }
+  summary:hover {
+    color: var(--text);
+  }
+  .detail {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 10px;
   }
   .source {
     font-size: 0.74rem;
@@ -188,33 +213,14 @@
     font-size: 0.84rem;
     cursor: pointer;
   }
-  button:hover:not(:disabled) {
+  button:hover {
     border-color: var(--accent);
-  }
-  button:disabled {
-    opacity: 0.45;
-    cursor: default;
   }
   .primary {
     background: var(--accent);
     color: var(--on-accent);
     border-color: var(--accent);
     font-weight: 600;
-  }
-  .summary {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    margin-bottom: 12px;
-  }
-  strong {
-    font-family: var(--font-mono);
-    font-size: 1.35rem;
-    font-weight: 600;
-  }
-  .hint {
-    font-size: 0.76rem;
-    color: var(--text-dim);
   }
   table {
     width: 100%;
@@ -239,10 +245,5 @@
   }
   .left {
     text-align: left;
-  }
-  .empty {
-    color: var(--text-dim);
-    font-size: 0.85rem;
-    margin: 0;
   }
 </style>

@@ -75,13 +75,18 @@
 <style>
   input,
   select {
-    background: var(--surface-2);
+    /* Raccourci `background` évité : il effacerait le chevron dessiné par la
+     * feuille globale. */
+    background-color: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: 6px;
     color: var(--text);
     padding: 5px 9px;
     font: inherit;
     font-size: 0.8rem;
+  }
+  select {
+    padding-right: 26px;
   }
   input {
     width: 180px;

@@ -37,10 +37,16 @@ pub fn run() {
             // Essai en cours de développement : `CG_MINIMIZED=1` réduit la
             // fenêtre au démarrage, pour vérifier une collecte sans que
             // l'application vienne prendre l'écran.
+            // Réduire pendant `setup` ne tient pas : la fenêtre est affichée
+            // juste après et remonte au premier plan. On attend qu'elle soit là,
+            // puis on la réduit comme le ferait un clic sur le bouton.
             #[cfg(debug_assertions)]
             if std::env::var("CG_MINIMIZED").is_ok() {
                 if let Some(main) = app.get_webview_window("main") {
-                    let _ = main.minimize();
+                    tauri::async_runtime::spawn(async move {
+                        tokio::time::sleep(std::time::Duration::from_millis(1200)).await;
+                        let _ = main.minimize();
+                    });
                 }
             }
 

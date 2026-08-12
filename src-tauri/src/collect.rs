@@ -157,6 +157,39 @@ pub fn parse_revenue_estimation(raw: &str) -> (Option<f64>, Option<f64>) {
     )
 }
 
+/// Retrouve le nom du compte connecté dans une réponse du tableau de bord.
+///
+/// Aucune adresse documentée ne le donne : on interroge plusieurs points
+/// d'entrée possibles et on lit la première clé de nom rencontrée, à n'importe
+/// quelle profondeur. Ainsi le relevé survit à un changement de forme de la
+/// réponse, qui arrive à chaque refonte du site.
+pub fn parse_account_name(raw: &str) -> Option<String> {
+    const KEYS: [&str; 5] = ["username", "userName", "displayName", "name", "slug"];
+    fn walk(value: &serde_json::Value, depth: usize) -> Option<String> {
+        if depth > 6 {
+            return None;
+        }
+        match value {
+            serde_json::Value::Object(map) => {
+                for key in KEYS {
+                    if let Some(found) = map.get(key).and_then(|v| v.as_str()) {
+                        let found = found.trim();
+                        // Un nom d'affichage vide ou purement numérique ne
+                        // désigne personne : on continue de chercher.
+                        if !found.is_empty() && !found.chars().all(|c| c.is_ascii_digit()) {
+                            return Some(found.to_string());
+                        }
+                    }
+                }
+                map.values().find_map(|v| walk(v, depth + 1))
+            }
+            serde_json::Value::Array(items) => items.iter().find_map(|v| walk(v, depth + 1)),
+            _ => None,
+        }
+    }
+    walk(&serde_json::from_str::<serde_json::Value>(raw).ok()?, 0)
+}
+
 /// Rapproche une colonne de la réponse d'un projet connu.
 ///
 /// La colonne porte soit `project-<identifiant>`, soit le titre du mod en
@@ -227,6 +260,29 @@ mod tests {
 
     fn known() -> Vec<(i64, String)> {
         vec![(7, "1002185".into()), (9, "444333".into())]
+    }
+
+    #[test]
+    fn reads_the_account_name_whatever_its_place() {
+        assert_eq!(
+            parse_account_name(r#"{"id":42,"username":"DreykaOas_official"}"#).as_deref(),
+            Some("DreykaOas_official")
+        );
+        assert_eq!(
+            parse_account_name(r#"{"data":{"user":{"displayName":"Dreyka"}}}"#).as_deref(),
+            Some("Dreyka")
+        );
+        assert_eq!(
+            parse_account_name(r#"{"data":[{"userName":"Dreyka"}]}"#).as_deref(),
+            Some("Dreyka")
+        );
+    }
+
+    #[test]
+    fn refuses_what_does_not_name_anybody() {
+        assert_eq!(parse_account_name("<!doctype html>"), None);
+        assert_eq!(parse_account_name(r#"{"name":"  "}"#), None);
+        assert_eq!(parse_account_name(r#"{"name":"1284433"}"#), None);
     }
 
     #[test]

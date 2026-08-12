@@ -45,7 +45,7 @@ fn status_of(state: &AppState) -> AuthStatus {
     let settings = config::load_settings(&state.data_dir);
     // L'état des plateformes se lit dans la base : elle survit au redémarrage,
     // contrairement à ce que le front garde en mémoire.
-    let (author, modrinth, curseforge) = state
+    let (author, account, modrinth, curseforge) = state
         .store
         .with(|conn| {
             let count = |platform: Platform| -> Result<i64> {
@@ -57,17 +57,20 @@ fn status_of(state: &AppState) -> AuthStatus {
             };
             Ok((
                 crate::store::metrics::get_meta(conn, "curseforge_author")?,
+                crate::store::metrics::get_meta(conn, "curseforge_account")?,
                 count(Platform::Modrinth)?,
                 count(Platform::CurseForge)?,
             ))
         })
-        .unwrap_or((None, 0, 0));
+        .unwrap_or((None, None, 0, 0));
 
     AuthStatus {
         connected: session.is_some(),
         username: session.as_ref().map(|s| s.username.clone()),
         connected_since: session.as_ref().map(|s| s.obtained_at.clone()),
-        curseforge_username: settings.curseforge_username.or(author),
+        // Le compte relevé sur le tableau de bord fait foi : il nomme la session
+        // réellement ouverte, là où l'auteur déduit des mods peut être un autre.
+        curseforge_username: settings.curseforge_username.or(account).or(author),
         modrinth_projects: modrinth,
         curseforge_projects: curseforge,
     }
@@ -964,6 +967,19 @@ const FETCH_SCRIPT: &str = r#"(function () {
         .catch(function (e) { out[name] = 'erreur ' + e; });
     });
   }, Promise.resolve()).then(function () {
+    // Nom du compte connecté : aucune adresse n'est documentée, on essaie les
+    // formes usuelles et on garde la première réponse qui ressemble à du JSON.
+    var who = ['/_api/users/me', '/_api/user', '/_api/me', '/_api/account', '/_api/profile'];
+    return who.reduce(function (chain, path) {
+      return chain.then(function () {
+        if (out.account) return null;
+        return fetch(path, { credentials: 'include' })
+          .then(function (r) { return r.ok ? r.text() : ''; })
+          .then(function (t) { if (t && t.charAt(0) === '{') out.account = t.slice(0, 4000); })
+          .catch(function () {});
+      });
+    }, Promise.resolve());
+  }).then(function () {
     out.balance = (document.body ? document.body.innerText : '').slice(0, 4000);
     window.__cgData = out;
   });
@@ -984,6 +1000,40 @@ fn balance_from_text(text: &str) -> Option<i64> {
         .take_while(|c| c.is_ascii_digit())
         .collect();
     digits.parse().ok()
+}
+
+/// Réponses brutes du tableau de bord, telles que la page les a rapportées.
+#[derive(serde::Deserialize, Default)]
+struct Fetched {
+    #[serde(default)]
+    downloads: String,
+    #[serde(default)]
+    revenue: String,
+    #[serde(default)]
+    estimation: String,
+    #[serde(default)]
+    balance: String,
+    /// Réponse qui nomme le compte connecté, quand l'une des adresses répond.
+    #[serde(default)]
+    account: String,
+}
+
+/// Lance les appels depuis la page et attend leur retour.
+///
+/// L'attente est sondée plutôt que fixée : les appels s'enchaînent, et leur
+/// durée dépend du réseau du jour.
+async fn fetch_dashboard(app: &tauri::AppHandle) -> Result<Fetched> {
+    let _ = eval_in_window(app, FETCH_SCRIPT).await;
+    for _ in 0..20 {
+        tokio::time::sleep(std::time::Duration::from_millis(700)).await;
+        let raw = eval_in_window(app, "JSON.stringify(window.__cgData)").await?;
+        let unquoted: String = serde_json::from_str(&raw).unwrap_or(raw);
+        if unquoted.trim() == "null" || unquoted.trim().is_empty() {
+            continue;
+        }
+        return Ok(serde_json::from_str(&unquoted).unwrap_or_default());
+    }
+    Ok(Fetched::default())
 }
 
 /// Collecte le tableau de bord CurseForge sans rien demander à l'utilisateur.
@@ -1008,24 +1058,18 @@ pub async fn collect_curseforge(
         });
     }
 
-    let _ = eval_in_window(&app, FETCH_SCRIPT).await;
-    // Les appels s'enchaînent ; on laisse le temps au dernier de revenir.
-    tokio::time::sleep(std::time::Duration::from_millis(6000)).await;
-    let raw = eval_in_window(&app, "JSON.stringify(window.__cgData)").await?;
-    let unquoted: String = serde_json::from_str(&raw).unwrap_or(raw);
-
-    #[derive(serde::Deserialize, Default)]
-    struct Fetched {
-        #[serde(default)]
-        downloads: String,
-        #[serde(default)]
-        revenue: String,
-        #[serde(default)]
-        estimation: String,
-        #[serde(default)]
-        balance: String,
+    let mut fetched = fetch_dashboard(&app).await?;
+    // Un relevé qui revient vide vient presque toujours de la même cause : la
+    // page n'était pas encore sur le tableau de bord quand les appels sont
+    // partis. On l'y ramène et on redemande une fois avant de conclure.
+    if fetched.downloads.trim().is_empty() && fetched.revenue.trim().is_empty() {
+        tracing::debug!("relevé vide : retour au tableau de bord puis seconde tentative");
+        let _ = navigate(&app, &window, CF_AUTHOR_PAGE, "authors.curseforge.com").await;
+        let second = fetch_dashboard(&app).await?;
+        if !second.downloads.trim().is_empty() || !second.revenue.trim().is_empty() {
+            fetched = second;
+        }
     }
-    let fetched: Fetched = serde_json::from_str(&unquoted).unwrap_or_default();
 
     // Les projets connus, avec leur identifiant CurseForge et leur titre : les
     // colonnes de la série portent l'un ou l'autre.
@@ -1094,6 +1138,14 @@ pub async fn collect_curseforge(
             .store
             .with(|conn| crate::store::metrics::record_cf_points(conn, &today, value, &now))?;
     }
+    // Le compte CurseForge connecté n'a aucune raison de porter le même nom que
+    // le compte Modrinth : on relève le sien plutôt que de le deviner.
+    if let Some(name) = crate::collect::parse_account_name(&fetched.account) {
+        state
+            .store
+            .with(|conn| crate::store::metrics::set_meta(conn, "curseforge_account", &name))?;
+    }
+
     let months = crate::collect::parse_revenue_series(&fetched.revenue);
     let (last_month, year_to_date) = crate::collect::parse_revenue_estimation(&fetched.estimation);
     let now = Utc::now().to_rfc3339();

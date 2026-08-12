@@ -113,9 +113,15 @@
    * La table défile chez elle quand on lui donne une hauteur : avec plusieurs
    * centaines de projets, la page entière ferait sinon des milliers de pixels.
    */
+  /*
+   * La table déborde de 10 px de chaque côté : le voile de survol respire
+   * au-delà du premier et du dernier texte, qui restent eux alignés sur les
+   * bords de la carte grâce au retrait équivalent des cellules extrêmes.
+   */
   .scroller {
     overflow: auto;
     overscroll-behavior: contain;
+    margin: 0 -10px;
   }
   table {
     width: 100%;
@@ -146,11 +152,11 @@
   th:first-child,
   td:first-child {
     text-align: left;
-    padding-left: 0;
+    padding-left: 10px;
   }
   th:last-child,
   td:last-child {
-    padding-right: 0;
+    padding-right: 10px;
   }
   th button {
     background: none;

@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { ProjectSummary } from "../types";
-import { heatmapOption } from "./heatmap";
+import { cellTooltipHtml, heatmapOption } from "./heatmap";
 import { foldSeriesTail } from "./multiseries";
 import { revenueOption } from "./revenue";
 import { sparklinePath } from "./sparkline";
 import { splitOption } from "./split";
 import { DARK, dayAxis, dayTooltipHtml, monthAxis } from "./theme";
 import { timelineOption } from "./timeline";
-import { worldMapOption } from "./worldmap";
+import { countryTooltipHtml, worldMapOption } from "./worldmap";
 
 const points = [
   { day: "2026-08-09", modrinth: 40, curseforge: 0 },
@@ -160,6 +160,25 @@ describe("worldMapOption", () => {
       { country: "??", downloads: 1012 },
     ]);
     expect(option.series[0].data.map((d) => d.name)).toEqual(["DE"]);
+  });
+
+  it("nomme le pays et sa part au lieu de la série sans nom", () => {
+    const html = countryTooltipHtml("DE", 25, 100);
+    expect(html).toContain("Allemagne");
+    expect(html).toContain("25,0 %");
+    expect(html).not.toContain("série");
+  });
+
+  it("annonce un pays sans relevé plutôt qu'une valeur vide", () => {
+    expect(countryTooltipHtml("FR", Number.NaN, 100)).toContain("aucun téléchargement relevé");
+  });
+});
+
+describe("cellTooltipHtml", () => {
+  it("nomme le chargeur et la version de jeu", () => {
+    const html = cellTooltipHtml("fabric", "1.21", 1200);
+    expect(html).toContain("fabric · 1.21");
+    expect(html).not.toContain("série");
   });
 });
 

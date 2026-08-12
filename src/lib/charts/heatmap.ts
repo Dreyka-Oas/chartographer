@@ -1,5 +1,13 @@
+import { compactNumber } from "../format";
 import type { LoaderCell } from "../types";
 import { axisStyle, DARK, tooltip, type Palette } from "./theme";
+
+/** Même raison que sur la carte : sans nom de série, ECharts affichait « série () »
+ * suivi des index bruts de la case. On nomme la case et son compte. */
+export function cellTooltipHtml(loader: string, gameVersion: string, value: number): string {
+  const amount = Number.isFinite(value) ? compactNumber(value) : "0";
+  return `<b>${loader} · ${gameVersion}</b><br>${amount} téléchargements`;
+}
 
 /** Trie les versions de jeu par ordre numérique croissant plutôt qu'alphabétique. */
 function sortGameVersions(values: string[]): string[] {
@@ -22,7 +30,14 @@ export function heatmapOption(cells: LoaderCell[], p: Palette = DARK) {
 
   return {
     grid: { left: 90, right: 20, top: 16, bottom: 70, containLabel: true },
-    tooltip: { position: "top", ...tooltip(p) },
+    tooltip: {
+      position: "top",
+      ...tooltip(p),
+      formatter: (params: { value?: [number, number, number] }) => {
+        const [x, y, v] = params.value ?? [0, 0, 0];
+        return cellTooltipHtml(loaders[y] ?? "", gameVersions[x] ?? "", v);
+      },
+    },
     xAxis: {
       type: "category",
       data: gameVersions,

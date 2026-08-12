@@ -52,6 +52,10 @@ pub struct Kpis {
     /// remontent pas jusqu'à l'origine : ce total est inférieur au cumul.
     pub revenue_window: String,
     pub followers: i64,
+    /// Abonnés par plateforme. CurseForge ne les publie nulle part : ils sont
+    /// relevés sur le tableau de bord auteur, comme les téléchargements.
+    pub followers_modrinth: i64,
+    pub followers_curseforge: i64,
     pub projects_active: i64,
     /// Projets actifs par plateforme. CurseForge n'expose aucun abonné : c'est
     /// le seul décompte qui puisse y être ventilé.

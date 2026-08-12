@@ -237,6 +237,8 @@ pub fn per_project(
                 (true, Some(cf)) => cf.total_downloads,
                 _ => 0,
             },
+            // Les abonnés d'un mod ne se lisent que sur Modrinth : CurseForge
+            // n'en publie qu'un total, pour le compte entier.
             followers: project.followers,
             link_confidence: link.map(|l| l.confidence),
             spark: densify(&spark),
@@ -262,7 +264,7 @@ pub fn per_project(
                 curseforge_ext_id: project.ext_id.parse().ok(),
                 modrinth_downloads: 0,
                 curseforge_downloads: project.total_downloads,
-                followers: 0,
+                followers: project.followers,
                 link_confidence: None,
                 spark: densify(&spark),
             });
@@ -551,6 +553,27 @@ pub fn kpis(conn: &Connection, today: &str, filter: PlatformFilter) -> Result<Kp
     let projects_modrinth = projects_of(Platform::Modrinth)?;
     let projects_curseforge = projects_of(Platform::CurseForge)?;
 
+    let followers_modrinth = if filter.modrinth {
+        conn.query_row(
+            "SELECT COALESCE(SUM(followers), 0) FROM projects
+             WHERE archived_at IS NULL AND platform = ?1",
+            params![Platform::Modrinth.as_str()],
+            |r| r.get(0),
+        )?
+    } else {
+        0
+    };
+    // CurseForge ne publie aucun compte par projet : sa fiche de compte annonce
+    // un total, relevé à la collecte. On le rend tel quel plutôt que de le
+    // répartir arbitrairement entre les mods.
+    let followers_curseforge = if filter.curseforge {
+        crate::store::metrics::get_meta(conn, "curseforge_followers")?
+            .and_then(|raw| raw.parse::<i64>().ok())
+            .unwrap_or(0)
+    } else {
+        0
+    };
+
     Ok(Kpis {
         downloads_total: downloads_modrinth + downloads_curseforge,
         downloads_modrinth,
@@ -567,11 +590,9 @@ pub fn kpis(conn: &Connection, today: &str, filter: PlatformFilter) -> Result<Kp
         revenue_available_curseforge: revenue_curseforge.normalize().to_string(),
         revenue_pending: balance.pending.clone(),
         revenue_window: revenue_window.normalize().to_string(),
-        followers: conn.query_row(
-            "SELECT COALESCE(SUM(followers), 0) FROM projects WHERE archived_at IS NULL",
-            [],
-            |r| r.get(0),
-        )?,
+        followers: followers_modrinth + followers_curseforge,
+        followers_modrinth,
+        followers_curseforge,
         projects_active: projects_modrinth + projects_curseforge,
         projects_modrinth,
         projects_curseforge,
@@ -823,7 +844,7 @@ mod tests {
             icon_url: None,
             created_at: None,
             total_downloads: total,
-            followers: 5,
+            followers: Some(5),
         };
         let m = upsert(&conn, &mk(Platform::Modrinth, "m1", "Mobs Blocker", 23_225)).unwrap();
         let c = upsert(
@@ -889,7 +910,7 @@ mod tests {
                 icon_url: None,
                 created_at: None,
                 total_downloads: 7,
-                followers: 0,
+                followers: None,
             },
         )
         .unwrap();
@@ -950,7 +971,7 @@ mod tests {
                 icon_url: None,
                 created_at: None,
                 total_downloads: 1_800,
-                followers: 1,
+                followers: Some(1),
             },
         )
         .unwrap();

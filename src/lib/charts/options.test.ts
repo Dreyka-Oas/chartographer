@@ -108,6 +108,16 @@ describe("dayTooltipHtml", () => {
     expect(html).toContain("9 août 2026");
     expect(html).toContain("Modrinth");
     expect(html.replace(/\s/g, " ")).toContain("1,8 k");
+    expect(html).not.toContain("Total");
+  });
+
+  it("ajoute le total quand plusieurs séries sont survolées", () => {
+    const html = dayTooltipHtml([
+      { axisValue: "2026-08-09", marker: "●", seriesName: "Modrinth", value: 1000 },
+      { axisValue: "2026-08-09", marker: "●", seriesName: "CurseForge", value: 240 },
+    ]);
+    expect(html).toContain("Total");
+    expect(html.replace(/\s/g, " ")).toContain("1,2 k");
   });
 });
 

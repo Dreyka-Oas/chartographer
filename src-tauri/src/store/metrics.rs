@@ -475,7 +475,7 @@ mod tests {
                 icon_url: None,
                 created_at: None,
                 total_downloads: 0,
-                followers: 0,
+                followers: None,
             },
         )
         .unwrap();

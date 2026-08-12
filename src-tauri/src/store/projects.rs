@@ -13,7 +13,9 @@ pub struct ProjectUpsert {
     pub icon_url: Option<String>,
     pub created_at: Option<String>,
     pub total_downloads: i64,
-    pub followers: i64,
+    /// Abonnés, quand la source les compte. `None` veut dire « je ne sais
+    /// pas » : le nombre déjà connu est alors conservé.
+    pub followers: Option<i64>,
 }
 
 #[derive(Debug, Clone)]
@@ -44,7 +46,7 @@ pub fn upsert(conn: &Connection, p: &ProjectUpsert) -> Result<i64> {
     conn.execute(
         "INSERT INTO projects
            (platform, ext_id, slug, title, project_type, url, icon_url, created_at, total_downloads, followers, archived_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, NULL)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, COALESCE(?10, 0), NULL)
          ON CONFLICT(platform, ext_id) DO UPDATE SET
            slug = excluded.slug,
            title = excluded.title,
@@ -53,7 +55,10 @@ pub fn upsert(conn: &Connection, p: &ProjectUpsert) -> Result<i64> {
            icon_url = COALESCE(excluded.icon_url, projects.icon_url),
            created_at = COALESCE(excluded.created_at, projects.created_at),
            total_downloads = excluded.total_downloads,
-           followers = excluded.followers,
+           -- Une source qui ne compte pas les abonnés envoie `None` : elle ne
+           -- doit pas effacer ce qu'une autre a relevé. On relit le paramètre
+           -- plutôt que `excluded`, que la valeur insérée a déjà ramené à zéro.
+           followers = COALESCE(?10, projects.followers),
            archived_at = NULL",
         params![
             p.platform.as_str(),
@@ -173,6 +178,55 @@ pub fn link_exclusive(conn: &Connection, modrinth_id: i64, cf_id: i64) -> Result
 
 /// Déclare un projet sans équivalent sur l'autre plateforme, ou annule cette
 /// déclaration. Un projet marqué ainsi sort de la liste des appariements à faire.
+#[cfg(test)]
+mod follower_tests {
+    use super::*;
+    use crate::store::schema::migrate;
+
+    fn base() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        migrate(&conn).unwrap();
+        conn
+    }
+
+    fn fiche(followers: Option<i64>) -> ProjectUpsert {
+        ProjectUpsert {
+            platform: Platform::CurseForge,
+            ext_id: "1002185".into(),
+            slug: Some("mobs-blocker".into()),
+            title: "Mobs Blocker".into(),
+            project_type: None,
+            url: None,
+            icon_url: None,
+            created_at: None,
+            total_downloads: 86_904,
+            followers,
+        }
+    }
+
+    /// Une source qui ne compte pas les abonnés ne doit pas effacer ce qu'une
+    /// autre a relevé : elle envoie `None`, pas zéro.
+    #[test]
+    fn a_source_that_ignores_followers_keeps_the_known_count() {
+        let conn = base();
+        upsert(&conn, &fiche(Some(42))).unwrap();
+        upsert(&conn, &fiche(None)).unwrap();
+
+        let row = list(&conn).unwrap().into_iter().next().unwrap();
+        assert_eq!(row.followers, 42);
+        assert_eq!(row.total_downloads, 86_904);
+    }
+
+    #[test]
+    fn a_source_that_counts_them_writes_its_own_figure() {
+        let conn = base();
+        upsert(&conn, &fiche(Some(7))).unwrap();
+        assert_eq!(list(&conn).unwrap()[0].followers, 7);
+        upsert(&conn, &fiche(Some(3))).unwrap();
+        assert_eq!(list(&conn).unwrap()[0].followers, 3);
+    }
+}
+
 pub fn set_solo(conn: &Connection, id: i64, solo: bool) -> Result<()> {
     conn.execute(
         "UPDATE projects SET solo = ?2 WHERE id = ?1",
@@ -239,7 +293,7 @@ mod tests {
             icon_url: None,
             created_at: None,
             total_downloads: 100,
-            followers: 2,
+            followers: Some(2),
         }
     }
 

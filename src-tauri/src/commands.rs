@@ -1021,6 +1021,33 @@ const FETCH_SCRIPT: &str = r#"(function () {
   return 'appels lances';
 })()"#;
 
+/// Texte de la page, replié sur une ligne.
+///
+/// Le site public refuse toute requête faite hors d'un navigateur : ses pages
+/// ne se lisent qu'avec la fenêtre. Le tableau de bord auteur, lui, ne compte
+/// les abonnés nulle part — ni sa liste de projets, ni ses adresses de
+/// statistiques, toutes sondées sans rien trouver.
+const PAGE_TEXT: &str = r#"(function () {
+  var texte = document.body ? document.body.innerText : '';
+  return texte.replace(/\s+/g, ' ').slice(0, 6000);
+})()"#;
+
+/// Va lire le nombre d'abonnés sur la fiche publique du compte, puis ramène la
+/// fenêtre au tableau de bord.
+async fn read_author_followers(
+    app: &tauri::AppHandle,
+    window: &tauri::WebviewWindow,
+    account: &str,
+) -> Option<i64> {
+    let page = format!("https://www.curseforge.com/members/{account}/projects");
+    navigate(app, window, &page, "/members/").await.ok()?;
+    let raw = eval_in_window(app, PAGE_TEXT).await.ok()?;
+    let text: String = serde_json::from_str(&raw).unwrap_or(raw);
+    let found = crate::collect::parse_author_followers(&text);
+    let _ = navigate(app, window, CF_AUTHOR_PAGE, "authors.curseforge.com").await;
+    found
+}
+
 /// Solde de points affiché par le tableau de bord.
 ///
 /// Le bandeau montre « My Balance », le nombre de points puis leur contre-valeur
@@ -1179,6 +1206,30 @@ pub async fn collect_curseforge(
         state
             .store
             .with(|conn| crate::store::metrics::set_meta(conn, "curseforge_account", &name))?;
+    }
+
+    // Abonnés : CurseForge ne les compte que sur la fiche publique du compte,
+    // et pour le compte entier — aucun décompte par projet n'existe.
+    let account = state
+        .store
+        .with(|conn| crate::store::metrics::get_meta(conn, "curseforge_account"))?
+        .or(state
+            .store
+            .with(|conn| crate::store::metrics::get_meta(conn, "curseforge_author"))?);
+    if let Some(account) = account.filter(|name| !name.is_empty()) {
+        match read_author_followers(&app, &window, &account).await {
+            Some(count) => {
+                tracing::debug!(count, "abonnés CurseForge relevés");
+                state.store.with(|conn| {
+                    crate::store::metrics::set_meta(
+                        conn,
+                        "curseforge_followers",
+                        &count.to_string(),
+                    )
+                })?;
+            }
+            None => tracing::debug!("aucun compte d'abonnés lisible sur la fiche publique"),
+        }
     }
 
     let months = crate::collect::parse_revenue_series(&fetched.revenue);

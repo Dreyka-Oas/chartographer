@@ -64,14 +64,14 @@
     {
       label: "Followers",
       value: compactNumber(kpis.followers),
-      // CurseForge ne publie pas ses abonnés : la seule chose partageable ici
-      // est le nombre de projets.
       parts: {
-        modrinth: kpis.projects_modrinth,
-        curseforge: kpis.projects_curseforge,
-        show: (v: number) => `${v} projets`,
+        modrinth: kpis.followers_modrinth,
+        curseforge: kpis.followers_curseforge,
+        show: (v: number) => compactNumber(v),
       },
-      hint: "abonnés relevés sur Modrinth seul",
+      // CurseForge n'annonce qu'un total pour le compte : le dire évite de
+      // chercher en vain le détail par mod.
+      hint: `Modrinth par mod · CurseForge pour le compte entier`,
     },
   ]);
 

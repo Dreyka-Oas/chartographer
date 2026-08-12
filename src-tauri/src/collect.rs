@@ -190,6 +190,52 @@ pub fn parse_account_name(raw: &str) -> Option<String> {
     walk(&serde_json::from_str::<serde_json::Value>(raw).ok()?, 0)
 }
 
+/// Relève le nombre d'abonnés annoncé par la page membre de CurseForge.
+///
+/// Le tableau de bord auteur ne les compte nulle part : ni sa liste de projets,
+/// ni ses adresses de statistiques. Le site public, lui, les affiche sur la
+/// fiche du compte — « 6 Followers », juste avant le total de téléchargements.
+/// C'est donc là qu'on les lit, et au niveau du compte : CurseForge ne publie
+/// pas de compte par projet.
+pub fn parse_author_followers(text: &str) -> Option<i64> {
+    let lower = text.to_lowercase();
+    let mut from = 0usize;
+    while let Some(found) = lower[from..].find("follower") {
+        let at = from + found;
+        // Le nombre précède le mot. On remonte les espaces, puis les chiffres,
+        // en acceptant le millier abrégé que le site emploie parfois.
+        let before = text[..at].trim_end();
+        let number: String = before
+            .chars()
+            .rev()
+            .take_while(|c| c.is_ascii_digit() || matches!(c, '.' | ',' | 'k' | 'K' | 'm' | 'M'))
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect();
+        if let Some(value) = parse_abbreviated(&number) {
+            return Some(value);
+        }
+        from = at + "follower".len();
+    }
+    None
+}
+
+/// Lit un nombre tel que le site l'écrit : `6`, `1.2K`, `132.4K`, `1,5M`.
+fn parse_abbreviated(raw: &str) -> Option<i64> {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return None;
+    }
+    let (digits, factor) = match raw.chars().last() {
+        Some('k') | Some('K') => (&raw[..raw.len() - 1], 1_000.0),
+        Some('m') | Some('M') => (&raw[..raw.len() - 1], 1_000_000.0),
+        _ => (raw, 1.0),
+    };
+    let value: f64 = digits.replace(',', ".").parse().ok()?;
+    Some((value * factor).round() as i64)
+}
+
 /// Rapproche une colonne de la réponse d'un projet connu.
 ///
 /// La colonne porte soit `project-<identifiant>`, soit le titre du mod en
@@ -260,6 +306,26 @@ mod tests {
 
     fn known() -> Vec<(i64, String)> {
         vec![(7, "1002185".into()), (9, "444333".into())]
+    }
+
+    /// Texte réel de la page membre, relevé sur le compte de l'auteur.
+    #[test]
+    fn reads_the_followers_from_the_member_page() {
+        let page = "DreykaOas_official Author Premium member 6 Followers 132.4K Downloads \
+                    Member Since 2 Years Ago Last Active Today";
+        assert_eq!(parse_author_followers(page), Some(6));
+    }
+
+    #[test]
+    fn reads_an_abbreviated_count() {
+        assert_eq!(parse_author_followers("1.2K Followers"), Some(1_200));
+        assert_eq!(parse_author_followers("3,5M followers"), Some(3_500_000));
+    }
+
+    #[test]
+    fn refuses_a_page_that_counts_nobody() {
+        assert_eq!(parse_author_followers("Follow this project"), None);
+        assert_eq!(parse_author_followers("aucune mention"), None);
     }
 
     #[test]

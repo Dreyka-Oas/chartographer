@@ -129,7 +129,7 @@ async fn discover_modrinth(store: &Store, ctx: &SyncContext) -> Result<String> {
                     icon_url: project.icon_url.clone(),
                     created_at: project.published.clone(),
                     total_downloads: project.downloads,
-                    followers: project.followers,
+                    followers: Some(project.followers),
                 },
             )?;
         }
@@ -229,7 +229,7 @@ async fn discover_curseforge(store: &Store, ctx: &SyncContext) -> Result<String>
                             icon_url: project.thumbnail.clone(),
                             created_at: project.created_at.clone(),
                             total_downloads: project.downloads_total,
-                            followers: 0,
+                            followers: None,
                         },
                     )?;
                     m::insert_snapshot(
@@ -434,7 +434,7 @@ async fn snapshot_curseforge(store: &Store) -> Result<String> {
                             icon_url: project.thumbnail.clone(),
                             created_at: project.created_at.clone(),
                             total_downloads: project.downloads_total,
-                            followers: 0,
+                            followers: None,
                         },
                     )?;
                     Ok(())
@@ -505,7 +505,7 @@ mod tests {
                     icon_url: None,
                     created_at: None,
                     total_downloads: 0,
-                    followers: 0,
+                    followers: None,
                 };
                 upsert(
                     conn,

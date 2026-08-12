@@ -20,6 +20,9 @@ export interface Kpis {
   /** Revenus relevés jour par jour sur la fenêtre affichée. */
   revenue_window: string;
   followers: number;
+  /** Abonnés par plateforme : ceux de CurseForge viennent du tableau de bord. */
+  followers_modrinth: number;
+  followers_curseforge: number;
   projects_active: number;
   projects_modrinth: number;
   projects_curseforge: number;

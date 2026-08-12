@@ -86,11 +86,20 @@ export function dayTooltipHtml(
   format: (value: number) => string = compactNumber,
 ): string {
   const head = formatDayLong(String(params[0]?.axisValue ?? ""));
+  let sum = 0;
   const rows = params.map((entry) => {
     const value = Number(entry.value ?? 0);
+    if (Number.isFinite(value)) sum += value;
     const amount = Number.isFinite(value) ? format(value) : "—";
     return `${entry.marker ?? ""} ${entry.seriesName ?? ""} <b>${amount}</b>`;
   });
+  // Plusieurs séries : la question qui vient d'abord est « combien ce jour-là,
+  // en tout ». On la met au pied, séparée du détail par un filet.
+  if (params.length > 1) {
+    rows.push(
+      `<span style="opacity:.65">──────────</span><br>Total <b>${format(sum)}</b>`,
+    );
+  }
   return [`<b>${head}</b>`, ...rows].join("<br>");
 }
 

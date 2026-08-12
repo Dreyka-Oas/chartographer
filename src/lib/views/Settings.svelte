@@ -478,12 +478,15 @@
     padding: 2px 10px;
     color: var(--text-dim);
     display: inline-flex;
-    align-items: center;
+    /* Centrer les boîtes ne suffit pas : la chasse fixe n'a pas les mêmes
+     * hauteurs de caractère que la fonte d'interface. C'est la ligne de base
+     * qu'il faut aligner, comme deux mots d'une même phrase. */
+    align-items: baseline;
     gap: 6px;
   }
   .chip b {
     font-family: var(--font-mono);
-    font-size: 0.7rem;
+    font-size: 0.72rem;
     line-height: 1.6;
     color: var(--text);
   }

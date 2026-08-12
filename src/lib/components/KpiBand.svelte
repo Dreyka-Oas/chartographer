@@ -7,6 +7,14 @@
   const delta = $derived(deltaPercent(kpis.downloads_30d, kpis.downloads_prev_30d));
   const money = (raw: string) => Number.parseFloat(raw) || 0;
 
+  /** Part de la première plateforme, en pourcentage. Deux parts nulles se
+   * partagent la barre en deux : mieux vaut une moitié franche qu'un trait
+   * collé à un bord. */
+  function shareOf(first: number, second: number) {
+    const total = first + second;
+    return total > 0 ? (first / total) * 100 : 50;
+  }
+
   /**
    * Chaque carte porte la même lecture : le total, puis d'où il vient. La barre
    * donne la proportion d'un coup d'œil, les deux mentions donnent le compte
@@ -22,7 +30,11 @@
         curseforge: kpis.downloads_curseforge,
         show: (v: number) => compactNumber(v),
       },
-      hint: "",
+      // La carte n'a pas d'écart à commenter : elle dit la proportion, ce que
+      // les deux montants seuls ne donnent pas d'un coup d'œil.
+      hint: `${Math.round(shareOf(kpis.downloads_modrinth, kpis.downloads_curseforge))} % Modrinth · ${
+        100 - Math.round(shareOf(kpis.downloads_modrinth, kpis.downloads_curseforge))
+      } % CurseForge`,
     },
     {
       label: "30 derniers jours",
@@ -63,10 +75,8 @@
     },
   ]);
 
-  function share(part: { modrinth: number; curseforge: number }) {
-    const total = part.modrinth + part.curseforge;
-    return total > 0 ? (part.modrinth / total) * 100 : 50;
-  }
+  const share = (part: { modrinth: number; curseforge: number }) =>
+    shareOf(part.modrinth, part.curseforge);
 </script>
 
 <div class="band">
@@ -83,6 +93,9 @@
       >
         <span class="modrinth" style="width:{share(tile.parts)}%"></span>
         <span class="curseforge"></span>
+        <!-- Trait de partage : il dépasse en haut et en bas pour marquer la
+             frontière sans dépendre du contraste entre les deux couleurs. -->
+        <span class="cut" style="left:{share(tile.parts)}%"></span>
       </div>
       <div class="split">
         <span><i class="dot modrinth"></i>{tile.parts.show(tile.parts.modrinth)}</span>
@@ -123,12 +136,29 @@
   /* Deux segments accolés : la part Modrinth donne la largeur, CurseForge
    * occupe ce qui reste. Aucun écart entre eux, c'est un seul tout partagé. */
   .bar {
+    position: relative;
     display: flex;
-    height: 3px;
-    margin: 4px 0 2px;
+    height: 4px;
+    /* Le trait dépasse de la barre : la marge du haut lui laisse la place. */
+    margin: 8px 0 6px;
     border-radius: 999px;
-    overflow: hidden;
     background: var(--surface-2);
+  }
+  .bar .modrinth {
+    border-radius: 999px 0 0 999px;
+  }
+  .bar .curseforge {
+    border-radius: 0 999px 999px 0;
+  }
+  .cut {
+    position: absolute;
+    top: -3px;
+    bottom: -3px;
+    width: 2px;
+    margin-left: -1px;
+    border-radius: 1px;
+    background: var(--text);
+    transition: left 260ms cubic-bezier(0.22, 1, 0.36, 1);
   }
   .bar .modrinth {
     background: var(--modrinth);
@@ -165,7 +195,8 @@
     color: var(--text-dim);
   }
   @media (prefers-reduced-motion: reduce) {
-    .bar .modrinth {
+    .bar .modrinth,
+    .cut {
       transition: none;
     }
   }

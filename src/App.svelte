@@ -185,10 +185,16 @@
     font-size: 0.8rem;
     margin-right: 2px;
   }
+  /*
+   * La place de la barre de défilement est réservée en permanence. Sans cela,
+   * la barre flottante de Windows apparaît au survol et disparaît ensuite, et
+   * toute la colonne se décale de sa largeur à chaque passage de la souris.
+   */
   main {
     flex: 1;
     min-height: 0;
     overflow-y: auto;
+    scrollbar-gutter: stable;
     overscroll-behavior: contain;
     padding: 16px 18px 36px;
   }

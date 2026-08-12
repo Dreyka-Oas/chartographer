@@ -30,6 +30,7 @@
     flex: 1;
     min-height: 0;
     overflow-y: auto;
+    scrollbar-gutter: stable;
     /* La liste bute net : plus de rebond qui déborde sur la page derrière. */
     overscroll-behavior: contain;
   }

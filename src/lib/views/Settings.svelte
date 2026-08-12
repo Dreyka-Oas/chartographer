@@ -510,6 +510,9 @@
     gap: 16px;
     min-height: 0;
     overflow-y: auto;
+    /* Place de la barre réservée : sinon la colonne se décale à chaque fois
+     * que la barre flottante paraît sous la souris. */
+    scrollbar-gutter: stable;
     overscroll-behavior: contain;
     padding-right: 4px;
     /* La barre d'enregistrement flotte au-dessus du bas de page. */

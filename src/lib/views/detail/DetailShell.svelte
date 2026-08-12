@@ -135,6 +135,7 @@
     flex: 1;
     min-height: 0;
     overflow-y: auto;
+    scrollbar-gutter: stable;
     /* Le défilement bute net et ne se propage pas à la page de vision dessous. */
     overscroll-behavior: contain;
     padding: 18px 18px 36px;

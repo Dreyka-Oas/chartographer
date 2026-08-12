@@ -120,6 +120,7 @@
    */
   .scroller {
     overflow: auto;
+    scrollbar-gutter: stable;
     overscroll-behavior: contain;
     margin: 0 -10px;
   }

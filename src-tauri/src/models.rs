@@ -29,6 +29,9 @@ pub struct Kpis {
     pub downloads_modrinth: i64,
     pub downloads_curseforge: i64,
     pub downloads_30d: i64,
+    /// Même fenêtre de trente jours, plateforme par plateforme.
+    pub downloads_30d_modrinth: i64,
+    pub downloads_30d_curseforge: i64,
     pub downloads_prev_30d: i64,
     /// Tout ce que les deux plateformes ont rapporté depuis l'origine :
     /// reversement Modrinth et contre-valeur des points CurseForge additionnés.
@@ -39,6 +42,10 @@ pub struct Kpis {
     pub revenue_curseforge: String,
     /// Somme retirable immédiatement.
     pub revenue_available: String,
+    /// Ce qui, dans cette somme, vient de chaque plateforme : le solde de
+    /// reversement Modrinth d'un côté, les points CurseForge de l'autre.
+    pub revenue_available_modrinth: String,
+    pub revenue_available_curseforge: String,
     /// Somme gagnée mais encore en maturation.
     pub revenue_pending: String,
     /// Revenus relevés jour par jour sur la fenêtre affichée. Les analytics ne
@@ -46,6 +53,10 @@ pub struct Kpis {
     pub revenue_window: String,
     pub followers: i64,
     pub projects_active: i64,
+    /// Projets actifs par plateforme. CurseForge n'expose aucun abonné : c'est
+    /// le seul décompte qui puisse y être ventilé.
+    pub projects_modrinth: i64,
+    pub projects_curseforge: i64,
 }
 
 #[derive(Debug, Clone, Serialize)]

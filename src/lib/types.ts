@@ -3,6 +3,8 @@ export interface Kpis {
   downloads_modrinth: number;
   downloads_curseforge: number;
   downloads_30d: number;
+  downloads_30d_modrinth: number;
+  downloads_30d_curseforge: number;
   downloads_prev_30d: number;
   /** Les deux plateformes réunies : reversement Modrinth et points CurseForge. */
   revenue_total: string;
@@ -11,11 +13,16 @@ export interface Kpis {
   /** Part CurseForge : le solde de points converti au tarif publié. */
   revenue_curseforge: string;
   revenue_available: string;
+  /** Ce qui, dans la somme retirable, vient de chaque plateforme. */
+  revenue_available_modrinth: string;
+  revenue_available_curseforge: string;
   revenue_pending: string;
   /** Revenus relevés jour par jour sur la fenêtre affichée. */
   revenue_window: string;
   followers: number;
   projects_active: number;
+  projects_modrinth: number;
+  projects_curseforge: number;
 }
 
 export interface TimelinePoint {

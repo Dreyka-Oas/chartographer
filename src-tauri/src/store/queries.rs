@@ -466,28 +466,20 @@ pub fn kpis(conn: &Connection, today: &str, filter: PlatformFilter) -> Result<Kp
     // `metrics_daily` porte désormais les deux plateformes : la collecte du
     // tableau de bord CurseForge y écrit ses journées. La somme suit donc le
     // filtre, plateforme par plateforme.
-    let sum_downloads = |from: &str, to: &str| -> Result<i64> {
-        let mut wanted: Vec<&str> = Vec::new();
-        if filter.modrinth {
-            wanted.push(Platform::Modrinth.as_str());
-        }
-        if filter.curseforge {
-            wanted.push(Platform::CurseForge.as_str());
-        }
-        if wanted.is_empty() {
+    let window_of = |from: &str, to: &str, platform: Platform| -> Result<i64> {
+        if !filter.shows(platform) {
             return Ok(0);
         }
-        let placeholders = vec!["?"; wanted.len()].join(", ");
-        let sql = format!(
+        Ok(conn.query_row(
             "SELECT COALESCE(SUM(m.downloads), 0) FROM metrics_daily m
              JOIN projects p ON p.id = m.project_id
-             WHERE m.day >= ? AND m.day < ? AND p.platform IN ({placeholders})"
-        );
-        let mut params: Vec<&dyn rusqlite::ToSql> = vec![&from, &to];
-        for name in &wanted {
-            params.push(name);
-        }
-        Ok(conn.query_row(&sql, params.as_slice(), |r| r.get(0))?)
+             WHERE m.day >= ?1 AND m.day < ?2 AND p.platform = ?3",
+            params![from, to, platform.as_str()],
+            |r| r.get(0),
+        )?)
+    };
+    let sum_downloads = |from: &str, to: &str| -> Result<i64> {
+        Ok(window_of(from, to, Platform::Modrinth)? + window_of(from, to, Platform::CurseForge)?)
     };
 
     let per_platform = |platform: Platform| -> Result<i64> {
@@ -546,16 +538,33 @@ pub fn kpis(conn: &Connection, today: &str, filter: PlatformFilter) -> Result<Kp
     let downloads_modrinth = per_platform(Platform::Modrinth)?;
     let downloads_curseforge = per_platform(Platform::CurseForge)?;
 
+    let projects_of = |platform: Platform| -> Result<i64> {
+        if !filter.shows(platform) {
+            return Ok(0);
+        }
+        Ok(conn.query_row(
+            "SELECT COUNT(*) FROM projects WHERE archived_at IS NULL AND platform = ?1",
+            params![platform.as_str()],
+            |r| r.get(0),
+        )?)
+    };
+    let projects_modrinth = projects_of(Platform::Modrinth)?;
+    let projects_curseforge = projects_of(Platform::CurseForge)?;
+
     Ok(Kpis {
         downloads_total: downloads_modrinth + downloads_curseforge,
         downloads_modrinth,
         downloads_curseforge,
         downloads_30d: sum_downloads(&window_start, today)?,
+        downloads_30d_modrinth: window_of(&window_start, today, Platform::Modrinth)?,
+        downloads_30d_curseforge: window_of(&window_start, today, Platform::CurseForge)?,
         downloads_prev_30d: sum_downloads(&previous_start, &window_start)?,
         revenue_total: revenue_total.normalize().to_string(),
         revenue_modrinth: revenue_modrinth.normalize().to_string(),
         revenue_curseforge: revenue_curseforge.normalize().to_string(),
         revenue_available: available.normalize().to_string(),
+        revenue_available_modrinth: decimal(&balance.available).normalize().to_string(),
+        revenue_available_curseforge: revenue_curseforge.normalize().to_string(),
         revenue_pending: balance.pending.clone(),
         revenue_window: revenue_window.normalize().to_string(),
         followers: conn.query_row(
@@ -563,11 +572,9 @@ pub fn kpis(conn: &Connection, today: &str, filter: PlatformFilter) -> Result<Kp
             [],
             |r| r.get(0),
         )?,
-        projects_active: conn.query_row(
-            "SELECT COUNT(*) FROM projects WHERE archived_at IS NULL",
-            [],
-            |r| r.get(0),
-        )?,
+        projects_active: projects_modrinth + projects_curseforge,
+        projects_modrinth,
+        projects_curseforge,
     })
 }
 
@@ -1189,6 +1196,36 @@ mod tests {
                 .downloads_30d,
             100
         );
+    }
+
+    /// Chaque carte de tête annonce d'où vient son total : la somme des deux
+    /// parts doit toujours retomber sur le total affiché.
+    #[test]
+    fn every_headline_figure_is_split_between_the_two_platforms() {
+        let (conn, m, c) = seed();
+        upsert_daily(&conn, m, "2026-08-10", Some(100), None, None).unwrap();
+        upsert_daily(&conn, c, "2026-08-10", Some(30), None, None).unwrap();
+        crate::store::metrics::record_cf_points(&conn, "2026-08-10", 400, "2026-08-10T00:00:00Z")
+            .unwrap();
+
+        let k = kpis(&conn, "2026-08-11", PlatformFilter::default()).unwrap();
+        assert_eq!(k.downloads_30d_modrinth, 100);
+        assert_eq!(k.downloads_30d_curseforge, 30);
+        assert_eq!(
+            k.downloads_30d_modrinth + k.downloads_30d_curseforge,
+            k.downloads_30d
+        );
+        assert_eq!(k.projects_modrinth, 1);
+        assert_eq!(k.projects_curseforge, 1);
+        assert_eq!(
+            k.projects_modrinth + k.projects_curseforge,
+            k.projects_active
+        );
+        // 400 points à 0,05 $ : la part CurseForge du solde retirable.
+        assert_eq!(k.revenue_available_curseforge, "20");
+        let parts = Decimal::from_str(&k.revenue_available_modrinth).unwrap()
+            + Decimal::from_str(&k.revenue_available_curseforge).unwrap();
+        assert_eq!(parts.normalize().to_string(), k.revenue_available);
     }
 
     #[test]

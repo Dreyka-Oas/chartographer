@@ -4,6 +4,7 @@
   import { palette } from "../../charts/theme";
   import { timelineOption } from "../../charts/timeline";
   import StatRow from "../../components/StatRow.svelte";
+  import Switch from "../../components/Switch.svelte";
   import { compactNumber, formatDay } from "../../format";
   import { dashboard } from "../../state.svelte";
   import { theme } from "../../theme.svelte";
@@ -67,10 +68,13 @@
         Par plateforme
       </button>
     </div>
-    <label>
-      <input type="checkbox" bind:checked={stacked} />
-      Empiler
-    </label>
+    <Switch
+      bind:checked={stacked}
+      label="Empiler"
+      title={mode === "projects"
+        ? "Les mods s'additionnent en une pile, ou se superposent en courbes"
+        : "Les deux plateformes s'additionnent, ou se comparent niveau à niveau"}
+    />
   {/snippet}
 
   <StatRow
@@ -155,13 +159,6 @@
   .switch button:hover {
     color: var(--text);
     border-color: var(--accent);
-  }
-  label {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 0.8rem;
-    color: var(--text-dim);
   }
   .chart {
     background: var(--surface);

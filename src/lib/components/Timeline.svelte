@@ -1,5 +1,6 @@
 <script lang="ts">
   import Chart from "../charts/Chart.svelte";
+  import Switch from "./Switch.svelte";
   import { palette } from "../charts/theme";
   import { timelineOption } from "../charts/timeline";
   import { dashboard } from "../state.svelte";
@@ -7,7 +8,9 @@
   import type { TimelinePoint } from "../types";
 
   let { points }: { points: TimelinePoint[] } = $props();
-  let stacked = $state(true);
+  // Décoché par défaut : deux courbes côte à côte se comparent, une pile ne se
+  // lit que comme un total.
+  let stacked = $state(false);
   const option = $derived(timelineOption(points, stacked, palette(theme.dark)));
 
   /** Rien à tracer : toutes les journées de la fenêtre sont à zéro. */
@@ -27,20 +30,20 @@
     {/if}
   </p>
 {:else}
-  <label>
-    <input type="checkbox" bind:checked={stacked} />
-    Empiler les plateformes
-  </label>
+  <div class="head">
+    <Switch
+      bind:checked={stacked}
+      label="Empiler les plateformes"
+      title={stacked
+        ? "Les deux plateformes s'additionnent : la courbe montre le total"
+        : "Les deux plateformes se superposent : les niveaux se comparent"}
+    />
+  </div>
   <Chart {option} height="fill" />
 {/if}
 
 <style>
-  label {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 0.8rem;
-    color: var(--text-dim);
+  .head {
     margin-bottom: 8px;
   }
   .empty {

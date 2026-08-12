@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { cubicOut } from "svelte/easing";
   import PlatformBadge from "./lib/components/PlatformBadge.svelte";
   import ThemeToggle from "./lib/components/ThemeToggle.svelte";
   import { dashboard } from "./lib/state.svelte";
@@ -25,6 +26,25 @@
   });
 
   const overview = $derived(dashboard.overview);
+
+  /** Durée des entrées et sorties, annulée si le système demande le calme. */
+  const motion = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 200;
+
+  /**
+   * Repli latéral : le bloc s'efface en glissant vers le haut *et* en rendant
+   * sa largeur. Sans cette largeur animée, le reste de la barre sauterait d'un
+   * coup à la fin de la disparition.
+   */
+  function retract(node: Element, { duration = motion }: { duration?: number } = {}) {
+    const width = node.getBoundingClientRect().width;
+    return {
+      duration,
+      easing: cubicOut,
+      css: (t: number, u: number) =>
+        `opacity:${t}; transform: translateY(${-8 * u}px); width:${t * width}px;` +
+        `overflow:hidden; white-space:nowrap;`,
+    };
+  }
 </script>
 
 {#if !dashboard.auth}
@@ -63,20 +83,29 @@
     </button>
     <button class:active={view === "settings"} onclick={() => (view = "settings")}>Réglages</button>
     <span class="user">{dashboard.auth.username}</span>
-    <PlatformBadge
-      platform="modrinth"
-      account={dashboard.auth.username}
-      count={dashboard.auth.modrinth_projects}
-      active={dashboard.platforms.modrinth}
-      ontoggle={() => dashboard.togglePlatform("modrinth")}
-    />
-    <PlatformBadge
-      platform="curseforge"
-      account={dashboard.auth.curseforge_username}
-      count={dashboard.auth.curseforge_projects}
-      active={dashboard.platforms.curseforge}
-      ontoggle={() => dashboard.togglePlatform("curseforge")}
-    />
+    <!--
+      Les deux filtres de plateforme n'agissent que sur les chiffres affichés :
+      ils n'ont rien à faire sur la page des réglages, qui n'en montre aucun.
+      Ils s'effacent donc, en glissant plutôt qu'en disparaissant d'un coup.
+    -->
+    {#if view !== "settings"}
+      <span class="badges" transition:retract>
+        <PlatformBadge
+          platform="modrinth"
+          account={dashboard.auth.username}
+          count={dashboard.auth.modrinth_projects}
+          active={dashboard.platforms.modrinth}
+          ontoggle={() => dashboard.togglePlatform("modrinth")}
+        />
+        <PlatformBadge
+          platform="curseforge"
+          account={dashboard.auth.curseforge_username}
+          count={dashboard.auth.curseforge_projects}
+          active={dashboard.platforms.curseforge}
+          ontoggle={() => dashboard.togglePlatform("curseforge")}
+        />
+      </span>
+    {/if}
     <ThemeToggle />
   </nav>
 
@@ -143,6 +172,13 @@
   nav button:hover {
     color: var(--text);
     background: var(--surface-2);
+  }
+  /* Les deux pastilles glissent ensemble : elles forment un seul bloc, sinon
+   * la barre se réorganiserait en deux temps. */
+  .badges {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
   }
   .user {
     margin-left: auto;

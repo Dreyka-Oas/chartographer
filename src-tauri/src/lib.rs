@@ -63,6 +63,7 @@ pub fn run() {
             commands::connect,
             commands::logout,
             commands::open_token_page,
+            commands::open_account_page,
             commands::get_settings,
             commands::save_settings,
             commands::sync_now,

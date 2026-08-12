@@ -23,6 +23,8 @@ export const api = {
   connect: (token: string) => invoke<AuthStatus>("connect", { token }),
   logout: () => invoke<AuthStatus>("logout"),
   openTokenPage: () => invoke<void>("open_token_page"),
+  openAccountPage: (platform: string, username: string) =>
+    invoke<void>("open_account_page", { platform, username }),
   getSettings: () => invoke<Settings>("get_settings"),
   saveSettings: (curseforgeUsername: string | null, rangeDays: number, currency?: string) =>
     invoke<void>("save_settings", { curseforgeUsername, rangeDays, currency }),

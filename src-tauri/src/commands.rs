@@ -116,6 +116,41 @@ pub fn open_token_page(app: tauri::AppHandle) -> Result<()> {
         .map_err(|e| AppError::Config(format!("ouverture du navigateur : {e}")))
 }
 
+/// Adresse publique d'un compte, plateforme par plateforme.
+///
+/// L'adresse est bâtie ici et non côté fenêtre : le nom relevé est la seule
+/// chose qui vienne de l'extérieur, et il ne sert qu'à compléter un gabarit
+/// connu. Aucune adresse arbitraire ne peut donc être ouverte.
+pub(crate) fn account_page(platform: &str, username: &str) -> Option<String> {
+    let name = username.trim();
+    if name.is_empty() {
+        return None;
+    }
+    let encoded: String = name
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.'))
+        .collect();
+    if encoded.is_empty() {
+        return None;
+    }
+    match platform {
+        "modrinth" => Some(format!("https://modrinth.com/user/{encoded}")),
+        "curseforge" => Some(format!(
+            "https://www.curseforge.com/members/{encoded}/projects"
+        )),
+        _ => None,
+    }
+}
+
+#[tauri::command]
+pub fn open_account_page(app: tauri::AppHandle, platform: String, username: String) -> Result<()> {
+    let url = account_page(&platform, &username)
+        .ok_or_else(|| AppError::Config("aucune page de compte pour ce pseudo".into()))?;
+    app.opener()
+        .open_url(url, None::<&str>)
+        .map_err(|e| AppError::Config(format!("ouverture du navigateur : {e}")))
+}
+
 /// Réglages tels que l'interface les voit : le jeton d'envoi n'en sort jamais,
 /// seule sa présence est annoncée.
 #[derive(Debug, Serialize)]
@@ -1456,4 +1491,32 @@ pub fn data_dir(app: &tauri::AppHandle) -> PathBuf {
     app.path()
         .app_data_dir()
         .unwrap_or_else(|_| PathBuf::from("."))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::account_page;
+
+    #[test]
+    fn builds_the_public_page_of_each_platform() {
+        assert_eq!(
+            account_page("modrinth", "DreykaOas").as_deref(),
+            Some("https://modrinth.com/user/DreykaOas")
+        );
+        assert_eq!(
+            account_page("curseforge", "DreykaOas_official").as_deref(),
+            Some("https://www.curseforge.com/members/DreykaOas_official/projects")
+        );
+    }
+
+    #[test]
+    fn refuses_what_is_not_a_pseudonym() {
+        assert_eq!(account_page("modrinth", "  "), None);
+        assert_eq!(account_page("steam", "DreykaOas"), None);
+        // Un nom porteur de séparateurs ne peut pas détourner l'adresse.
+        assert_eq!(
+            account_page("modrinth", "a/../../settings?x=1").as_deref(),
+            Some("https://modrinth.com/user/a....settingsx1")
+        );
+    }
 }

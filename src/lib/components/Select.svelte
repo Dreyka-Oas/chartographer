@@ -242,6 +242,9 @@
 
 <style>
   .trigger {
+    /* Peint après ses voisins : sans cela le trait du haut pouvait passer sous
+     * la bordure de la ligne suivante, qui n'a pas de fond propre. */
+    position: relative;
     display: inline-flex;
     align-items: center;
     gap: 10px;
@@ -255,7 +258,9 @@
     padding: 7px 10px;
     cursor: pointer;
     text-align: left;
-    transition: border-color 120ms ease;
+    transition:
+      border-color 120ms ease,
+      box-shadow 120ms ease;
   }
   .trigger.compact {
     background-color: var(--surface);
@@ -263,9 +268,16 @@
     padding: 5px 10px;
     gap: 8px;
   }
+  /*
+   * La mise en évidence double la bordure d'une ombre intérieure. Une bordure
+   * d'un pixel tombe souvent à cheval sur deux pixels physiques : en gris cela
+   * ne se voyait pas, en vert le trait du haut paraissait effacé. L'ombre est
+   * peinte à l'intérieur de la boîte, donc toujours sur un pixel plein.
+   */
   .trigger:hover:not(:disabled),
   .trigger.open {
     border-color: var(--accent);
+    box-shadow: inset 0 0 0 1px var(--accent);
   }
   .trigger:disabled {
     opacity: 0.45;

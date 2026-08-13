@@ -186,8 +186,193 @@ option {
   outline-offset: 2px;
 }
 
-/* Barres de défilement discrètes, accordées au thème. */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: var(--rule) transparent;
+/*
+ * Barres de défilement discrètes, accordées au thème.
+ *
+ * Elles sont dessinées à la main plutôt que réglées par `scrollbar-width` et
+ * `scrollbar-color` : ces deux propriétés laissent la barre au style Fluent
+ * d'Edge, qui se pose par-dessus le contenu et ne paraît qu'au survol. La
+ * colonne se rétrécissait alors d'une dizaine de pixels dès que la souris
+ * l'effleurait, et tout ce qui est calé à droite — les listes déroulantes des
+ * réglages — sautait de place. Une barre dessinée occupe sa place en
+ * permanence, et le contenu ne bouge plus.
+ */
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--rule);
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: 999px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--text-dim);
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/*
+ * Page des réglages : vocabulaire commun à toutes les rangées.
+ *
+ * Ces classes sont globales, et non dispersées dans chaque composant, pour une
+ * raison précise : une rangée de réglage doit se comporter de la même façon
+ * partout, et une seule définition rend cela vérifiable d'un coup d'œil.
+ *
+ * Deux règles tiennent tout le reste :
+ *
+ * 1. La rangée est une grille à deux colonnes, dont la seconde a une largeur
+ *    fixe. Le contrôle n'est jamais « poussé à droite » par une marge
+ *    automatique : il occupe une colonne qui existe indépendamment de lui. Sa
+ *    position ne dépend donc ni de la longueur du texte à sa gauche, ni de la
+ *    largeur de la fenêtre, ni de l'apparition d'une barre de défilement.
+ *
+ * 2. Aucun état — survol, focus, sélection, ouverture — ne touche à la
+ *    géométrie. Les contours sont des ombres intérieures, jamais des bordures
+ *    qui s'ajoutent à la boîte ; les hauteurs sont fixes ; les mises en
+ *    évidence ne changent que des couleurs. Rien ne peut donc sauter sous la
+ *    souris.
+ */
+.stg-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 4px 20px 6px;
+  scroll-margin-top: 68px;
+}
+.stg-panel > h2 {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin: 16px 0 4px;
+}
+.stg-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--stg-control-width, 280px);
+  gap: 24px;
+  align-items: start;
+  padding: 16px 0;
+  border-top: 1px solid var(--border);
+}
+.stg-row:first-of-type {
+  border-top: 0;
+}
+/* Rangée sans contrôle à droite : le texte occupe toute la largeur. */
+.stg-row.wide {
+  grid-template-columns: minmax(0, 1fr);
+}
+.stg-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.stg-name {
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+.stg-desc {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  line-height: 1.45;
+  max-width: 62ch;
+}
+/*
+ * Ligne d'appoint sous la description, pour les valeurs qui arrivent après le
+ * premier rendu (un taux relevé, une date). Sa hauteur est réservée même quand
+ * elle est vide : le texte ne grandit pas sous le contrôle une fois la donnée
+ * arrivée.
+ */
+.stg-note {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  line-height: 1.45;
+  min-height: 1.45em;
+}
+.stg-control {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  /* Un contrôle trop large pour sa colonne passe à la ligne suivante plutôt que
+   * de déborder sur le texte. La colonne, elle, ne bouge pas pour autant : elle
+   * est posée par la grille, pas par le contenu. */
+  flex-wrap: wrap;
+  gap: 8px;
+  /* Hauteur d'un contrôle : la rangée garde la même allure, qu'elle porte un
+   * champ, deux boutons ou rien du tout. */
+  min-height: 34px;
+  min-width: 0;
+}
+.stg-btn,
+.stg-input {
+  height: 34px;
+  background: var(--surface-2);
+  border: 0;
+  box-shadow: inset 0 0 0 1px var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.84rem;
+}
+.stg-btn {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  padding: 0 13px;
+  cursor: pointer;
+  transition:
+    box-shadow 120ms ease,
+    color 120ms ease;
+}
+.stg-btn:hover:not(:disabled) {
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.stg-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.stg-btn.danger:hover:not(:disabled) {
+  box-shadow: inset 0 0 0 1px var(--error);
+  color: var(--error);
+}
+.stg-btn.on {
+  box-shadow: inset 0 0 0 1px var(--accent);
+  color: var(--accent);
+}
+.stg-btn.primary {
+  background: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+.stg-input {
+  width: 92px;
+  padding: 0 10px;
+  font-size: 0.86rem;
+  font-variant-numeric: tabular-nums;
+}
+.stg-input:hover,
+.stg-input:focus {
+  box-shadow: inset 0 0 0 1px var(--accent);
+  outline: none;
+}
+.stg-value {
+  font-family: var(--font-mono);
+  font-size: 0.86rem;
+  color: var(--text-dim);
+}
+.stg-unit {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+@media (prefers-reduced-motion: reduce) {
+  .stg-btn {
+    transition: none;
+  }
 }

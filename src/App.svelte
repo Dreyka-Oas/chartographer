@@ -5,6 +5,7 @@
   import { dashboard } from "./lib/state.svelte";
   import CountriesDetail from "./lib/views/detail/CountriesDetail.svelte";
   import EventsDetail from "./lib/views/detail/EventsDetail.svelte";
+  import FollowersDetail from "./lib/views/detail/FollowersDetail.svelte";
   import LoadersDetail from "./lib/views/detail/LoadersDetail.svelte";
   import PlatformsDetail from "./lib/views/detail/PlatformsDetail.svelte";
   import ProjectsDetail from "./lib/views/detail/ProjectsDetail.svelte";
@@ -46,9 +47,14 @@
   }
 </script>
 
+<!--
+  L'application ne s'ouvre qu'avec ses deux comptes. Chartographer met les deux
+  plateformes côte à côte : entrer avec une seule montrerait des totaux amputés
+  sans qu'aucun chiffre ne signale ce qui manque.
+-->
 {#if !dashboard.auth}
   <p class="boot">Démarrage…</p>
-{:else if !dashboard.auth.connected}
+{:else if !dashboard.auth.connected || dashboard.curseforgeSession !== true}
   <Login />
 {:else}
   <nav>
@@ -124,6 +130,9 @@
   <!-- Vues plein écran, empilées par-dessus la page de vision. -->
   {#if dashboard.selectedProject}
     <ProjectDetail />
+  {:else if dashboard.detail === "followers"}
+    <!-- Les abonnés ne viennent pas de l'aperçu : cette vue les relève elle-même. -->
+    <FollowersDetail />
   {:else if overview}
     {#if dashboard.detail === "timeline"}
       <TimelineDetail {overview} />

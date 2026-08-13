@@ -51,6 +51,17 @@ pub struct Kpis {
     /// Revenus relevés jour par jour sur la fenêtre affichée. Les analytics ne
     /// remontent pas jusqu'à l'origine : ce total est inférieur au cumul.
     pub revenue_window: String,
+    /// Téléchargements de la période choisie dans la barre de filtres, et de la
+    /// période de même durée qui la précède, pour l'écart.
+    pub range_downloads: i64,
+    pub range_downloads_modrinth: i64,
+    pub range_downloads_curseforge: i64,
+    pub range_downloads_prev: i64,
+    /// Revenus de la même période. Modrinth les relève jour par jour ; ceux de
+    /// CurseForge sont reconstruits par écart entre deux soldes de points.
+    pub range_revenue: String,
+    pub range_revenue_modrinth: String,
+    pub range_revenue_curseforge: String,
     pub followers: i64,
     /// Abonnés par plateforme. CurseForge ne les publie nulle part : ils sont
     /// relevés sur le tableau de bord auteur, comme les téléchargements.

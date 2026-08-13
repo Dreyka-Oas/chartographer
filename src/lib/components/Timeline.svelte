@@ -1,5 +1,6 @@
 <script lang="ts">
   import Chart from "../charts/Chart.svelte";
+  import Hint from "./Hint.svelte";
   import Switch from "./Switch.svelte";
   import { palette } from "../charts/theme";
   import { timelineOption } from "../charts/timeline";
@@ -8,9 +9,9 @@
   import type { TimelinePoint } from "../types";
 
   let { points }: { points: TimelinePoint[] } = $props();
-  // Décoché par défaut : deux courbes côte à côte se comparent, une pile ne se
-  // lit que comme un total.
-  let stacked = $state(false);
+  // Coché par défaut : la première lecture attendue est le total des deux
+  // plateformes. Décocher les sépare, pour les comparer niveau à niveau.
+  let stacked = $state(true);
   const option = $derived(timelineOption(points, stacked, palette(theme.dark)));
 
   /** Rien à tracer : toutes les journées de la fenêtre sont à zéro. */
@@ -20,13 +21,11 @@
 
 {#if empty}
   <p class="empty">
+    Aucun téléchargement relevé sur cette période.
     {#if onlyCurseforge}
-      CurseForge ne publie aucun historique de téléchargements. Chartographer le reconstruit en
-      comparant deux relevés successifs, à raison d'un par jour : tant qu'un seul jour est
-      enregistré, il n'y a aucun écart à tracer. La première courbe apparaîtra au relevé de demain.
-      Les totaux cumulés du tableau, eux, sont exacts dès maintenant.
-    {:else}
-      Aucun téléchargement relevé sur cette période.
+      <Hint
+        text="CurseForge ne publie aucun historique de téléchargements. Chartographer le reconstruit en comparant deux relevés successifs, à raison d'un par jour : tant qu'un seul jour est enregistré, il n'y a aucun écart à tracer. La première courbe apparaîtra au relevé de demain. Les totaux cumulés du tableau, eux, sont exacts dès maintenant."
+      />
     {/if}
   </p>
 {:else}
@@ -47,6 +46,9 @@
     margin-bottom: 8px;
   }
   .empty {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     margin: 0;
     align-self: center;
     max-width: 52ch;

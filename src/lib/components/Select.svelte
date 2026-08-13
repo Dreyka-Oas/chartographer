@@ -249,34 +249,37 @@
     align-items: center;
     gap: 10px;
     width: 100%;
+    /* Hauteur composée de nombres entiers : bordure, marges et hauteur de ligne
+     * tombent ainsi sur des pixels pleins, et le trait du bas ne se perd plus
+     * entre deux pixels physiques quand Windows applique une mise à l'échelle. */
+    box-sizing: border-box;
+    line-height: 18px;
     background-color: var(--surface-2);
-    border: 1px solid var(--border);
+    /* Le contour est une ombre intérieure, jamais une bordure : une bordure se
+     * peint sur le bord de la boîte, qui peut tomber entre deux pixels
+     * physiques une fois la mise à l'échelle de Windows appliquée — le trait du
+     * bas disparaissait alors. L'ombre est peinte à l'intérieur, donc toujours
+     * sur un pixel plein. */
+    border: 0;
+    box-shadow: inset 0 0 0 1px var(--border);
     border-radius: var(--radius-sm);
     color: var(--text);
     font: inherit;
     font-size: 0.86rem;
-    padding: 7px 10px;
+    padding: 8px 11px;
     cursor: pointer;
     text-align: left;
-    transition:
-      border-color 120ms ease,
-      box-shadow 120ms ease;
+    transition: box-shadow 120ms ease;
   }
   .trigger.compact {
     background-color: var(--surface);
     font-size: 0.8rem;
-    padding: 5px 10px;
+    line-height: 16px;
+    padding: 6px 11px;
     gap: 8px;
   }
-  /*
-   * La mise en évidence double la bordure d'une ombre intérieure. Une bordure
-   * d'un pixel tombe souvent à cheval sur deux pixels physiques : en gris cela
-   * ne se voyait pas, en vert le trait du haut paraissait effacé. L'ombre est
-   * peinte à l'intérieur de la boîte, donc toujours sur un pixel plein.
-   */
   .trigger:hover:not(:disabled),
   .trigger.open {
-    border-color: var(--accent);
     box-shadow: inset 0 0 0 1px var(--accent);
   }
   .trigger:disabled {

@@ -1,7 +1,7 @@
 use crate::error::Result;
 use rusqlite::Connection;
 
-pub const SCHEMA_VERSION: i64 = 4;
+pub const SCHEMA_VERSION: i64 = 7;
 
 const V1: &str = r#"
 CREATE TABLE projects (
@@ -128,6 +128,52 @@ CREATE TABLE cf_revenue (
 );
 "#;
 
+/// Abonnés CurseForge, relevés sur la fiche publique du compte.
+///
+/// La plateforme ne dit pas depuis quand chacun suit : elle les classe du plus
+/// récent au plus ancien, sans date. On garde donc le jour où chacun est apparu
+/// et celui où on l'a vu pour la dernière fois — ce que le site ne dira jamais,
+/// mais que l'application peut constater d'un relevé à l'autre. Un abonné parti
+/// garde sa ligne : `lost_on` note le jour où il a cessé de figurer.
+const V5: &str = r#"
+CREATE TABLE cf_followers (
+  name TEXT PRIMARY KEY,
+  avatar_url TEXT,
+  seniority TEXT,
+  first_seen TEXT NOT NULL,
+  last_seen TEXT NOT NULL,
+  lost_on TEXT,
+  rank INTEGER NOT NULL DEFAULT 0
+);
+"#;
+
+/// Nombre d'abonnés relevé jour par jour, plateforme par plateforme.
+///
+/// Ni Modrinth ni CurseForge ne tiennent d'historique : ils annoncent un
+/// compte, celui de l'instant. La courbe se construit donc ici, un relevé par
+/// jour, et ne remonte pas plus loin que le premier d'entre eux.
+const V6: &str = r#"
+CREATE TABLE followers_daily (
+  day TEXT NOT NULL,
+  platform TEXT NOT NULL,
+  count INTEGER NOT NULL,
+  PRIMARY KEY(day, platform)
+);
+"#;
+
+/// Efface le compte de sa propre liste d'abonnés.
+///
+/// Le premier relevé partait des liens vers `/members/`, et celui de l'en-tête
+/// mène au compte lui-même : il se comptait donc parmi ceux qui le suivent. Le
+/// relevé l'écarte désormais, mais les bases déjà remplies gardent la ligne, et
+/// aucune d'elles ne serait corrigée avant le prochain passage.
+const V7: &str = r#"
+DELETE FROM cf_followers WHERE LOWER(name) IN (
+  SELECT LOWER(value) FROM meta
+  WHERE key IN ('curseforge_account', 'curseforge_author', 'curseforge_username')
+);
+"#;
+
 pub fn migrate(conn: &Connection) -> Result<()> {
     conn.execute_batch("PRAGMA foreign_keys = ON;")?;
     let current: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
@@ -146,6 +192,18 @@ pub fn migrate(conn: &Connection) -> Result<()> {
 
     if current < 4 {
         conn.execute_batch(V4)?;
+    }
+
+    if current < 5 {
+        conn.execute_batch(V5)?;
+    }
+
+    if current < 6 {
+        conn.execute_batch(V6)?;
+    }
+
+    if current < 7 {
+        conn.execute_batch(V7)?;
     }
 
     if current < SCHEMA_VERSION {
@@ -177,11 +235,13 @@ mod tests {
             .map(|r| r.unwrap())
             .collect();
         for expected in [
+            "cf_followers",
             "cf_points",
             "cf_revenue",
             "cf_snapshots",
             "countries_daily",
             "events",
+            "followers_daily",
             "links",
             "meta",
             "metrics_daily",

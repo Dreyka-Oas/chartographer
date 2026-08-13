@@ -203,6 +203,115 @@ fn resume_local_database() {
         println!("  revenus {month} : {amount} $");
     }
 
+    // D'où vient chaque journée du graphique : une mesure rapportée du tableau
+    // de bord, ou l'écart entre deux snapshots. Les deux ne doivent jamais
+    // compter la même journée.
+    println!("\ndernières journées, source par source :");
+    let mut mixed = conn
+        .prepare(
+            "SELECT m.day,
+                    SUM(CASE WHEN p.platform = 'modrinth' THEN m.downloads ELSE 0 END),
+                    SUM(CASE WHEN p.platform = 'curseforge' THEN m.downloads ELSE 0 END),
+                    COUNT(DISTINCT CASE WHEN p.platform = 'curseforge' THEN p.id END)
+             FROM metrics_daily m JOIN projects p ON p.id = m.project_id
+             GROUP BY m.day ORDER BY m.day DESC LIMIT 12",
+        )
+        .unwrap();
+    for row in mixed
+        .query_map([], |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, i64>(1)?,
+                r.get::<_, i64>(2)?,
+                r.get::<_, i64>(3)?,
+            ))
+        })
+        .unwrap()
+    {
+        let (day, modrinth, curseforge, mods) = row.unwrap();
+        println!("  {day}  modrinth {modrinth:6}  curseforge {curseforge:6} ({mods} mods mesurés)");
+    }
+
+    println!("\nsnapshots CurseForge, cumul par mod et par jour :");
+    let mut snaps = conn
+        .prepare(
+            "SELECT substr(s.taken_at, 1, 10) AS day, p.title, MAX(s.total_downloads)
+             FROM cf_snapshots s JOIN projects p ON p.id = s.project_id
+             GROUP BY day, p.id ORDER BY day, p.title LIMIT 40",
+        )
+        .unwrap();
+    for row in snaps
+        .query_map([], |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, i64>(2)?,
+            ))
+        })
+        .unwrap()
+    {
+        let (day, title, total) = row.unwrap();
+        println!("  {day}  {title:26} {total}");
+    }
+
+    println!("\nabonnés CurseForge :");
+    println!(
+        "  connus           : {}",
+        count("SELECT COUNT(*) FROM cf_followers")
+    );
+    let mut who = conn
+        .prepare("SELECT name, seniority, first_seen, rank FROM cf_followers ORDER BY rank")
+        .unwrap();
+    for row in who
+        .query_map([], |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, Option<String>>(1)?,
+                r.get::<_, String>(2)?,
+                r.get::<_, i64>(3)?,
+            ))
+        })
+        .unwrap()
+    {
+        let (name, seniority, first_seen, rank) = row.unwrap();
+        println!(
+            "  #{rank:<2} {name:28} {:24} vu le {first_seen}",
+            seniority.unwrap_or_default()
+        );
+    }
+
+    println!("\ncourbe des abonnés :");
+    let mut curve = conn
+        .prepare("SELECT day, platform, count FROM followers_daily ORDER BY day, platform")
+        .unwrap();
+    for row in curve
+        .query_map([], |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, i64>(2)?,
+            ))
+        })
+        .unwrap()
+    {
+        let (day, platform, count) = row.unwrap();
+        println!("  {day}  {platform:12} {count}");
+    }
+
+    let mut metas = conn
+        .prepare(
+            "SELECT key, value FROM meta
+             WHERE key LIKE 'curseforge_%' ORDER BY key",
+        )
+        .unwrap();
+    for row in metas
+        .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))
+        .unwrap()
+    {
+        let (key, value) = row.unwrap();
+        println!("  {key:32} {}", &value[..value.len().min(60)]);
+    }
+
     let mut stmt = conn
         .prepare("SELECT provider, status, detail FROM sync_runs ORDER BY id DESC LIMIT 6")
         .unwrap();

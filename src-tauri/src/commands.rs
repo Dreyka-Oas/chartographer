@@ -449,6 +449,129 @@ pub fn open_curseforge_window(app: tauri::AppHandle) -> Result<()> {
     ensure_curseforge_window(&app, true)
 }
 
+/// Ce qu'un relevé d'abonnés a donné.
+#[derive(Debug, Serialize)]
+pub struct FollowersReport {
+    pub followers: Vec<crate::store::followers::Follower>,
+    /// Évolution du compte, jour par jour et plateforme par plateforme.
+    pub history: Vec<crate::store::followers::FollowerDay>,
+    /// Nombre annoncé par la page, quand elle l'affiche.
+    pub announced: Option<i64>,
+    /// Arrivées et départs constatés depuis le relevé précédent.
+    pub arrived: usize,
+    pub lost: usize,
+    /// Jour du premier relevé : avant lui, l'application ne regardait pas.
+    pub since: Option<String>,
+    pub detail: String,
+}
+
+/// Le pseudo CurseForge, sous l'une ou l'autre des clés qui l'ont porté.
+///
+/// Trois collectes différentes l'ont écrit au fil du temps, chacune sous son
+/// nom : celle du tableau de bord, celle des projets, celle de la fiche
+/// publique. Les chercher toutes vaut mieux que d'en élire une et de rester
+/// aveugle sur les bases où seules les autres existent.
+fn curseforge_account(state: &AppState) -> Result<Option<String>> {
+    for key in ["curseforge_account", "curseforge_author", "curseforge_username"] {
+        let found = state
+            .store
+            .with(|conn| crate::store::metrics::get_meta(conn, key))?
+            .filter(|name| !name.trim().is_empty());
+        if found.is_some() {
+            return Ok(found);
+        }
+    }
+    Ok(None)
+}
+
+/// Les abonnés déjà connus, sans rien demander au site.
+#[tauri::command]
+pub fn curseforge_followers(state: State<'_, AppState>) -> Result<FollowersReport> {
+    state.store.with(|conn| {
+        Ok(FollowersReport {
+            followers: crate::store::followers::list(conn)?,
+            history: crate::store::followers::history(conn)?,
+            announced: crate::store::metrics::get_meta(conn, "curseforge_followers")?
+                .and_then(|raw| raw.parse().ok()),
+            arrived: 0,
+            lost: 0,
+            since: crate::store::followers::first_survey(conn)?,
+            detail: String::new(),
+        })
+    })
+}
+
+/// Va relever la liste des abonnés sans attendre le prochain cycle.
+///
+/// Le relevé se fait de lui-même à chaque collecte CurseForge, une fois par
+/// jour. Cette commande est là pour ne pas avoir à l'attendre.
+#[tauri::command]
+pub async fn collect_curseforge_followers(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<FollowersReport> {
+    let account = curseforge_account(&state)?.ok_or_else(|| {
+        AppError::Config("aucun compte CurseForge connu : lance une synchronisation d'abord".into())
+    })?;
+
+    let window = cf_window(&app).await?;
+    let (seen, announced) = survey_followers(&app, &window, &account).await;
+
+    let today = crate::sync::today_utc();
+    let (arrived, lost) = state
+        .store
+        .with(|conn| crate::store::followers::record(conn, &today, &account, &seen))?;
+
+    let (followers, history, since) = state.store.with(|conn| {
+        if let Some(count) = announced {
+            crate::store::followers::record_count(conn, &today, "curseforge", count)?;
+        }
+        Ok((
+            crate::store::followers::list(conn)?,
+            crate::store::followers::history(conn)?,
+            crate::store::followers::first_survey(conn)?,
+        ))
+    })?;
+
+    Ok(FollowersReport {
+        detail: format!(
+            "{} abonnés relevés · {arrived} arrivée(s) · {lost} départ(s)",
+            seen.len()
+        ),
+        followers,
+        history,
+        announced,
+        arrived,
+        lost,
+        since,
+    })
+}
+
+/// État de la session CurseForge, tel que le tableau de bord le montre.
+#[derive(Debug, Default, Serialize)]
+pub struct CfSession {
+    pub connected: bool,
+    /// Adresse où la fenêtre a abouti, utile quand la connexion manque.
+    pub url: String,
+}
+
+/// Dit si le compte CurseForge est bien ouvert dans la fenêtre.
+///
+/// Le nom retenu dans les réglages ne prouve rien : il vient d'un relevé passé,
+/// et survit à l'expiration de la session. La seule réponse sûre est celle de
+/// la page elle-même — le tableau de bord auteur, ou la page d'identification
+/// vers laquelle il renvoie.
+#[tauri::command]
+pub async fn curseforge_session(app: tauri::AppHandle) -> Result<CfSession> {
+    let window = cf_window(&app).await?;
+    wait_until_loaded(&window).await;
+    let page = page_state(&app).await?;
+    Ok(CfSession {
+        connected: !asks_for_login(&page),
+        url: page.url,
+    })
+}
+
 /// Note les appels que la page émet : méthode, adresse, état, et le début du
 /// corps envoyé. Sert à découvrir comment le tableau de bord s'y prend pour
 /// gérer projets et fichiers, là où aucune documentation ne le dit.
@@ -1038,33 +1161,124 @@ const PAGE_TEXT: &str = r#"(function () {
   return texte.replace(/\s+/g, ' ').slice(0, 6000);
 })()"#;
 
-/// Va lire le nombre d'abonnés sur la fiche publique du compte, puis ramène la
-/// fenêtre au tableau de bord.
-async fn read_author_followers(
+/// Relève les abonnés sur la fiche publique du compte, puis ramène la fenêtre
+/// au tableau de bord.
+///
+/// Une seule page sert les deux : l'onglet des abonnés porte la liste et, en
+/// tête, leur nombre. Deux visites — une pour compter, une pour nommer —
+/// n'apprendraient rien de plus et doubleraient les passages sur une page
+/// publique qui n'a aucune raison d'en recevoir autant.
+///
+/// L'adresse change avant que la page ne soit peinte : lire une seule fois
+/// revenait à jouer sur la vitesse du réseau, et un relevé manqué laissait les
+/// abonnés à zéro jusqu'à la synchronisation suivante. On relit donc tant que
+/// rien n'est venu.
+async fn survey_followers(
     app: &tauri::AppHandle,
     window: &tauri::WebviewWindow,
     account: &str,
-) -> Option<i64> {
-    let page = format!("https://www.curseforge.com/members/{account}/projects");
-    navigate(app, window, &page, "/members/").await.ok()?;
-    // L'adresse change avant que la page ne soit peinte : lire une seule fois
-    // revenait à jouer sur la vitesse du réseau, et un relevé manqué laissait
-    // les abonnés à zéro jusqu'à la synchronisation suivante. On relit tant que
-    // le compte n'est pas là.
-    let mut found = None;
+) -> (Vec<crate::store::followers::Seen>, Option<i64>) {
+    let page = format!("https://www.curseforge.com/members/{account}/followers");
+    if navigate(app, window, &page, "/members/").await.is_err() {
+        return (Vec::new(), None);
+    }
+    wait_until_loaded(window).await;
+
+    let mut seen: Vec<crate::store::followers::Seen> = Vec::new();
+    let mut count = None;
     for _ in 0..12 {
-        if let Ok(raw) = eval_in_window(app, PAGE_TEXT).await {
+        if let Ok(raw) = eval_in_window(app, FOLLOWERS_SCRIPT).await {
+            let json: String = serde_json::from_str(&raw).unwrap_or(raw);
+            seen = serde_json::from_str(&json).unwrap_or_default();
+        }
+        if let Ok(raw) = eval_in_window(app, FOLLOWERS_COUNT).await {
             let text: String = serde_json::from_str(&raw).unwrap_or(raw);
-            found = crate::collect::parse_author_followers(&text);
-            if found.is_some() {
-                break;
-            }
+            count = text.trim().parse::<i64>().ok();
+        }
+        // Un compte annoncé sans aucune vignette veut dire que la grille n'est
+        // pas encore peinte — sauf s'il n'y a personne à peindre.
+        if !seen.is_empty() || count == Some(0) {
+            break;
         }
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
     }
+
+    // Repli sur le texte de la page si l'en-tête ne s'est pas laissé lire.
+    if count.is_none() {
+        if let Ok(raw) = eval_in_window(app, PAGE_TEXT).await {
+            let text: String = serde_json::from_str(&raw).unwrap_or(raw);
+            count = crate::collect::parse_author_followers(&text);
+        }
+    }
+
     let _ = navigate(app, window, CF_AUTHOR_PAGE, "authors.curseforge.com").await;
-    found
+    (seen, count)
 }
+
+/// Relève la liste des abonnés sur la fiche publique du compte.
+///
+/// Chaque abonné y a sa vignette : un lien vers son profil, un avatar, et
+/// l'ancienneté de son compte — jamais la date à laquelle il s'est abonné. Le
+/// site les classe du plus récent au plus ancien ; ce rang est la seule chose
+/// qu'il dise du temps, on le garde donc tel quel.
+///
+/// On part des liens plutôt que d'une classe de mise en page : les noms de
+/// classes du site changent à chaque refonte, la forme des adresses non.
+const FOLLOWERS_SCRIPT: &str = r#"(function () {
+  var out = [];
+  var seen = {};
+  // Le compte dont on lit la fiche se trouve dans l'adresse. Son propre lien
+  // figure en tête de page : sans cette garde, il se comptait parmi ceux qui
+  // le suivent.
+  var owner = (location.pathname.split('/members/')[1] || '').split('/')[0].toLowerCase();
+  var links = document.querySelectorAll('a[href*="/members/"]');
+  for (var i = 0; i < links.length && out.length < 300; i++) {
+    var link = links[i];
+    var href = link.getAttribute('href') || '';
+    var part = href.split('/members/')[1];
+    if (!part) continue;
+    var name = part.split('/')[0].split('?')[0].split('#')[0];
+    if (!name) continue;
+    var key = name.toLowerCase();
+    if (key === owner || seen[key]) continue;
+    // Le lien porte le pseudo tel qu'il s'écrit, l'adresse le porte en
+    // minuscules : on garde la forme lisible quand elle est là.
+    var shown = (link.textContent || '').trim();
+    if (shown && shown.length < 40 && shown.toLowerCase() === key) name = shown;
+
+    // La vignette est le plus proche ancêtre qui porte à la fois l'avatar et le
+    // texte : on remonte de quelques crans, sans jamais sortir de la grille.
+    var card = link;
+    for (var step = 0; step < 4 && card.parentElement; step++) {
+      if (card.querySelector('img') && (card.innerText || '').indexOf('Member') >= 0) break;
+      card = card.parentElement;
+    }
+    var image = card.querySelector('img');
+    var text = (card.innerText || '').replace(/\s+/g, ' ').trim();
+    // Le nom lui-même n'apprend rien de plus : on ne garde que ce qui l'entoure.
+    var about = '';
+    var match = text.match(/Member (for|since)[^·|\n]*/i);
+    if (match) about = match[0].trim();
+    // Les liens de la barre de navigation ou du pied de page n'ont ni avatar ni
+    // ancienneté : ils ne sont pas des abonnés.
+    if (!image && !about) continue;
+
+    seen[key] = true;
+    out.push({
+      name: name,
+      avatar_url: image ? image.getAttribute('src') : null,
+      seniority: about || null
+    });
+  }
+  return JSON.stringify(out);
+})()"#;
+
+/// Nombre d'abonnés annoncé en tête de page, pour savoir si la liste est complète.
+const FOLLOWERS_COUNT: &str = r#"(function () {
+  var text = (document.body ? document.body.innerText : '').replace(/\s+/g, ' ');
+  var match = text.match(/([0-9][0-9\s,\.]*)\s*Followers?/i);
+  return match ? match[1].replace(/[^0-9]/g, '') : '';
+})()"#;
 
 /// Solde de points affiché par le tableau de bord.
 ///
@@ -1228,28 +1442,43 @@ pub async fn collect_curseforge(
 
     // Abonnés : CurseForge ne les compte que sur la fiche publique du compte,
     // et pour le compte entier — aucun décompte par projet n'existe.
-    let account = state
-        .store
-        .with(|conn| crate::store::metrics::get_meta(conn, "curseforge_account"))?
-        .or(state
-            .store
-            .with(|conn| crate::store::metrics::get_meta(conn, "curseforge_author"))?)
-        .or(state
-            .store
-            .with(|conn| crate::store::metrics::get_meta(conn, "curseforge_username"))?);
+    let account = curseforge_account(&state)?;
     // La fiche publique n'est visitée qu'une fois par jour : le nombre d'abonnés
     // bouge de quelques unités par mois, et une visite à chaque relevé ferait
     // dix passages quotidiens sur une page qui n'a aucune raison d'en recevoir
     // autant.
-    let followers_fresh = state
+    //
+    // Tant qu'aucun abonné n'est nommé, la garde ne s'applique pas : elle
+    // portait jusqu'ici sur un simple décompte, et aurait retardé d'un jour le
+    // premier relevé de la liste elle-même.
+    let known = state
         .store
-        .with(|conn| crate::store::metrics::get_meta(conn, "curseforge_followers_at"))?
-        .and_then(|stamp| chrono::DateTime::parse_from_rfc3339(&stamp).ok())
-        .is_some_and(|when| Utc::now().signed_duration_since(when).num_hours() < 24);
-    if let Some(account) = account.filter(|name| !name.is_empty() && !followers_fresh) {
-        match read_author_followers(&app, &window, &account).await {
+        .with(|conn| crate::store::followers::first_survey(conn))?
+        .is_some();
+    let followers_fresh = known
+        && state
+            .store
+            .with(|conn| crate::store::metrics::get_meta(conn, "curseforge_followers_at"))?
+            .and_then(|stamp| chrono::DateTime::parse_from_rfc3339(&stamp).ok())
+            .is_some_and(|when| Utc::now().signed_duration_since(when).num_hours() < 24);
+    if let Some(account) = account.filter(|_| !followers_fresh) {
+        let (seen, count) = survey_followers(&app, &window, &account).await;
+        // La liste est confrontée à celle du relevé précédent : c'est de là, et
+        // de nulle part ailleurs, que viennent les dates d'arrivée. CurseForge
+        // n'en donne aucune.
+        let today = sync::today_utc();
+        let (arrived, lost) = state
+            .store
+            .with(|conn| crate::store::followers::record(conn, &today, &account, &seen))?;
+        tracing::debug!(
+            releves = seen.len(),
+            arrived,
+            lost,
+            "abonnés CurseForge relevés"
+        );
+
+        match count {
             Some(count) => {
-                tracing::debug!(count, "abonnés CurseForge relevés");
                 state.store.with(|conn| {
                     crate::store::metrics::set_meta(
                         conn,
@@ -1266,6 +1495,31 @@ pub async fn collect_curseforge(
             None => tracing::debug!("aucun compte d'abonnés lisible sur la fiche publique"),
         }
     }
+
+    // La courbe des abonnés prend un point par jour, pour les deux plateformes.
+    //
+    // Elle est notée ici, à chaque collecte, et non au moment où la fiche
+    // publique est visitée : cette visite n'a lieu qu'une fois par jour, et une
+    // journée sans visite laisserait un trou dans la courbe alors que le
+    // dernier compte connu, lui, ne bouge pas. Modrinth compte ses abonnés par
+    // projet ; CurseForge n'en donne qu'un total, gardé tel quel.
+    let today = sync::today_utc();
+    state.store.with(|conn| {
+        let modrinth: i64 = conn.query_row(
+            "SELECT COALESCE(SUM(followers), 0) FROM projects
+             WHERE archived_at IS NULL AND platform = 'modrinth'",
+            [],
+            |r| r.get(0),
+        )?;
+        crate::store::followers::record_count(conn, &today, "modrinth", modrinth)?;
+
+        if let Some(curseforge) = crate::store::metrics::get_meta(conn, "curseforge_followers")?
+            .and_then(|raw| raw.parse::<i64>().ok())
+        {
+            crate::store::followers::record_count(conn, &today, "curseforge", curseforge)?;
+        }
+        Ok(())
+    })?;
 
     let months = crate::collect::parse_revenue_series(&fetched.revenue);
     let (last_month, year_to_date) = crate::collect::parse_revenue_estimation(&fetched.estimation);

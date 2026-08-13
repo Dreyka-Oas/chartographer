@@ -3,6 +3,7 @@
   import { rankingOption } from "../charts/multiseries";
   import { palette } from "../charts/theme";
   import { api } from "../api";
+  import Hint from "./Hint.svelte";
   import { formatDayLong, formatMonth, formatMoney } from "../format";
   import { dashboard } from "../state.svelte";
   import { theme } from "../theme.svelte";
@@ -101,8 +102,10 @@
   {/if}
 {:else}
   <p class="empty">
-    Aucun relevé pour l'instant. La collecte se fait toute seule à chaque synchronisation ; si ta
-    session CurseForge a expiré, les réglages proposent de te reconnecter une fois.
+    Aucun relevé pour l'instant.
+    <Hint
+      text="La collecte se fait toute seule à chaque synchronisation ; si ta session CurseForge a expiré, les réglages proposent de te reconnecter une fois."
+    />
   </p>
 {/if}
 
@@ -171,6 +174,9 @@
     text-align: left;
   }
   .empty {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     color: var(--text-dim);
     font-size: 0.84rem;
     margin: 0;

@@ -19,6 +19,15 @@ export interface Kpis {
   revenue_pending: string;
   /** Revenus relevés jour par jour sur la fenêtre affichée. */
   revenue_window: string;
+  /** Téléchargements de la période choisie, et de celle de même durée d'avant. */
+  range_downloads: number;
+  range_downloads_modrinth: number;
+  range_downloads_curseforge: number;
+  range_downloads_prev: number;
+  /** Revenus de la période. Ceux de CurseForge viennent de l'écart de solde. */
+  range_revenue: string;
+  range_revenue_modrinth: string;
+  range_revenue_curseforge: string;
   followers: number;
   /** Abonnés par plateforme : ceux de CurseForge viennent du tableau de bord. */
   followers_modrinth: number;
@@ -279,6 +288,50 @@ export interface CfImported {
 }
 
 /** Résultat d'une collecte automatique sur le tableau de bord CurseForge. */
+/** Un abonné CurseForge, relevé sur la fiche publique du compte. */
+export interface Follower {
+  name: string;
+  avatar_url: string | null;
+  /** Ancienneté du compte, telle que le site l'écrit. */
+  seniority: string | null;
+  /** Jour du premier relevé où ce nom est apparu. */
+  first_seen: string;
+  last_seen: string;
+  /** Jour où il a cessé de figurer, s'il est parti. */
+  lost_on: string | null;
+  rank: number;
+  /**
+   * Faux quand il était déjà là au tout premier relevé : son abonnement est
+   * antérieur, sans qu'on sache de combien.
+   */
+  arrival_known: boolean;
+}
+
+/** Un jour de la courbe des abonnés, plateforme par plateforme. */
+export interface FollowerDay {
+  day: string;
+  modrinth: number;
+  curseforge: number;
+}
+
+export interface FollowersReport {
+  followers: Follower[];
+  /** Évolution du compte, un point par jour relevé. */
+  history: FollowerDay[];
+  /** Nombre annoncé par la page, quand elle l'affiche. */
+  announced: number | null;
+  arrived: number;
+  lost: number;
+  since: string | null;
+  detail: string;
+}
+
+/** Réponse de la page CurseForge quand on lui demande si le compte est ouvert. */
+export interface CfSession {
+  connected: boolean;
+  url: string;
+}
+
 export interface CfCollect {
   needs_login: boolean;
   visited: string[];

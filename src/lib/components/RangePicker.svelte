@@ -139,9 +139,19 @@
     opacity: 0.45;
     cursor: default;
   }
+  /*
+   * Rappel de la fenêtre affichée. Il redit ce que les deux champs de dates
+   * portent déjà, en toutes lettres : quand la place manque, c'est la première
+   * chose à retirer, avant de laisser la barre passer à la ligne.
+   */
   .window {
     font-size: 0.78rem;
     color: var(--text-dim);
     font-variant-numeric: tabular-nums;
+  }
+  @media (max-width: 1500px) {
+    .window {
+      display: none;
+    }
   }
 </style>

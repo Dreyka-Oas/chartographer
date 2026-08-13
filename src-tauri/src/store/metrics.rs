@@ -73,6 +73,35 @@ pub fn cf_revenue(conn: &Connection) -> Result<Vec<CfRevenueEntry>> {
     Ok(rows)
 }
 
+/// Points gagnés entre deux dates, reconstruits par écart de solde.
+///
+/// CurseForge ne publie aucun revenu par jour : il n'annonce qu'un solde de
+/// points, relevé à chaque passage. Deux relevés successifs suffisent pourtant
+/// à retrouver ce qui a été gagné entre eux — c'est le même procédé que pour
+/// les téléchargements, dont la plateforme ne donne que des cumuls.
+///
+/// Le relevé qui précède la fenêtre est repris comme point de départ, faute de
+/// quoi la première journée serait perdue. Une baisse de solde est un retrait,
+/// jamais un gain négatif : elle ne retranche rien, et les gains suivants
+/// repartent simplement du nouveau solde.
+///
+/// `to` est exclu, comme partout ailleurs.
+pub fn cf_points_gained(conn: &Connection, from: &str, to: &str) -> Result<i64> {
+    let mut stmt = conn.prepare(
+        "SELECT points FROM cf_points
+         WHERE day < ?2
+           AND (day >= ?1 OR day = (SELECT MAX(day) FROM cf_points WHERE day < ?1))
+         ORDER BY day",
+    )?;
+    let rows = stmt
+        .query_map(params![from, to], |r| r.get::<_, i64>(0))?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(rows
+        .windows(2)
+        .map(|pair| (pair[1] - pair[0]).max(0))
+        .sum())
+}
+
 pub fn delete_cf_points(conn: &Connection, day: &str) -> Result<usize> {
     Ok(conn.execute("DELETE FROM cf_points WHERE day = ?1", params![day])?)
 }
@@ -360,6 +389,31 @@ mod point_tests {
         let conn = Connection::open_in_memory().unwrap();
         migrate(&conn).unwrap();
         conn
+    }
+
+    #[test]
+    fn points_gained_come_from_the_gap_between_two_readings() {
+        let conn = base();
+        record_cf_points(&conn, "2026-08-08", 100, "x").unwrap();
+        record_cf_points(&conn, "2026-08-09", 140, "x").unwrap();
+        record_cf_points(&conn, "2026-08-10", 155, "x").unwrap();
+
+        // Le relevé du 8 précède la fenêtre : il sert d'origine au gain du 9.
+        assert_eq!(cf_points_gained(&conn, "2026-08-09", "2026-08-11").unwrap(), 55);
+        assert_eq!(cf_points_gained(&conn, "2026-08-10", "2026-08-11").unwrap(), 15);
+        // Sans relevé antérieur, le premier de la fenêtre n'est qu'une origine.
+        assert_eq!(cf_points_gained(&conn, "2026-08-08", "2026-08-10").unwrap(), 40);
+    }
+
+    /// Un solde qui baisse est un retrait, pas un revenu négatif.
+    #[test]
+    fn a_withdrawal_never_subtracts_from_what_was_earned() {
+        let conn = base();
+        record_cf_points(&conn, "2026-08-08", 400, "x").unwrap();
+        record_cf_points(&conn, "2026-08-09", 0, "x").unwrap();
+        record_cf_points(&conn, "2026-08-10", 30, "x").unwrap();
+
+        assert_eq!(cf_points_gained(&conn, "2026-08-08", "2026-08-11").unwrap(), 30);
     }
 
     #[test]

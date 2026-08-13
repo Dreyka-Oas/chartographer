@@ -1,3 +1,4 @@
+pub mod followers;
 pub mod metrics;
 pub mod projects;
 pub mod queries;

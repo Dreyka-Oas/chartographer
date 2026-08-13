@@ -2,6 +2,7 @@
   import Card from "../components/Card.svelte";
   import EventsFeed from "../components/EventsFeed.svelte";
   import FreshnessBadge from "../components/FreshnessBadge.svelte";
+  import Hint from "../components/Hint.svelte";
   import KpiBand from "../components/KpiBand.svelte";
   import LoaderHeatmap from "../components/LoaderHeatmap.svelte";
   import PlatformSplit from "../components/PlatformSplit.svelte";
@@ -25,33 +26,46 @@
     </div>
   </div>
 
-  <KpiBand kpis={overview.kpis} />
+  <!--
+    Chaque carte porte sa propre bascule : elle ne change pas la fenêtre lue,
+    seulement la lecture de cette carte-là.
+  -->
+  <KpiBand
+    kpis={overview.kpis}
+    bind:ranged={dashboard.kpiRanged}
+    days={overview.days.length}
+    onfollowers={() => dashboard.openDetail("followers")}
+  />
 
   {#if !dashboard.platforms.modrinth || !dashboard.platforms.curseforge}
     <p class="notice">
-      {dashboard.platforms.modrinth ? "CurseForge" : "Modrinth"} est masqué : ses téléchargements ne
-      sont pas comptés ici.
-      {#if !dashboard.platforms.modrinth}
-        L'origine géographique, les versions de jeu et les revenus ne sont relevés que sur Modrinth,
-        leurs cartes sont donc retirées.
-      {/if}
-      Clique la pastille en haut de la fenêtre pour la réafficher.
+      {dashboard.platforms.modrinth ? "CurseForge" : "Modrinth"} est masqué.
+      <Hint
+        text={dashboard.platforms.modrinth
+          ? "Ses téléchargements ne sont pas comptés dans les chiffres affichés. Clique la pastille en haut de la fenêtre pour la réafficher."
+          : "Ses téléchargements ne sont pas comptés ici. L'origine géographique, les versions de jeu et les revenus ne sont relevés que sur Modrinth : leurs cartes sont donc retirées. Clique la pastille en haut de la fenêtre pour la réafficher."}
+      />
     </p>
   {/if}
 
+  <!--
+    Un seul jour de snapshots CurseForge : le dire vaut mieux que de laisser
+    croire à une courbe plate. Le pourquoi, lui, tient dans l'infobulle — il ne
+    se lit qu'une fois.
+  -->
   {#if dashboard.platforms.curseforge && overview.curseforge_history_days < 2}
     <p class="notice">
-      CurseForge n'expose aucun historique public : Chartographer va le chercher sur ton tableau de
-      bord auteur, à chaque synchronisation. {overview.curseforge_history_days} jour est enregistré
-      pour l'instant. Si ce chiffre ne monte pas, ta session CurseForge a sans doute expiré : les
-      réglages proposent de te reconnecter une fois.
+      L'historique CurseForge ne compte que {overview.curseforge_history_days} jour pour l'instant.
+      <Hint
+        text="CurseForge n'expose aucun historique public : Chartographer va le chercher sur ton tableau de bord auteur, à chaque synchronisation, et reconstruit les journées en comparant deux relevés. Si ce chiffre ne monte pas, ta session CurseForge a sans doute expiré : les réglages proposent de te reconnecter."
+      />
     </p>
   {/if}
 
   <div class="grid">
     <Card
       title="Téléchargements par jour"
-      subtitle="Modrinth en série, CurseForge reconstruit par snapshots"
+      subtitle="Relevés des tableaux de bord ; CurseForge complété par écart de snapshots"
       onexpand={() => dashboard.openDetail("timeline")}
     >
       <Timeline points={overview.timeline} />
@@ -135,11 +149,19 @@
     flex-wrap: wrap;
     margin-bottom: 16px;
   }
+  /*
+   * Bloc d'état, calé à droite. Il garde la même ligne que les filtres tant
+   * qu'il y tient ; passé à la ligne, il occupe toute la largeur plutôt que de
+   * flotter en tête d'une rangée vide.
+   */
   .state {
     margin-left: auto;
+    flex: 1 1 auto;
     display: flex;
     align-items: center;
-    gap: 12px;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 10px 12px;
   }
   button {
     background: var(--surface);
@@ -198,6 +220,9 @@
     margin-top: 16px;
   }
   .notice {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     margin: 14px 0 0;
     padding: 10px 14px;
     border-left: 2px solid var(--warn);

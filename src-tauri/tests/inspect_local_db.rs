@@ -312,6 +312,53 @@ fn resume_local_database() {
         println!("  {key:32} {}", &value[..value.len().min(60)]);
     }
 
+    // Le bilan d'hier, tel que l'onglet Journée le montre. Les totaux doivent
+    // se recouper : la somme des projets vaut celle des cartes de tête.
+    {
+        use chartographer_lib::store::queries::{day_report, shift_day, PlatformFilter};
+
+        let today = chartographer_lib::sync::today_utc();
+        let day = shift_day(&today, -1);
+        let report = day_report(&conn, &day, &today, PlatformFilter::default()).unwrap();
+        println!("\nbilan du {day} :");
+        println!(
+            "  telechargements  : {} (modrinth {} · curseforge {})",
+            report.downloads.total, report.downloads.modrinth, report.downloads.curseforge
+        );
+        println!(
+            "  la veille        : {}   moyennes 7j {:.1} · 28j {:.1}",
+            report.downloads.previous, report.downloads.average_7, report.downloads.average_28
+        );
+        println!(
+            "  revenus          : {} (modrinth {} · curseforge {}), veille {}",
+            report.revenue.total, report.revenue.modrinth, report.revenue.curseforge,
+            report.revenue.previous
+        );
+        println!(
+            "  rang             : {:?} sur {} journees · record {} le {:?}",
+            report.rank, report.ranked_days, report.best_downloads, report.best_day
+        );
+        println!(
+            "  abonnes          : {:?}   evenements : {}",
+            report.followers_delta,
+            report.events.len()
+        );
+        println!("  projets :");
+        let mut sum = 0;
+        for project in &report.projects {
+            sum += project.total;
+            println!(
+                "    {:26} {:6} (m {:5} · c {:5})  veille {:6}",
+                project.title, project.total, project.modrinth, project.curseforge, project.previous
+            );
+        }
+        println!("  somme des projets : {sum} · total annonce : {}", report.downloads.total);
+        assert_eq!(
+            sum, report.downloads.total,
+            "la somme des projets doit valoir le total du jour"
+        );
+    }
+
     let mut stmt = conn
         .prepare("SELECT provider, status, detail FROM sync_runs ORDER BY id DESC LIMIT 6")
         .unwrap();

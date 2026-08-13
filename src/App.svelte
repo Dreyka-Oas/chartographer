@@ -3,6 +3,7 @@
   import PlatformBadge from "./lib/components/PlatformBadge.svelte";
   import ThemeToggle from "./lib/components/ThemeToggle.svelte";
   import { dashboard } from "./lib/state.svelte";
+  import Day from "./lib/views/Day.svelte";
   import CountriesDetail from "./lib/views/detail/CountriesDetail.svelte";
   import EventsDetail from "./lib/views/detail/EventsDetail.svelte";
   import FollowersDetail from "./lib/views/detail/FollowersDetail.svelte";
@@ -17,7 +18,7 @@
   import Settings from "./lib/views/Settings.svelte";
   import Vision from "./lib/views/Vision.svelte";
 
-  let view = $state<"vision" | "revenue" | "publish" | "settings">("vision");
+  let view = $state<"vision" | "day" | "revenue" | "publish" | "settings">("vision");
   let ready = $state(false);
 
   $effect(() => {
@@ -69,6 +70,15 @@
       Vision
     </button>
     <button
+      class:active={view === "day"}
+      onclick={() => {
+        view = "day";
+        dashboard.closeDetail();
+      }}
+    >
+      Journée
+    </button>
+    <button
       class:active={view === "revenue"}
       onclick={() => {
         view = "revenue";
@@ -118,6 +128,8 @@
     {#if dashboard.error}<p class="error">{dashboard.error}</p>{/if}
     {#if view === "settings"}
       <Settings />
+    {:else if view === "day"}
+      <Day />
     {:else if view === "revenue"}
       <Revenue />
     {:else if view === "publish"}

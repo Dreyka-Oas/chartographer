@@ -24,6 +24,7 @@
    * confort de lecture, pas le seul moyen de savoir à quoi l'on touche.
    */
   import type { Snippet } from "svelte";
+  import { anchorX, placeBubble } from "./tooltipPlacement";
 
   let {
     text,
@@ -36,44 +37,51 @@
     children: Snippet;
   } = $props();
 
-  /** Marge entre l'élément et la bulle, et garde contre les bords de la vue. */
-  const GAP = 8;
-  const EDGE = 10;
-  /** Hauteur supposée pour décider du côté, sans avoir à mesurer la bulle. */
-  const ROOM = 44;
   /**
-   * Largeur maximale de la bulle, reprise telle quelle dans la feuille de
-   * style. Sa moitié sert à écarter le point d'ancrage des bords : la bulle est
-   * centrée dessus, elle déborde donc de part et d'autre.
+   * Largeur supposée avant la première mesure. La bulle est en réalité plus
+   * large que ce maximum — s'y ajoutent son cadre et ses marges intérieures —
+   * et c'est la valeur mesurée qui compte ensuite.
    */
-  const WIDTH = 260;
+  const WIDTH = 282;
 
   let anchor = $state<HTMLSpanElement | null>(null);
+  let bubble = $state<HTMLDivElement | null>(null);
   let open = $state(false);
   let box = $state({ top: 0, left: 0, below: false });
 
-  function place() {
+  /**
+   * Place la bulle. Sans hauteur connue, elle se pose du côté demandé ; une
+   * fois peinte, l'effet ci-dessous la mesure et la corrige si elle déborde.
+   */
+  function place(height: number, width: number) {
     if (!anchor) return;
     const rect = anchor.getBoundingClientRect();
-    const below = placement === "bottom" ? rect.bottom + ROOM < window.innerHeight : rect.top < ROOM;
-    // Le point d'ancrage est le milieu de l'élément, écarté des bords de la
-    // moitié de la bulle : sans cette garde, une bulle collée au bord droit se
-    // voyait rognée.
-    const half = Math.min(WIDTH, window.innerWidth - 2 * EDGE) / 2;
-    const middle = rect.left + rect.width / 2;
-    const room = Math.max(window.innerWidth - EDGE - half, EDGE + half);
+    const spot = placeBubble(rect, height, window.innerHeight, placement);
     box = {
-      top: below ? rect.bottom + GAP : rect.top - GAP,
-      left: Math.min(Math.max(middle, EDGE + half), room),
-      below,
+      top: spot.top,
+      below: spot.below,
+      left: anchorX(rect.left + rect.width / 2, width, window.innerWidth),
     };
   }
 
   function show() {
     if (!text) return;
-    place();
+    place(0, WIDTH);
     open = true;
   }
+
+  /**
+   * Corrige le placement une fois la bulle peinte.
+   *
+   * Ses dimensions dépendent du texte : les supposer rognait les explications
+   * un peu longues contre le haut de la fenêtre, et débordait d'un cheveu sur
+   * les bords, le cadre et les marges s'ajoutant à la largeur maximale. On les
+   * mesure donc, et on rejoue la même règle avec les vraies valeurs.
+   */
+  $effect(() => {
+    if (!open || !bubble) return;
+    place(bubble.offsetHeight, bubble.offsetWidth);
+  });
 
   const hide = () => (open = false);
 
@@ -120,6 +128,7 @@
 
 {#if open && text}
   <div
+    bind:this={bubble}
     class="bubble"
     class:below={box.below}
     role="tooltip"

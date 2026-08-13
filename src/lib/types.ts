@@ -307,6 +307,52 @@ export interface Follower {
   arrival_known: boolean;
 }
 
+/** Une mesure du jour, ses parts, et ce à quoi la comparer. */
+export interface DayFigure {
+  total: number;
+  modrinth: number;
+  curseforge: number;
+  previous: number;
+  average_7: number;
+  average_28: number;
+}
+
+export interface DayMoney {
+  total: string;
+  modrinth: string;
+  curseforge: string;
+  previous: string;
+  average_7: string;
+  average_28: string;
+}
+
+export interface DayProject {
+  key: string;
+  title: string;
+  icon_url: string | null;
+  modrinth: number;
+  curseforge: number;
+  total: number;
+  previous: number;
+}
+
+/** Bilan d'une seule journée, avec de quoi la juger. */
+export interface DayReport {
+  day: string;
+  /** Vrai quand la journée n'est pas finie : ses chiffres monteront encore. */
+  partial: boolean;
+  downloads: DayFigure;
+  revenue: DayMoney;
+  /** Rang parmi les journées relevées, 1 étant la meilleure. */
+  rank: number | null;
+  ranked_days: number;
+  best_day: string | null;
+  best_downloads: number;
+  followers_delta: number | null;
+  projects: DayProject[];
+  events: EventRow[];
+}
+
 /** Un jour de la courbe des abonnés, plateforme par plateforme. */
 export interface FollowerDay {
   day: string;

@@ -1,8 +1,9 @@
 <script lang="ts">
   import Chart from "../../charts/Chart.svelte";
-  import { foldSeriesTail, stackedProjectsOption } from "../../charts/multiseries";
+  import { foldSeriesTail, seriesColor, stackedProjectsOption } from "../../charts/multiseries";
   import { palette } from "../../charts/theme";
   import { timelineOption } from "../../charts/timeline";
+  import Hint from "../../components/Hint.svelte";
   import StatRow from "../../components/StatRow.svelte";
   import Switch from "../../components/Switch.svelte";
   import { compactNumber, formatDay } from "../../format";
@@ -44,6 +45,13 @@
     ),
   );
   const average = $derived(overview.timeline.length ? Math.round(total / overview.timeline.length) : 0);
+
+  /**
+   * Or, argent, bronze pour les trois meilleures journées. Ces teintes sont
+   * écrites en clair plutôt que prises au thème : elles ne veulent rien dire
+   * d'autre qu'un rang, et doivent se lire pareil en clair comme en sombre.
+   */
+  const PODIUM = ["#d4a72c", "#9aa4ad", "#b97a45"];
 
   const top = $derived(
     [...overview.timeline]
@@ -91,23 +99,33 @@
   />
 
   <div class="chart">
-    <Chart {option} height={480} />
+    <Chart {option} height={480} morph />
   </div>
 
   <div class="split">
     <div class="panel">
-      <h2>Meilleures journées</h2>
+      <h2>
+        Meilleures journées
+        <Hint
+          text="Les douze jours les mieux servis de la période affichée, du plus fort au plus faible. Les trois premiers sont marqués d'un rang coloré. Changer les dates change ce classement."
+        />
+      </h2>
       <table>
         <thead>
-          <tr><th>Jour</th><th>Modrinth</th><th>CurseForge</th><th>Total</th></tr>
+          <tr><th class="left">Jour</th><th>Modrinth</th><th>CurseForge</th><th>Total</th></tr>
         </thead>
         <tbody>
-          {#each top as row (row.day)}
+          {#each top as row, i (row.day)}
             <tr>
-              <td class="left">{formatDay(row.day)}</td>
+              <td class="left">
+                <span class="rank" class:podium={i < 3} style="--rank: {PODIUM[i] ?? ''}">
+                  {i + 1}
+                </span>
+                {formatDay(row.day)}
+              </td>
               <td>{compactNumber(row.modrinth)}</td>
               <td>{compactNumber(row.curseforge)}</td>
-              <td><b>{compactNumber(row.total)}</b></td>
+              <td><b class:lead={i === 0}>{compactNumber(row.total)}</b></td>
             </tr>
           {/each}
         </tbody>
@@ -115,13 +133,18 @@
     </div>
 
     <div class="panel">
-      <h2>Contribution par mod</h2>
+      <h2>
+        Contribution par mod
+        <Hint
+          text="Ce que chaque mod a rapporté de téléchargements sur la période, et la part que cela représente dans le total. La pastille reprend sa couleur dans le graphique ci-dessus. Cliquer sur une ligne ouvre la fiche du mod."
+        />
+      </h2>
       <table>
         <thead>
-          <tr><th>Mod</th><th>Période</th><th>Part</th></tr>
+          <tr><th class="left">Mod</th><th>Période</th><th>Part</th></tr>
         </thead>
         <tbody>
-          {#each series as s (s.name)}
+          {#each series as s, i (s.name)}
             {@const sum = s.values.reduce((a, v) => a + v, 0)}
             <tr
               onclick={() => {
@@ -129,7 +152,10 @@
                 if (found) dashboard.openProject(found);
               }}
             >
-              <td class="left">{s.name}</td>
+              <td class="left">
+                <span class="dot" style="background: {seriesColor(i)}"></span>
+                {s.name}
+              </td>
               <td>{compactNumber(sum)}</td>
               <td>{total ? Math.round((sum / total) * 100) : 0} %</td>
             </tr>
@@ -179,9 +205,44 @@
     padding: 14px 16px;
   }
   h2 {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     margin: 0 0 10px;
     font-size: 0.9rem;
     font-weight: 600;
+  }
+  .rank {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    margin-right: 8px;
+    border-radius: 999px;
+    background: var(--surface-2);
+    color: var(--text-dim);
+    font-size: 0.68rem;
+    font-variant-numeric: tabular-nums;
+    /* Le rang est déjà donné par l'ordre des lignes : la couleur le redit,
+     * elle ne le porte pas seule. */
+    vertical-align: middle;
+  }
+  .rank.podium {
+    background: color-mix(in srgb, var(--rank) 22%, transparent);
+    color: var(--rank);
+    font-weight: 600;
+  }
+  .lead {
+    color: var(--accent);
+  }
+  .dot {
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    margin-right: 8px;
+    border-radius: 999px;
+    vertical-align: middle;
   }
   table {
     width: 100%;

@@ -8,6 +8,7 @@ import type {
   CfScrape,
   CfSession,
   CurrencyView,
+  DayReport,
   FollowersReport,
   GameVersion,
   Overview,
@@ -56,6 +57,8 @@ export const api = {
   curseforgePoints: () => invoke<CfPointEntry[]>("curseforge_points"),
   openCurseforgeSite: () => invoke<void>("open_curseforge_site"),
   openCurseforgeWindow: () => invoke<void>("open_curseforge_window"),
+  dayReport: (day: string | null, platforms: string[]) =>
+    invoke<DayReport>("day_report", { day, platforms }),
   curseforgeSession: () => invoke<CfSession>("curseforge_session"),
   curseforgeFollowers: () => invoke<FollowersReport>("curseforge_followers"),
   collectCurseforgeFollowers: () => invoke<FollowersReport>("collect_curseforge_followers"),

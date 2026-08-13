@@ -1,6 +1,7 @@
 use crate::error::Result;
 use crate::models::{
-    CountryTotal, Kpis, LoaderCell, Overview, Platform, ProjectSummary, RevenuePoint, TimelinePoint,
+    CountryTotal, DayFigure, DayMoney, DayProject, DayReport, Kpis, LoaderCell, Overview, Platform,
+    ProjectSummary, RevenuePoint, TimelinePoint,
 };
 use crate::store::metrics::{freshness, recent_events, snapshot_day_count, snapshot_deltas};
 use crate::store::projects::{links, list};
@@ -825,6 +826,206 @@ pub fn available_months(conn: &Connection) -> Result<Vec<String>> {
     Ok(rows)
 }
 
+/// Téléchargements d'une seule journée, projet par projet.
+///
+/// `per_project` ne convient pas ici : ses deux compteurs portent le cumul
+/// depuis l'origine, celui que les plateformes affichent sur une fiche. Sur une
+/// journée, ils seraient identiques d'un jour à l'autre et tout écart vaudrait
+/// zéro.
+///
+/// La règle est celle de la courbe : la mesure rapportée du tableau de bord
+/// prime, et l'écart entre deux snapshots CurseForge ne sert qu'aux journées
+/// qu'aucune mesure ne couvre — sans quoi elles compteraient deux fois.
+fn downloads_by_project(conn: &Connection, day: &str) -> Result<HashMap<i64, i64>> {
+    let mut out: HashMap<i64, i64> = HashMap::new();
+    let mut stmt = conn.prepare(
+        "SELECT project_id, COALESCE(SUM(downloads), 0) FROM metrics_daily
+         WHERE day = ?1 GROUP BY project_id",
+    )?;
+    for row in stmt.query_map(params![day], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?)))? {
+        let (project_id, downloads) = row?;
+        out.insert(project_id, downloads);
+    }
+    for ((cf_id, on), delta) in snapshot_deltas(conn)? {
+        if on == day {
+            out.entry(cf_id).or_insert(delta);
+        }
+    }
+    Ok(out)
+}
+
+/// Bilan d'une journée, avec de quoi la juger.
+///
+/// Tout passe par `timeline`, y compris pour une seule journée : c'est elle qui
+/// sait mêler les mesures rapportées des tableaux de bord et les écarts entre
+/// deux snapshots CurseForge, sans compter deux fois. Refaire ce calcul ici
+/// aurait donné deux vérités pour un même jour.
+pub fn day_report(
+    conn: &Connection,
+    day: &str,
+    today: &str,
+    filter: PlatformFilter,
+) -> Result<DayReport> {
+    let next = shift_day(day, 1);
+    let point = timeline(conn, day, &next, filter)?
+        .into_iter()
+        .next()
+        .unwrap_or(TimelinePoint {
+            day: day.to_string(),
+            modrinth: 0,
+            curseforge: 0,
+        });
+
+    let sum_of = |from: &str, to: &str| -> Result<i64> {
+        Ok(timeline(conn, from, to, filter)?
+            .iter()
+            .map(|p| p.modrinth + p.curseforge)
+            .sum())
+    };
+    // Les moyennes portent sur les journées qui précèdent, la journée jugée
+    // exclue : s'y inclure reviendrait à se comparer à soi-même.
+    let mean = |span: i64| -> Result<f64> {
+        let start = shift_day(day, -span);
+        Ok(sum_of(&start, day)? as f64 / span as f64)
+    };
+
+    let revenue_of = |from: &str, to: &str| -> Result<(Decimal, Decimal)> {
+        let mut modrinth = Decimal::ZERO;
+        if filter.modrinth {
+            let mut stmt = conn.prepare(
+                "SELECT m.revenue FROM metrics_daily m
+                 JOIN projects p ON p.id = m.project_id
+                 WHERE m.revenue IS NOT NULL AND m.day >= ?1 AND m.day < ?2
+                   AND p.platform = ?3",
+            )?;
+            let rows = stmt.query_map(params![from, to, Platform::Modrinth.as_str()], |r| {
+                r.get::<_, String>(0)
+            })?;
+            for row in rows {
+                modrinth += Decimal::from_str(&row?).unwrap_or_default();
+            }
+        }
+        let curseforge = if filter.curseforge {
+            Decimal::from(crate::store::metrics::cf_points_gained(conn, from, to)?) * point_value()
+        } else {
+            Decimal::ZERO
+        };
+        Ok((modrinth, curseforge))
+    };
+
+    let (revenue_modrinth, revenue_curseforge) = revenue_of(day, &next)?;
+    let money = |value: Decimal| value.normalize().to_string();
+    let mean_money = |span: i64| -> Result<String> {
+        let start = shift_day(day, -span);
+        let (m, c) = revenue_of(&start, day)?;
+        Ok(money((m + c) / Decimal::from(span)))
+    };
+    let previous_day = shift_day(day, -1);
+    let (previous_modrinth, previous_curseforge) = revenue_of(&previous_day, day)?;
+
+    // Rang du jour parmi les quatre-vingt-dix qui le précèdent, lui compris.
+    //
+    // Le classement ne regarde jamais en avant : la question est de savoir si
+    // c'était un bon jour quand il s'est produit, et les journées suivantes
+    // n'existaient pas encore. Les journées sans le moindre téléchargement sont
+    // écartées : ce sont des jours sans relevé, pas des jours creux, et elles
+    // flatteraient le classement.
+    let window_start = shift_day(day, -89);
+    let neighbours: Vec<i64> = timeline(conn, &window_start, &next, filter)?
+        .iter()
+        .map(|p| p.modrinth + p.curseforge)
+        .filter(|total| *total > 0)
+        .collect();
+    let total = point.modrinth + point.curseforge;
+    let rank = (total > 0).then(|| neighbours.iter().filter(|other| **other > total).count() as i64 + 1);
+
+    // Meilleure journée connue, toutes plateformes visibles confondues.
+    let all = timeline(conn, "0000-01-01", &next, filter)?;
+    let best = all
+        .iter()
+        .max_by_key(|p| p.modrinth + p.curseforge)
+        .map(|p| (p.day.clone(), p.modrinth + p.curseforge));
+
+    let followers_delta = {
+        let count = |on: &str| -> Result<Option<i64>> {
+            Ok(conn
+                .query_row(
+                    "SELECT SUM(count) FROM followers_daily WHERE day = ?1",
+                    params![on],
+                    |r| r.get::<_, Option<i64>>(0),
+                )
+                .unwrap_or(None))
+        };
+        match (count(day)?, count(&previous_day)?) {
+            (Some(now), Some(before)) => Some(now - before),
+            _ => None,
+        }
+    };
+
+    // Projets du jour, comparés à la veille. `per_project` n'est appelée que
+    // pour le rattachement des deux plateformes — un mod publié des deux côtés
+    // tient sur une seule ligne — et pour le titre et l'icône. Les chiffres,
+    // eux, viennent de la journée.
+    let now = downloads_by_project(conn, day)?;
+    let before = downloads_by_project(conn, &previous_day)?;
+    let of = |source: &HashMap<i64, i64>, id: Option<i64>, shown: bool| -> i64 {
+        match (shown, id) {
+            (true, Some(id)) => source.get(&id).copied().unwrap_or(0),
+            _ => 0,
+        }
+    };
+    let mut projects: Vec<DayProject> = per_project(conn, day, &next, filter)?
+        .into_iter()
+        .map(|p| {
+            let modrinth = of(&now, p.modrinth_id, filter.modrinth);
+            let curseforge = of(&now, p.curseforge_id, filter.curseforge);
+            DayProject {
+                previous: of(&before, p.modrinth_id, filter.modrinth)
+                    + of(&before, p.curseforge_id, filter.curseforge),
+                key: p.key,
+                title: p.title,
+                icon_url: p.icon_url,
+                modrinth,
+                curseforge,
+                total: modrinth + curseforge,
+            }
+        })
+        .filter(|p| p.total > 0 || p.previous > 0)
+        .collect();
+    projects.sort_by_key(|p| std::cmp::Reverse(p.total));
+
+    let mut events = crate::store::metrics::recent_events(conn, 400)?;
+    events.retain(|event| event.occurred_at.starts_with(day));
+
+    Ok(DayReport {
+        partial: day == today,
+        downloads: DayFigure {
+            total,
+            modrinth: point.modrinth,
+            curseforge: point.curseforge,
+            previous: sum_of(&previous_day, day)?,
+            average_7: mean(7)?,
+            average_28: mean(28)?,
+        },
+        revenue: DayMoney {
+            total: money(revenue_modrinth + revenue_curseforge),
+            modrinth: money(revenue_modrinth),
+            curseforge: money(revenue_curseforge),
+            previous: money(previous_modrinth + previous_curseforge),
+            average_7: mean_money(7)?,
+            average_28: mean_money(28)?,
+        },
+        rank,
+        ranked_days: neighbours.len() as i64,
+        best_day: best.as_ref().map(|(d, _)| d.clone()),
+        best_downloads: best.map(|(_, v)| v).unwrap_or(0),
+        followers_delta,
+        projects,
+        events,
+        day: day.to_string(),
+    })
+}
+
 pub fn overview(
     conn: &Connection,
     today: &str,
@@ -1360,6 +1561,64 @@ mod tests {
         // 100 points gagnés sur la fenêtre, à 0,05 $ le point.
         assert_eq!(k.range_revenue_curseforge, "5");
         assert_eq!(k.range_revenue, "5");
+    }
+
+    /// Le bilan d'une journée se juge par ce qui l'entoure : la veille, les
+    /// moyennes récentes, et le rang parmi les journées relevées.
+    #[test]
+    fn a_day_is_judged_against_the_days_around_it() {
+        let (conn, m, c) = seed();
+        upsert_daily(&conn, m, "2026-08-10", Some(100), None, Some("1.00")).unwrap();
+        upsert_daily(&conn, m, "2026-08-11", Some(300), None, Some("3.00")).unwrap();
+        upsert_daily(&conn, c, "2026-08-11", Some(50), None, None).unwrap();
+        upsert_daily(&conn, m, "2026-08-12", Some(200), None, Some("2.00")).unwrap();
+
+        let day = day_report(&conn, "2026-08-11", "2026-08-13", PlatformFilter::default()).unwrap();
+        assert_eq!(day.downloads.total, 350);
+        assert_eq!(day.downloads.modrinth, 300);
+        assert_eq!(day.downloads.curseforge, 50);
+        assert_eq!(day.downloads.previous, 100);
+        // Sept journées précédentes, dont une seule porte des téléchargements.
+        assert!((day.downloads.average_7 - 100.0 / 7.0).abs() < 0.001);
+        assert_eq!(day.revenue.total, "3");
+        assert_eq!(day.revenue.previous, "1");
+        // Le classement ne regarde qu'en arrière : le 12 ne compte pas, il
+        // n'existait pas encore le jour où l'on juge.
+        assert_eq!(day.rank, Some(1));
+        assert_eq!(day.ranked_days, 2);
+        assert_eq!(day.best_day.as_deref(), Some("2026-08-11"));
+        assert!(!day.partial, "la journée est finie");
+    }
+
+    /// Les chiffres par projet sont ceux de la journée, jamais le cumul depuis
+    /// l'origine : sans quoi deux journées voisines afficheraient le même
+    /// total, et tout écart vaudrait zéro.
+    #[test]
+    fn a_day_lists_what_each_project_did_that_day() {
+        let (conn, m, c) = seed();
+        upsert_daily(&conn, m, "2026-08-10", Some(40), None, None).unwrap();
+        upsert_daily(&conn, c, "2026-08-10", Some(10), None, None).unwrap();
+        upsert_daily(&conn, m, "2026-08-11", Some(90), None, None).unwrap();
+        upsert_daily(&conn, c, "2026-08-11", Some(30), None, None).unwrap();
+
+        let day = day_report(&conn, "2026-08-11", "2026-08-13", PlatformFilter::default()).unwrap();
+        assert_eq!(day.projects.len(), 1, "les deux plateformes tiennent une ligne");
+        let row = &day.projects[0];
+        assert_eq!(row.modrinth, 90);
+        assert_eq!(row.curseforge, 30);
+        assert_eq!(row.total, 120);
+        assert_eq!(row.previous, 50, "la veille, et non le cumul");
+        // Le total du jour doit retomber sur celui des cartes de tête.
+        assert_eq!(row.total, day.downloads.total);
+    }
+
+    /// La journée en cours se signale : ses chiffres monteront encore.
+    #[test]
+    fn today_is_marked_as_unfinished() {
+        let (conn, m, _) = seed();
+        upsert_daily(&conn, m, "2026-08-13", Some(10), None, None).unwrap();
+        let day = day_report(&conn, "2026-08-13", "2026-08-13", PlatformFilter::default()).unwrap();
+        assert!(day.partial);
     }
 
     #[test]

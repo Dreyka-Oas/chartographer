@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ProjectSummary } from "../types";
 import { cellTooltipHtml, heatmapOption } from "./heatmap";
-import { foldSeriesTail } from "./multiseries";
+import { foldSeriesTail, stackedProjectsOption, stackValues } from "./multiseries";
 import { revenueOption } from "./revenue";
 import { sparklinePath } from "./sparkline";
 import { splitOption } from "./split";
@@ -32,19 +32,80 @@ function project(partial: Partial<ProjectSummary>): ProjectSummary {
   };
 }
 
+/** Une série d'option, telle que les fabriques la rendent. */
+function line(option: { series: { id: string; data: { value: number; own: number }[] }[] }, id: string) {
+  const found = option.series.find((s) => s.id === id);
+  if (!found) throw new Error(`série absente : ${id}`);
+  return found;
+}
+
 describe("timelineOption", () => {
-  it("produit deux séries empilées alignées sur les jours", () => {
+  it("empile les plateformes en gardant la valeur propre de chacune", () => {
     const option = timelineOption(points, true);
     expect(option.xAxis.data).toEqual(["2026-08-09", "2026-08-10"]);
     expect(option.series).toHaveLength(2);
-    expect(option.series[0].data).toEqual([40, 55]);
-    expect(option.series[1].data).toEqual([0, 75]);
-    expect(option.series[0].stack).toBe(option.series[1].stack);
+    expect(line(option, "platform:modrinth").data).toEqual([
+      { value: 40, own: 40 },
+      { value: 55, own: 55 },
+    ]);
+    // CurseForge est dessinée au niveau du total ; son chiffre à elle reste
+    // joint, c'est lui qu'annonce le tooltip.
+    expect(line(option, "platform:curseforge").data).toEqual([
+      { value: 40, own: 0 },
+      { value: 130, own: 75 },
+    ]);
   });
 
-  it("désempile quand le mode comparaison est actif", () => {
+  it("peint la plus haute en premier pour ne pas couvrir l'autre", () => {
+    const option = timelineOption(points, true);
+    expect(option.series[0].id).toBe("platform:curseforge");
+    expect(option.series[1].id).toBe("platform:modrinth");
+  });
+
+  it("rend les valeurs brutes quand le mode comparaison est actif", () => {
     const option = timelineOption(points, false);
-    expect(option.series[0].stack).toBeUndefined();
+    expect(option.series[0].id).toBe("platform:modrinth");
+    expect(line(option, "platform:curseforge").data).toEqual([
+      { value: 0, own: 0 },
+      { value: 75, own: 75 },
+    ]);
+  });
+});
+
+describe("stackValues", () => {
+  it("cumule les séries dans l'ordre, jour par jour", () => {
+    expect(stackValues([[1, 2], [10, 20], [100, 200]])).toEqual([
+      [1, 2],
+      [11, 22],
+      [111, 222],
+    ]);
+  });
+});
+
+describe("stackedProjectsOption", () => {
+  const days = ["2026-08-09", "2026-08-10"];
+  const series = [
+    { name: "Gros", values: [100, 120] },
+    { name: "Petit", values: [5, 8] },
+  ];
+
+  it("empile les mods et garde leur chiffre propre", () => {
+    const option = stackedProjectsOption(days, series, DARK, true);
+    expect(line(option, "mod:Petit").data).toEqual([
+      { value: 105, own: 5 },
+      { value: 128, own: 8 },
+    ]);
+    // Le plus haut cumul d'abord, sinon son aire recouvrirait les autres.
+    expect(option.series[0].id).toBe("mod:Petit");
+  });
+
+  it("laisse les courbes à leur hauteur propre une fois désempilées", () => {
+    const option = stackedProjectsOption(days, series, DARK, false);
+    expect(line(option, "mod:Petit").data).toEqual([
+      { value: 5, own: 5 },
+      { value: 8, own: 8 },
+    ]);
+    expect(option.series[0].id).toBe("mod:Gros");
   });
 });
 
@@ -127,6 +188,34 @@ describe("dayTooltipHtml", () => {
     ]);
     expect(html).toContain("Total");
     expect(html.replace(/\s/g, " ")).toContain("1,2 k");
+  });
+
+  /**
+   * L'empilement étant calculé par l'application, la valeur portée par le point
+   * est une hauteur cumulée. Annoncer celle-ci gonflerait chaque mod et
+   * doublerait le total.
+   */
+  it("annonce la valeur propre plutot que le cumul dessine", () => {
+    const html = dayTooltipHtml([
+      { axisValue: "2026-08-09", seriesName: "Modrinth", value: 1000, data: { value: 1000, own: 1000 } },
+      { axisValue: "2026-08-09", seriesName: "CurseForge", value: 1240, data: { value: 1240, own: 240 } },
+    ]);
+    const flat = html.replace(/\s/g, " ");
+    expect(flat).toContain("240");
+    expect(flat).not.toContain("1,2 k</b><br>");
+    expect(flat).toContain("Total <b>1,2 k");
+  });
+
+  it("classe les series de la plus grosse a la plus petite quand on le demande", () => {
+    const html = dayTooltipHtml(
+      [
+        { axisValue: "2026-08-09", seriesName: "Petit", value: 10, data: { value: 1000, own: 10 } },
+        { axisValue: "2026-08-09", seriesName: "Gros", value: 990, data: { value: 990, own: 990 } },
+      ],
+      undefined,
+      true,
+    );
+    expect(html.indexOf("Gros")).toBeLessThan(html.indexOf("Petit"));
   });
 });
 

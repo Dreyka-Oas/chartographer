@@ -202,6 +202,22 @@ pub fn save_settings(
     config::save_settings(&state.data_dir, &settings)
 }
 
+/// Bilan d'une journée. Sans date, celle d'hier : la journée en cours n'est pas
+/// finie, et son bilan changerait encore.
+#[tauri::command]
+pub fn day_report(
+    state: State<'_, AppState>,
+    day: Option<String>,
+    platforms: Option<Vec<String>>,
+) -> Result<crate::models::DayReport> {
+    let today = sync::today_utc();
+    let day = day.unwrap_or_else(|| crate::store::queries::shift_day(&today, -1));
+    let filter = queries::PlatformFilter::from_names(platforms.as_deref());
+    state
+        .store
+        .with(|conn| queries::day_report(conn, &day, &today, filter))
+}
+
 #[tauri::command]
 pub async fn sync_now(state: State<'_, AppState>) -> Result<Vec<SyncReport>> {
     let ctx = state.context()?;

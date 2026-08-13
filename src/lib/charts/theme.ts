@@ -46,6 +46,20 @@ export interface AxisParam {
   marker?: string;
   seriesName?: string;
   value?: number | string;
+  /**
+   * L'item de données. Les graphiques qui empilent eux-mêmes leurs courbes y
+   * joignent `own` : la valeur propre de la série, quand `value` porte le
+   * cumul dessiné. Sans cela le tooltip annoncerait la hauteur du tracé au
+   * lieu du chiffre du mod.
+   */
+  data?: number | { value?: number; own?: number };
+}
+
+/** Ce qu'il faut annoncer pour une entrée : sa valeur propre, pas son cumul. */
+function ownValue(entry: AxisParam): number {
+  const item = entry.data;
+  if (item && typeof item === "object" && typeof item.own === "number") return item.own;
+  return Number(entry.value ?? 0);
 }
 
 /**
@@ -84,11 +98,14 @@ export function monthAxis(months: string[], p: Palette) {
 export function dayTooltipHtml(
   params: AxisParam[],
   format: (value: number) => string = compactNumber,
+  /** Trie les lignes de la plus grosse à la plus petite. */
+  sorted = false,
 ): string {
   const head = formatDayLong(String(params[0]?.axisValue ?? ""));
   let sum = 0;
-  const rows = params.map((entry) => {
-    const value = Number(entry.value ?? 0);
+  const entries = sorted ? [...params].sort((a, b) => ownValue(b) - ownValue(a)) : params;
+  const rows = entries.map((entry) => {
+    const value = ownValue(entry);
     if (Number.isFinite(value)) sum += value;
     const amount = Number.isFinite(value) ? format(value) : "—";
     return `${entry.marker ?? ""} ${entry.seriesName ?? ""} <b>${amount}</b>`;
@@ -104,12 +121,16 @@ export function dayTooltipHtml(
 }
 
 /** Tooltip d'axe temporel, daté au jour près. */
-export function dayTooltip(p: Palette, format: (value: number) => string = compactNumber) {
+export function dayTooltip(
+  p: Palette,
+  format: (value: number) => string = compactNumber,
+  sorted = false,
+) {
   return {
     trigger: "axis",
     confine: true,
     ...tooltip(p),
-    formatter: (params: AxisParam[]) => dayTooltipHtml(params, format),
+    formatter: (params: AxisParam[]) => dayTooltipHtml(params, format, sorted),
   };
 }
 

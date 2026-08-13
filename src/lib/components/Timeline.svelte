@@ -38,7 +38,7 @@
         : "Les deux plateformes se superposent : les niveaux se comparent"}
     />
   </div>
-  <Chart {option} height="fill" />
+  <Chart {option} height="fill" morph />
 {/if}
 
 <style>

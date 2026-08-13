@@ -45,6 +45,38 @@ export function foldSeriesTail(series: NamedSeries[], max: number): NamedSeries[
   return [...head, { name: `${tail.length} autres mods`, values: merged }];
 }
 
+/**
+ * Empile les séries jour par jour : la valeur rendue pour la série `i` est la
+ * somme des séries `0..i`, ce que dessinerait un empilement.
+ *
+ * Le calcul est fait ici plutôt que laissé à ECharts, et ce n'est pas un
+ * caprice : l'option `stack` se règle en amont du rendu, si bien que la
+ * décocher refait le tracé d'un bloc, sans transition. En ne changeant que des
+ * valeurs, on retombe sur ce qu'ECharts sait animer.
+ */
+export function stackValues(rows: number[][]): number[][] {
+  const running: number[] = [];
+  return rows.map((row) =>
+    row.map((value, day) => {
+      running[day] = (running[day] ?? 0) + value;
+      return running[day];
+    }),
+  );
+}
+
+/**
+ * Ordre de tracé des séries empilées : la plus haute en premier.
+ *
+ * Chaque aire est remplie depuis la ligne du bas jusqu'à son cumul, et non
+ * entre deux cumuls comme le ferait un empilement d'ECharts. Peintes dans
+ * l'ordre, les grandes recouvriraient les petites ; peintes de la plus haute à
+ * la plus basse, chaque bande laisse voir la couleur de la série à laquelle
+ * elle revient — le même dessin qu'un empilement.
+ */
+export function drawOrder<T>(items: T[], stacked: boolean): T[] {
+  return stacked ? [...items].reverse() : items;
+}
+
 /** Aire empilée par projet, sur un axe de jours déjà dense. */
 export function stackedProjectsOption(
   days: string[],
@@ -53,9 +85,23 @@ export function stackedProjectsOption(
   stacked = true,
 ) {
   const axis = axisStyle(p);
+  const drawn = stacked ? stackValues(series.map((s) => s.values)) : series.map((s) => s.values);
   return {
+    /*
+     * Le basculement se joue sur les mêmes séries, que leur `id` fait
+     * retrouver d'un état à l'autre : ECharts interpole alors les tracés au
+     * lieu de les refaire.
+     *
+     * Aucune courbe d'accélération n'est nommée ici : mesuré, `cubicOut`
+     * annule la transition dans ECharts 6 — le tracé arrive à destination dès
+     * la première image. Le réglage par défaut, lui, glisse bien.
+     *
+     * Le tri du tooltip est laissé au formateur, qui seul connaît la valeur
+     * propre de chaque mod derrière le cumul dessiné.
+     */
+    animationDurationUpdate: 700,
     grid: { ...BASE_GRID, top: 40, bottom: 72 },
-    tooltip: { ...dayTooltip(p), order: "valueDesc" },
+    tooltip: dayTooltip(p, undefined, true),
     legend: {
       type: "scroll",
       data: series.map((s) => s.name),
@@ -74,17 +120,28 @@ export function stackedProjectsOption(
         textStyle: { color: p.textDim },
       },
     ],
-    series: series.map((s, i) => ({
-      name: s.name,
-      type: "line",
-      stack: stacked ? "total" : undefined,
-      smooth: true,
-      showSymbol: false,
-      lineStyle: { width: stacked ? 1 : 2 },
-      areaStyle: stacked ? { opacity: 0.55 } : undefined,
-      itemStyle: { color: seriesColor(i) },
-      data: s.values,
-    })),
+    series: drawOrder(
+      series.map((s, i) => ({
+        id: `mod:${s.name}`,
+        name: s.name,
+        type: "line",
+        smooth: true,
+        showSymbol: false,
+        lineStyle: { width: 1.5 },
+        /*
+         * Empilées, les aires sont opaques : c'est la seule façon pour qu'une
+         * bande montre la couleur du mod auquel elle revient, puisqu'elles
+         * sont peintes depuis la ligne du bas et se recouvrent. Superposées,
+         * elles s'effacent presque : garder des remplissages pleins noierait
+         * les petits mods sous le plus gros, et ôterait tout intérêt à
+         * désempiler.
+         */
+        areaStyle: { opacity: stacked ? 1 : 0.06 },
+        itemStyle: { color: seriesColor(i) },
+        data: s.values.map((own, day) => ({ value: drawn[i][day], own })),
+      })),
+      stacked,
+    ),
   };
 }
 

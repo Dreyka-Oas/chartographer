@@ -74,6 +74,69 @@ pub struct Kpis {
     pub projects_curseforge: i64,
 }
 
+/// Bilan d'une seule journée.
+///
+/// La question n'est pas « combien », mais « était-ce un bon jour » : un
+/// chiffre seul n'y répond pas, il lui faut ceux d'à côté. On rend donc la
+/// journée, celle qui la précède, les moyennes récentes et le rang du jour
+/// parmi les précédents — de quoi juger sans avoir à chercher ailleurs.
+#[derive(Debug, Clone, Serialize)]
+pub struct DayReport {
+    pub day: String,
+    /// Vrai quand la journée n'est pas finie : ses chiffres monteront encore.
+    pub partial: bool,
+    pub downloads: DayFigure,
+    pub revenue: DayMoney,
+    /// Rang du jour parmi les journées relevées, 1 étant la meilleure.
+    pub rank: Option<i64>,
+    /// Nombre de journées comparées, rang compris.
+    pub ranked_days: i64,
+    /// Meilleure journée connue, pour situer celle-ci.
+    pub best_day: Option<String>,
+    pub best_downloads: i64,
+    /// Abonnés gagnés ou perdus ce jour-là, si les deux relevés existent.
+    pub followers_delta: Option<i64>,
+    /// Projets qui ont porté la journée, du plus fort au plus faible.
+    pub projects: Vec<DayProject>,
+    pub events: Vec<EventRow>,
+}
+
+/// Une mesure du jour, ses parts, et ce à quoi la comparer.
+#[derive(Debug, Clone, Serialize)]
+pub struct DayFigure {
+    pub total: i64,
+    pub modrinth: i64,
+    pub curseforge: i64,
+    /// La veille, pour l'écart immédiat.
+    pub previous: i64,
+    /// Moyenne des sept et des vingt-huit journées qui précèdent, la journée
+    /// jugée exclue : se comparer à soi-même fausserait le verdict.
+    pub average_7: f64,
+    pub average_28: f64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DayMoney {
+    pub total: String,
+    pub modrinth: String,
+    pub curseforge: String,
+    pub previous: String,
+    pub average_7: String,
+    pub average_28: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DayProject {
+    pub key: String,
+    pub title: String,
+    pub icon_url: Option<String>,
+    pub modrinth: i64,
+    pub curseforge: i64,
+    pub total: i64,
+    /// Même total la veille, pour voir ce qui a bougé.
+    pub previous: i64,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct TimelinePoint {
     pub day: String,

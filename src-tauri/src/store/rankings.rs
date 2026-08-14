@@ -131,13 +131,18 @@ fn ranked_value(
     }
 }
 
-/// `DayRankings` vide : aucune journée relevée, donc aucun classement à faire.
-fn empty_rankings() -> DayRankings {
-    DayRankings {
+/// Classement sans aucune ligne.
+///
+/// Les dates de première mesure restent celles de la base : elles disent depuis
+/// quand chaque plateforme est relevée, ce qui reste vrai même quand rien n'est
+/// classé. Les figer à `None` ferait dire à la bulle de couverture que rien n'a
+/// jamais été mesuré, ce qui est faux.
+fn empty_rankings(conn: &Connection) -> Result<DayRankings> {
+    Ok(DayRankings {
         rows: Vec::new(),
-        first_modrinth_day: None,
-        first_curseforge_day: None,
-    }
+        first_modrinth_day: first_day(conn, Platform::Modrinth)?,
+        first_curseforge_day: first_day(conn, Platform::CurseForge)?,
+    })
 }
 
 /// Classement absolu : toutes les journées d'une même plage se comparent
@@ -239,7 +244,7 @@ pub fn day_rankings(
         RankSource::Both => false,
     };
     if source_hidden {
-        return Ok(empty_rankings());
+        return empty_rankings(conn);
     }
 
     if scope == RankScope::Period {
@@ -252,7 +257,7 @@ pub fn day_rankings(
         // l'historique (`pool_start`).
         return match crate::store::metrics::first_metrics_day(conn)? {
             Some(pool_start) => rank_against_pool(conn, &pool_start, from, to, filter, by, source),
-            None => Ok(empty_rankings()),
+            None => empty_rankings(conn),
         };
     }
 
@@ -267,7 +272,7 @@ pub fn day_rankings(
         RankScope::Period | RankScope::All => unreachable!("traitées plus haut"),
     };
     let Some(history_start) = history_start else {
-        return Ok(empty_rankings());
+        return empty_rankings(conn);
     };
     let history = timeline(conn, &history_start, to, filter)?;
     let revenue = revenue_by_day(conn, &history_start, to, filter)?;

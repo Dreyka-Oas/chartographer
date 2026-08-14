@@ -890,27 +890,9 @@ pub fn day_report(
     };
 
     let revenue_of = |from: &str, to: &str| -> Result<(Decimal, Decimal)> {
-        let mut modrinth = Decimal::ZERO;
-        if filter.modrinth {
-            let mut stmt = conn.prepare(
-                "SELECT m.revenue FROM metrics_daily m
-                 JOIN projects p ON p.id = m.project_id
-                 WHERE m.revenue IS NOT NULL AND m.day >= ?1 AND m.day < ?2
-                   AND p.platform = ?3",
-            )?;
-            let rows = stmt.query_map(params![from, to, Platform::Modrinth.as_str()], |r| {
-                r.get::<_, String>(0)
-            })?;
-            for row in rows {
-                modrinth += Decimal::from_str(&row?).unwrap_or_default();
-            }
-        }
-        let curseforge = if filter.curseforge {
-            Decimal::from(crate::store::metrics::cf_points_gained(conn, from, to)?) * point_value()
-        } else {
-            Decimal::ZERO
-        };
-        Ok((modrinth, curseforge))
+        Ok(crate::store::rankings::revenue_by_day(conn, from, to, filter)?
+            .values()
+            .fold((Decimal::ZERO, Decimal::ZERO), |acc, (m, c)| (acc.0 + m, acc.1 + c)))
     };
 
     let (revenue_modrinth, revenue_curseforge) = revenue_of(day, &next)?;
@@ -930,14 +912,14 @@ pub fn day_report(
     // n'existaient pas encore. Les journées sans le moindre téléchargement sont
     // écartées : ce sont des jours sans relevé, pas des jours creux, et elles
     // flatteraient le classement.
-    let window_start = shift_day(day, -89);
+    let window_start = shift_day(day, -(crate::store::rankings::RANK_WINDOW_DAYS - 1));
     let neighbours: Vec<i64> = timeline(conn, &window_start, &next, filter)?
         .iter()
         .map(|p| p.modrinth + p.curseforge)
         .filter(|total| *total > 0)
         .collect();
     let total = point.modrinth + point.curseforge;
-    let rank = (total > 0).then(|| neighbours.iter().filter(|other| **other > total).count() as i64 + 1);
+    let rank = crate::store::rankings::rank_within(&neighbours, total);
 
     // Meilleure journée connue, toutes plateformes visibles confondues.
     let all = timeline(conn, "0000-01-01", &next, filter)?;

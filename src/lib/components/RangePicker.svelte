@@ -3,9 +3,8 @@
   import Select from "./Select.svelte";
   import Tooltip from "./Tooltip.svelte";
   import { formatMonth, formatRange, lastDayOfMonth } from "../format";
+  import { RANGES } from "../ranges";
   import { dashboard } from "../state.svelte";
-
-  const RANGES = [30, 90, 180, 365];
 
   const overview = $derived(dashboard.overview);
   const months = $derived([...(overview?.available_months ?? [])].reverse());

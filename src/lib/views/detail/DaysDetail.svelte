@@ -19,6 +19,7 @@
   import Select from "../../components/Select.svelte";
   import StatRow from "../../components/StatRow.svelte";
   import { compactNumber, formatDay, formatDayLong, formatMoney } from "../../format";
+  import { RANGES } from "../../ranges";
   import { dashboard } from "../../state.svelte";
   import { theme } from "../../theme.svelte";
   import type { AppErrorPayload, DayRankings, RankBy, RankScope } from "../../types";
@@ -36,8 +37,11 @@
    * défaut, toute l'histoire disponible : une fenêtre de quatre-vingt-dix
    * jours par défaut donnait des rangs qui ne suivaient pas les boutons de
    * période de la barre du haut, sans que rien à l'écran ne le dise.
+   *
+   * `"all"` et `"period"` sont deux sentinelles ; toute autre valeur est un
+   * palier de `RANGES` porté en texte, celui que `<Select>` renvoie.
    */
-  let windowChoice = $state<"all" | "90" | "30" | "period">("all");
+  let windowChoice = $state<string>("all");
 
   /**
    * `scope` et `windowDays` transmis à la commande. « La période affichée »
@@ -45,18 +49,15 @@
    * de la période : celle-ci referait toujours de la première journée la
    * première, sans jamais laisser une journée en dépasser une autre qui la
    * précède.
+   *
+   * Le palier lui-même n'est jamais nommé ici : il est lu dans `windowChoice`
+   * tel quel, si bien qu'un jour ajouté à `RANGES` fonctionne sans qu'on ait
+   * à y toucher.
    */
   const scopeAndWindow = $derived.by((): { scope: RankScope; windowDays: number | null } => {
-    switch (windowChoice) {
-      case "90":
-        return { scope: "sliding", windowDays: 90 };
-      case "30":
-        return { scope: "sliding", windowDays: 30 };
-      case "all":
-        return { scope: "all", windowDays: null };
-      case "period":
-        return { scope: "period", windowDays: null };
-    }
+    if (windowChoice === "all") return { scope: "all", windowDays: null };
+    if (windowChoice === "period") return { scope: "period", windowDays: null };
+    return { scope: "sliding", windowDays: Number(windowChoice) };
   });
 
   // Un jeton de séquence, pour ignorer une réponse arrivée après une plus
@@ -151,11 +152,10 @@
         value={windowChoice}
         label="Comparer à"
         compact
-        onchange={(value) => (windowChoice = (value as typeof windowChoice) ?? "all")}
+        onchange={(value) => (windowChoice = value ?? "all")}
         options={[
-          { value: "all", label: "toute l'histoire antérieure" },
-          { value: "90", label: "les 90 jours précédents" },
-          { value: "30", label: "les 30 jours précédents" },
+          { value: "all", label: "toutes les journées relevées" },
+          ...RANGES.map((days) => ({ value: String(days), label: `les ${days} jours précédents` })),
           { value: "period", label: "la période affichée" },
         ]}
       />

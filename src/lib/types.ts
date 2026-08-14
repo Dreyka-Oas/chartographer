@@ -373,12 +373,15 @@ export type RankBy = "downloads" | "revenue";
 /**
  * À quoi une journée se compare pour obtenir son rang.
  *
- * `sliding` et `all` ne regardent jamais en avant ; `all` n'est qu'une
- * fenêtre glissante sans borne basse. `period` rompt cette règle par
- * construction : elle classe les journées affichées les unes par rapport aux
- * autres, sans égard à leur ordre.
+ * Deux familles. `all` et `period` sont absolues : elles comparent un groupe
+ * de journées à lui-même, sans égard à leur ordre — `all` sur tout
+ * l'historique, `period` sur la seule période affichée. `sliding` et
+ * `retrospective` sont rétrospectives : une journée n'y est jugée que sur
+ * celles qui la précèdent, si bien qu'un rang une fois acquis ne bouge plus
+ * jamais — `sliding` sur une fenêtre de jours, `retrospective` sans borne
+ * basse.
  */
-export type RankScope = "sliding" | "all" | "period";
+export type RankScope = "sliding" | "retrospective" | "all" | "period";
 
 export interface DayRankings {
   /** Les journées relevées, de la plus ancienne à la plus récente. */

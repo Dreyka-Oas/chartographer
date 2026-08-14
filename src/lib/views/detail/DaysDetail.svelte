@@ -4,10 +4,12 @@
    *
    * La page Journée juge une journée à la fois ; celle-ci les met en rang. Le
    * classement se règle plutôt que de s'imposer : sur quoi il porte —
-   * téléchargements ou revenus — et à quoi chaque journée se compare — une
-   * fenêtre glissante, toute l'histoire, ou la période affichée. Deux filtres
-   * plutôt que deux colonnes figées : ils laissent choisir la question, là où
-   * deux rangs côte à côte auraient imposé les deux réponses à la fois.
+   * téléchargements ou revenus — et à quoi chaque journée se compare — tout
+   * l'historique ou la période affichée, comparés entre eux, ou une fenêtre
+   * glissante ou tout ce qui précède, jugés sans jamais regarder en avant.
+   * Deux filtres plutôt que deux colonnes figées : ils laissent choisir la
+   * question, là où deux rangs côte à côte auraient imposé les deux réponses
+   * à la fois.
    */
   import { api } from "../../api";
   import Chart from "../../charts/Chart.svelte";
@@ -34,12 +36,14 @@
   let rankBy = $state<RankBy>("downloads");
   /**
    * À quoi chaque journée se compare, tel que choisi dans le filtre. Par
-   * défaut, toute l'histoire disponible : une fenêtre de quatre-vingt-dix
-   * jours par défaut donnait des rangs qui ne suivaient pas les boutons de
-   * période de la barre du haut, sans que rien à l'écran ne le dise.
+   * défaut, toutes les journées relevées, comparées entre elles : la
+   * première place y signifie « meilleure journée jamais relevée », plutôt
+   * qu'un dénominateur qui varie d'une ligne à l'autre comme le ferait une
+   * comparaison rétrospective sans fenêtre.
    *
-   * `"all"` et `"period"` sont deux sentinelles ; toute autre valeur est un
-   * palier de `RANGES` porté en texte, celui que `<Select>` renvoie.
+   * `"all"`, `"retrospective"` et `"period"` sont trois sentinelles ; toute
+   * autre valeur est un palier de `RANGES` porté en texte, celui que
+   * `<Select>` renvoie.
    */
   let windowChoice = $state<string>("all");
 
@@ -56,6 +60,7 @@
    */
   const scopeAndWindow = $derived.by((): { scope: RankScope; windowDays: number | null } => {
     if (windowChoice === "all") return { scope: "all", windowDays: null };
+    if (windowChoice === "retrospective") return { scope: "retrospective", windowDays: null };
     if (windowChoice === "period") return { scope: "period", windowDays: null };
     return { scope: "sliding", windowDays: Number(windowChoice) };
   });
@@ -121,7 +126,7 @@
   );
 
   const WINDOW_HINT =
-    "À quoi chaque journée est comparée pour obtenir son rang. Sur une fenêtre glissante, une journée n'est jugée que sur celles qui la précèdent : le rang qu'elle avait le jour même, et que rien de ce qui est arrivé ensuite ne peut plus changer. Sur toute l'histoire antérieure, un pic ancien pèse sur toutes les journées qui le suivent. Sur la période affichée, le rang répond seulement à « où se situe ce jour dans ce que je regarde », et change avec les dates choisies.";
+    "À quoi chaque journée est comparée pour obtenir son rang. Sur toutes les journées relevées ou sur la période affichée, les journées se classent entre elles : la première place veut dire la meilleure de tout le groupe, et une journée peut y reculer quand une meilleure arrive ensuite. Sur une fenêtre glissante ou sur toutes celles qui la précèdent, une journée n'est jugée que sur ce qui la précède : le rang qu'elle avait le jour même, et que rien de ce qui arrive ensuite ne peut plus changer.";
   const BY_HINT =
     "Ce qui décide du rang. Les téléchargements comptent les deux plateformes visibles. Les revenus, eux, sont pour ainsi dire ceux de Modrinth : CurseForge n'en publie aucun par jour, ils ne sont reconstruits que par l'écart entre deux soldes de points relevés au passage, si bien que la plupart des journées n'en portent aucun.";
   const REVENUE =
@@ -155,6 +160,7 @@
         onchange={(value) => (windowChoice = value ?? "all")}
         options={[
           { value: "all", label: "toutes les journées relevées" },
+          { value: "retrospective", label: "toutes celles qui la précèdent" },
           ...RANGES.map((days) => ({ value: String(days), label: `les ${days} jours précédents` })),
           { value: "period", label: "la période affichée" },
         ]}

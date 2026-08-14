@@ -3,8 +3,8 @@
 //! Le classement vit à part des autres requêtes parce qu'il répond à une autre
 //! question : non pas « combien », mais « était-ce un bon jour ». Deux façons
 //! d'y répondre ne regardent jamais en avant — « était-ce un bon jour quand il
-//! s'est produit » — une troisième compare la période affichée à elle-même,
-//! sans égard à l'ordre des journées. `RankScope` en documente les trois.
+//! s'est produit » — deux autres comparent un groupe de journées à lui-même,
+//! sans égard à leur ordre. `RankScope` documente les quatre.
 
 use crate::error::Result;
 use crate::models::{DayRankRow, DayRankings, Platform, RankBy, RankScope};
@@ -118,23 +118,76 @@ fn ranked_value(point: &crate::models::TimelinePoint, revenue: &(Decimal, Decima
     }
 }
 
+/// `DayRankings` vide : aucune journée relevée, donc aucun classement à faire.
+fn empty_rankings() -> DayRankings {
+    DayRankings {
+        rows: Vec::new(),
+        first_modrinth_day: None,
+        first_curseforge_day: None,
+    }
+}
+
+/// Classement absolu : toutes les journées d'une même plage se comparent
+/// entre elles, sans égard à leur ordre, contre une seule et même référence.
+/// C'est le cœur commun à `Period`, dont la plage est la période affichée, et
+/// à `All`, dont la plage est tout l'historique — les deux ne diffèrent que
+/// par `pool_start`, jamais par la règle de classement elle-même.
+fn rank_against_pool(
+    conn: &Connection,
+    pool_start: &str,
+    to: &str,
+    filter: PlatformFilter,
+    by: RankBy,
+) -> Result<DayRankings> {
+    let history = timeline(conn, pool_start, to, filter)?;
+    let revenue = revenue_by_day(conn, pool_start, to, filter)?;
+    let values: Vec<i64> = history
+        .iter()
+        .map(|p| {
+            let r = revenue.get(&p.day).copied().unwrap_or_default();
+            ranked_value(p, &r, by)
+        })
+        .collect();
+
+    let pool: Vec<i64> = values.iter().copied().filter(|v| *v > 0).collect();
+    let mut rows = Vec::with_capacity(history.len());
+    for (i, point) in history.iter().enumerate() {
+        let (modrinth_revenue, curseforge_revenue) =
+            revenue.get(&point.day).copied().unwrap_or_default();
+        rows.push(DayRankRow {
+            day: point.day.clone(),
+            modrinth: point.modrinth,
+            curseforge: point.curseforge,
+            total: point.modrinth + point.curseforge,
+            revenue: (modrinth_revenue + curseforge_revenue).normalize().to_string(),
+            rank: rank_within(&pool, values[i]),
+            compared_days: pool.len() as i64,
+        });
+    }
+    Ok(DayRankings {
+        rows,
+        first_modrinth_day: first_day(conn, Platform::Modrinth)?,
+        first_curseforge_day: first_day(conn, Platform::CurseForge)?,
+    })
+}
+
 /// Classement des journées d'une période, `to` exclu.
 ///
 /// Une seule question se pose à chaque journée : quel rang les réglages
 /// demandés lui donnent-ils. `by` choisit ce qui est classé — téléchargements
-/// ou revenus. `scope` choisit à quoi une journée se compare :
+/// ou revenus. `scope` choisit à quoi une journée se compare, et se répartit
+/// en deux familles :
 ///
-/// - `Sliding` : aux `window_days` journées qui la précèdent, elle comprise —
-///   le rang qu'elle avait le jour où elle s'est produite. Le classement ne
-///   regarde jamais en avant : rien de ce qui est arrivé ensuite ne peut plus
-///   le modifier.
-/// - `All` : la même règle, sans borne basse — à tout ce qui a été relevé
-///   jusqu'à elle, elle comprise, ce qui suppose de charger l'historique
-///   depuis l'origine plutôt que depuis `from - (n - 1)`. `window_days` n'est
-///   pas lu dans ce cas.
-/// - `Period` : aux autres journées listées, sans égard à leur ordre — la
-///   seule des trois où une journée peut être dépassée par une qui la suit.
-///   `window_days` n'est pas lu dans ce cas non plus.
+/// - `Period` et `All` sont absolues : elles comparent un groupe de journées
+///   à lui-même, sans égard à leur ordre, si bien qu'une journée peut y être
+///   dépassée par une autre qui la suit. `Period` prend pour groupe la
+///   période affichée ; `All`, tout l'historique — la même règle, sans autre
+///   différence que la plage.
+/// - `Sliding` et `Retrospective` sont rétrospectives : une journée n'y est
+///   jugée que sur celles qui la précèdent, elle comprise, si bien qu'un rang
+///   une fois acquis ne bouge plus jamais. `Sliding` regarde les
+///   `window_days` journées qui précèdent ; `Retrospective`, sans borne
+///   basse — c'est la même fenêtre, simplement non bornée.
 pub fn day_rankings(
     conn: &Connection,
     from: &str,
@@ -144,24 +197,30 @@ pub fn day_rankings(
     scope: RankScope,
     window_days: Option<i64>,
 ) -> Result<DayRankings> {
-    // « Toutes les journées relevées » veut dire ce que la base contient
-    // réellement, pas l'origine du calendrier : partir de l'an zéro ferait
-    // porter `timeline` et `revenue_by_day` sur des millénaires vides.
+    if scope == RankScope::Period {
+        return rank_against_pool(conn, from, to, filter, by);
+    }
+    if scope == RankScope::All {
+        // « Toutes les journées relevées » veut dire ce que la base contient
+        // réellement, pas l'origine du calendrier.
+        return match crate::store::metrics::first_metrics_day(conn)? {
+            Some(pool_start) => rank_against_pool(conn, &pool_start, to, filter, by),
+            None => Ok(empty_rankings()),
+        };
+    }
+
+    // `Sliding` et `Retrospective` : une fenêtre qui ne regarde jamais en
+    // avant, la seconde n'étant qu'une fenêtre sans borne basse.
     let history_start = match scope {
         RankScope::Sliding => match window_days {
             Some(n) => Some(shift_day(from, -(n - 1))),
             None => crate::store::metrics::first_metrics_day(conn)?,
         },
-        RankScope::All => crate::store::metrics::first_metrics_day(conn)?,
-        RankScope::Period => Some(from.to_string()),
+        RankScope::Retrospective => crate::store::metrics::first_metrics_day(conn)?,
+        RankScope::Period | RankScope::All => unreachable!("traitées plus haut"),
     };
     let Some(history_start) = history_start else {
-        // Base vide : aucune journée relevée, donc aucun classement à faire.
-        return Ok(DayRankings {
-            rows: Vec::new(),
-            first_modrinth_day: None,
-            first_curseforge_day: None,
-        });
+        return Ok(empty_rankings());
     };
     let history = timeline(conn, &history_start, to, filter)?;
     let revenue = revenue_by_day(conn, &history_start, to, filter)?;
@@ -174,39 +233,11 @@ pub fn day_rankings(
         })
         .collect();
 
-    let mut rows = Vec::new();
-
-    if scope == RankScope::Period {
-        // Une seule référence, partagée par toutes les journées listées :
-        // c'est ce qui distingue ce mode des deux autres, où chaque journée
-        // recalcule la sienne en ne regardant jamais en avant.
-        let pool: Vec<i64> = values.iter().copied().filter(|v| *v > 0).collect();
-        for (i, point) in history.iter().enumerate() {
-            let (modrinth_revenue, curseforge_revenue) =
-                revenue.get(&point.day).copied().unwrap_or_default();
-            rows.push(DayRankRow {
-                day: point.day.clone(),
-                modrinth: point.modrinth,
-                curseforge: point.curseforge,
-                total: point.modrinth + point.curseforge,
-                revenue: (modrinth_revenue + curseforge_revenue).normalize().to_string(),
-                rank: rank_within(&pool, values[i]),
-                compared_days: pool.len() as i64,
-            });
-        }
-        return Ok(DayRankings {
-            rows,
-            first_modrinth_day: first_day(conn, Platform::Modrinth)?,
-            first_curseforge_day: first_day(conn, Platform::CurseForge)?,
-        });
-    }
-
-    // `Sliding` et `All` partagent le même algorithme : une fenêtre qui ne
-    // regarde jamais en avant, `All` n'étant qu'une fenêtre sans borne basse.
     let bound = if scope == RankScope::Sliding { window_days } else { None };
 
     // Borne basse glissante de la fenêtre : elle n'avance jamais en arrière, ce
     // qui laisse le parcours linéaire au lieu de rouvrir la fenêtre à chaque jour.
+    let mut rows = Vec::new();
     let mut start = 0usize;
     for (i, point) in history.iter().enumerate() {
         if point.day.as_str() < from {
@@ -369,7 +400,7 @@ mod tests {
     /// mais jamais sur ce qui suit : la règle « jamais en avant » vaut aussi
     /// pour cette fenêtre-là.
     #[test]
-    fn scope_all_compares_to_everything_before_never_after() {
+    fn scope_retrospective_compares_to_everything_before_never_after() {
         let (conn, m, _) = seed();
         upsert_daily(&conn, m, "2024-01-01", Some(900), None, None).unwrap();
         upsert_daily(&conn, m, "2026-08-10", Some(100), None, None).unwrap();
@@ -380,13 +411,62 @@ mod tests {
             "2026-08-11",
             PlatformFilter::default(),
             RankBy::Downloads,
-            RankScope::All,
+            RankScope::Retrospective,
             None,
         )
         .unwrap();
         let day = &out.rows[0];
         assert_eq!(day.rank, Some(2), "la journée de 2024 la précède et la dépasse");
         assert_eq!(day.compared_days, 2);
+    }
+
+    /// Portées absolues et rétrospectives ne répondent pas à la même
+    /// question. Deux journées, la seconde dépassant la première : en absolu,
+    /// elles se comparent l'une à l'autre sans égard à l'ordre, donc la
+    /// première recule quand la seconde arrive — rangs 2 puis 1. En
+    /// rétrospectif, chacune ne juge que ce qui la précède : la première n'a
+    /// personne devant elle, la seconde dépasse tout ce qu'elle voit — rangs
+    /// 1 puis 1, et ni l'une ni l'autre ne bouge plus jamais après coup.
+    #[test]
+    fn absolute_scope_lets_a_later_day_demote_an_earlier_one() {
+        let (conn, m, _) = seed();
+        upsert_daily(&conn, m, "2026-08-10", Some(100), None, None).unwrap();
+        upsert_daily(&conn, m, "2026-08-11", Some(500), None, None).unwrap();
+
+        let out = day_rankings(
+            &conn,
+            "2026-08-10",
+            "2026-08-12",
+            PlatformFilter::default(),
+            RankBy::Downloads,
+            RankScope::All,
+            None,
+        )
+        .unwrap();
+        let rank_of = |day: &str| out.rows.iter().find(|r| r.day == day).unwrap().rank;
+        assert_eq!(rank_of("2026-08-10"), Some(2), "dépassée par la journée qui la suit");
+        assert_eq!(rank_of("2026-08-11"), Some(1));
+    }
+
+    #[test]
+    fn retrospective_scope_never_lets_a_later_day_change_an_earlier_rank() {
+        let (conn, m, _) = seed();
+        upsert_daily(&conn, m, "2026-08-10", Some(100), None, None).unwrap();
+        upsert_daily(&conn, m, "2026-08-11", Some(500), None, None).unwrap();
+
+        let out = day_rankings(
+            &conn,
+            "2026-08-10",
+            "2026-08-12",
+            PlatformFilter::default(),
+            RankBy::Downloads,
+            RankScope::Retrospective,
+            None,
+        )
+        .unwrap();
+        let rank_of = |day: &str| out.rows.iter().find(|r| r.day == day).unwrap().rank;
+        assert_eq!(rank_of("2026-08-10"), Some(1), "personne ne la précède le jour même");
+        assert_eq!(rank_of("2026-08-11"), Some(1), "elle dépasse tout ce qu'elle voit derrière elle");
     }
 
     /// La fenêtre courte ne voit pas ce que la longue voit.
@@ -425,7 +505,7 @@ mod tests {
             "2026-08-13",
             PlatformFilter::default(),
             RankBy::Revenue,
-            RankScope::All,
+            RankScope::Retrospective,
             None,
         )
         .unwrap();
@@ -446,7 +526,7 @@ mod tests {
             "2026-08-13",
             PlatformFilter::default(),
             RankBy::Downloads,
-            RankScope::All,
+            RankScope::Retrospective,
             None,
         )
         .unwrap();
@@ -483,7 +563,7 @@ mod tests {
         assert_eq!(
             rank_of("2026-08-10"),
             Some(3),
-            "dépassée par des journées qui la suivent, ce que Sliding et All interdisent"
+            "dépassée par des journées qui la suivent, ce que Sliding et Retrospective interdisent"
         );
     }
 
@@ -509,10 +589,12 @@ mod tests {
         assert_eq!(days, vec!["2026-08-10", "2026-08-12"]);
     }
 
-    /// Mesure ponctuelle sur la base réelle de l'utilisateur : la portée
-    /// `All` doit répondre en un temps raisonnable, pas geler l'interface.
-    /// Ouverte en lecture seule, jamais modifiée. Ignoré par défaut : le
-    /// fichier n'existe pas sur les machines qui n'ont pas cette base.
+    /// Mesure ponctuelle sur la base réelle de l'utilisateur : la portée par
+    /// défaut de la page, `All`, classe désormais toutes les journées
+    /// relevées entre elles — elle doit répondre en un temps raisonnable, pas
+    /// geler l'interface. Ouverte en lecture seule, jamais modifiée. Ignoré
+    /// par défaut : le fichier n'existe pas sur les machines qui n'ont pas
+    /// cette base.
     #[test]
     #[ignore]
     fn day_rankings_all_scope_answers_quickly_on_the_real_database() {

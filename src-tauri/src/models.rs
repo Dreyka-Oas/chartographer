@@ -184,19 +184,23 @@ impl Default for RankBy {
 
 /// À quoi une journée se compare pour obtenir son rang.
 ///
-/// La règle de la page — un rang une fois acquis ne bouge plus — vaut pour
-/// `Sliding` et `All` : toutes deux ne regardent jamais en avant, la seconde
-/// n'ayant simplement pas de borne basse. `Period` rompt cette règle par
-/// construction : elle classe les journées affichées les unes par rapport aux
-/// autres, si bien qu'une journée peut y être dépassée par une autre qui la
-/// suit. C'est le prix d'une vraie réponse à « où se situe ce jour dans ce que
-/// je regarde », qui change avec les dates choisies.
+/// Deux familles, qui ne répondent pas à la même question. `All` et `Period`
+/// sont absolues : elles comparent un groupe de journées à lui-même, sans
+/// égard à leur ordre, si bien qu'une journée peut y être dépassée par une
+/// autre qui la suit — `All` sur tout l'historique, `Period` sur la seule
+/// période affichée. `Sliding` et `Retrospective` sont rétrospectives : une
+/// journée n'y est jugée que sur celles qui la précèdent, si bien qu'un rang
+/// une fois acquis ne bouge plus jamais — `Sliding` sur les `window_days`
+/// journées qui précèdent, `Retrospective` sans borne basse.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum RankScope {
     /// Aux `window_days` journées qui précèdent, elle comprise.
     Sliding,
     /// À tout ce qui précède, elle comprise, sans borne basse.
+    Retrospective,
+    /// Toutes les journées de l'historique, comparées entre elles sans égard
+    /// à leur ordre : la version non bornée de `Period`.
     All,
     /// Aux autres journées de la période affichée, toutes comparées entre elles.
     Period,

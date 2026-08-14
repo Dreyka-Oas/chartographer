@@ -71,9 +71,14 @@
     };
   }
 
+  /** Numéro d'ouverture, pour qu'une fermeture différée ne referme pas une
+   * bulle rouverte entre-temps. */
+  let opened = 0;
+
   function show() {
     if (!text) return;
     place(0, WIDTH);
+    opened += 1;
     open = true;
   }
 
@@ -90,7 +95,19 @@
     place(bubble.offsetHeight, bubble.offsetWidth);
   });
 
-  const hide = () => (open = false);
+  /**
+   * Un élément arraché sous la souris émet un dernier `mouseleave`, en pleine
+   * destruction de son bloc — là où Svelte refuse toute écriture d'état
+   * (`state_unsafe_mutation`). La fermeture attend donc la microtâche
+   * suivante, hors de cette fenêtre ; à l'œil, rien ne change.
+   */
+  function hide() {
+    if (!open) return;
+    const generation = opened;
+    queueMicrotask(() => {
+      if (generation === opened) open = false;
+    });
+  }
 
   /**
    * Les écouteurs sont posés sur l'élément plutôt que déclarés en attributs.

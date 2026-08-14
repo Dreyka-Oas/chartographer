@@ -1,5 +1,6 @@
 node_modules/
 dist/
+.superpowers/
 .svelte-kit/
 src-tauri/target/
 src-tauri/gen/

@@ -1441,6 +1441,214 @@ git add src/lib/components/DateField.svelte src/lib/components/calendar.ts src/l
 git commit -m "Calendrier maison aux couleurs de l application"
 ```
 
+## Tâche 9 : le classement se règle, il ne se subit pas
+
+Demande venue en cours d'exécution, après avoir vu la page. Trois reproches, tous fondés :
+
+1. **Pourquoi quatre-vingt-dix jours et pas tout l'historique ?** La fenêtre venait de la page Journée, où elle était déjà écrite en dur. Elle a une raison — comparer une journée à sa saison plutôt qu'à toute l'histoire, sans quoi un pic ancien écrase trois cents jours de suite — mais cette raison est discutable et n'a rien à faire dans le code plutôt que dans les mains de celui qui regarde.
+2. **Le classement porte sur quoi ?** Sur le total de téléchargements du jour, plateformes visibles comprises. Rien ne le disait à l'écran, et la colonne des revenus juste à côté entretenait le doute.
+3. **Pourquoi deux colonnes de rang ?** Parce que ce sont deux questions différentes. Mais deux colonnes figées imposent les deux réponses ; un filtre laisse choisir la question.
+
+La page passe donc de deux colonnes figées à **une colonne de rang et deux filtres** : sur quoi l'on classe, et à quoi l'on compare.
+
+**Fichiers :**
+- Modifier : `src-tauri/src/store/rankings.rs` — `day_rankings` prend le critère et la fenêtre.
+- Modifier : `src-tauri/src/models.rs` — `DayRankRow` porte un seul rang.
+- Modifier : `src-tauri/src/commands.rs` — la commande transmet les deux réglages.
+- Modifier : `src/lib/types.ts`, `src/lib/api.ts` — la signature suit.
+- Modifier : `src/lib/views/detail/DaysDetail.svelte` — les deux filtres, la colonne unique, les bulles réécrites.
+- Modifier : `src/lib/charts/dayRanking.ts` — la courbe de rang suit le rang choisi.
+
+**Interfaces :**
+- Produit côté Rust :
+  - `pub enum RankBy { Downloads, Revenue }` (sérialisé `"downloads"` / `"revenue"`)
+  - `pub fn day_rankings(conn, from, to, filter, by: RankBy, window: Option<i64>) -> Result<DayRankings>` — `window: None` compare à tout ce qui précède, `Some(n)` aux `n` journées qui précèdent, journée comprise.
+  - `DayRankRow { day, modrinth, curseforge, total, revenue, rank, compared_days }` — un seul rang, celui que les réglages ont demandé.
+- Produit côté front : `api.dayRankings(rangeDays, from, to, platforms, by, window)`.
+
+- [ ] **Étape 1 : écrire les tests qui échouent**
+
+Dans `mod tests` de `src-tauri/src/store/rankings.rs`, remplacer les tests `the_rank_of_a_day_never_looks_ahead` et `the_period_rank_orders_the_whole_range` par ceux-ci, et ajouter les deux suivants :
+
+```rust
+    /// Fenêtre glissante : le rang ne regarde que les journées qui précèdent.
+    #[test]
+    fn a_sliding_window_never_looks_ahead() {
+        let (conn, m, _) = seed();
+        upsert_daily(&conn, m, "2026-08-10", Some(100), None, None).unwrap();
+        upsert_daily(&conn, m, "2026-08-11", Some(500), None, None).unwrap();
+
+        let out = day_rankings(
+            &conn,
+            "2026-08-10",
+            "2026-08-12",
+            PlatformFilter::default(),
+            RankBy::Downloads,
+            Some(90),
+        )
+        .unwrap();
+        let first = out.rows.iter().find(|r| r.day == "2026-08-10").unwrap();
+        assert_eq!(first.rank, Some(1), "elle était première le jour même");
+    }
+
+    /// Sans fenêtre, la comparaison porte sur tout l'historique antérieur.
+    #[test]
+    fn without_a_window_the_whole_past_counts() {
+        let (conn, m, _) = seed();
+        upsert_daily(&conn, m, "2024-01-01", Some(900), None, None).unwrap();
+        upsert_daily(&conn, m, "2026-08-10", Some(100), None, None).unwrap();
+
+        let out = day_rankings(
+            &conn,
+            "2026-08-10",
+            "2026-08-11",
+            PlatformFilter::default(),
+            RankBy::Downloads,
+            None,
+        )
+        .unwrap();
+        let day = &out.rows[0];
+        assert_eq!(day.rank, Some(2), "la journée de 2024 la précède et la dépasse");
+        assert_eq!(day.compared_days, 2);
+    }
+
+    /// La fenêtre courte ne voit pas ce que la longue voit.
+    #[test]
+    fn a_short_window_forgets_the_old_peak() {
+        let (conn, m, _) = seed();
+        upsert_daily(&conn, m, "2026-05-01", Some(900), None, None).unwrap();
+        upsert_daily(&conn, m, "2026-08-10", Some(100), None, None).unwrap();
+
+        let out = day_rankings(
+            &conn,
+            "2026-08-10",
+            "2026-08-11",
+            PlatformFilter::default(),
+            RankBy::Downloads,
+            Some(30),
+        )
+        .unwrap();
+        assert_eq!(out.rows[0].rank, Some(1), "le pic de mai est hors fenêtre");
+    }
+
+    /// Classer sur les revenus classe sur les revenus, pas sur les téléchargements.
+    #[test]
+    fn ranking_on_revenue_ignores_downloads() {
+        let (conn, m, _) = seed();
+        upsert_daily(&conn, m, "2026-08-10", Some(1000), None, Some("0.10")).unwrap();
+        upsert_daily(&conn, m, "2026-08-11", Some(10), None, Some("5.00")).unwrap();
+
+        let out = day_rankings(
+            &conn,
+            "2026-08-10",
+            "2026-08-12",
+            PlatformFilter::default(),
+            RankBy::Revenue,
+            None,
+        )
+        .unwrap();
+        let rank_of = |day: &str| out.rows.iter().find(|r| r.day == day).unwrap().rank;
+        assert_eq!(rank_of("2026-08-11"), Some(1), "la journée la mieux payée est première");
+        assert_eq!(rank_of("2026-08-10"), Some(2));
+    }
+```
+
+- [ ] **Étape 2 : lancer les tests et vérifier qu'ils échouent**
+
+Lancer : `cd C:\Users\ipmss\chartographer\src-tauri; cargo test rankings`
+Attendu : ÉCHEC de compilation — `day_rankings` prend quatre paramètres, `RankBy` n'existe pas, `rank` n'existe pas sur `DayRankRow`.
+
+- [ ] **Étape 3 : le critère de classement**
+
+Dans `src-tauri/src/models.rs`, remplacer les deux champs de rang de `DayRankRow` par un seul :
+
+```rust
+    /// Rang de la journée selon les réglages demandés, 1 étant le meilleur.
+    pub rank: Option<i64>,
+    /// Journées réellement comparées pour établir ce rang.
+    pub compared_days: i64,
+```
+
+Et ajouter, à la suite de `DayRankings` :
+
+```rust
+/// Ce sur quoi les journées se classent.
+///
+/// Le classement porte sur les téléchargements par défaut. Les revenus sont
+/// proposés, mais ils ne racontent pas la même chose : Modrinth les relève au
+/// jour le jour quand CurseForge n'en publie aucun, si bien qu'un classement
+/// par revenus est d'abord un classement Modrinth.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum RankBy {
+    Downloads,
+    Revenue,
+}
+
+impl Default for RankBy {
+    fn default() -> Self {
+        Self::Downloads
+    }
+}
+```
+
+Vérifier que `serde::Deserialize` est bien importé dans `models.rs` — le fichier ne dérive jusqu'ici que `Serialize`.
+
+- [ ] **Étape 4 : le classement réglable**
+
+Dans `src-tauri/src/store/rankings.rs`, `day_rankings` prend deux paramètres de plus et n'établit plus qu'un rang.
+
+La valeur classée devient, selon `by`, le total de téléchargements du jour ou son revenu. Les revenus étant des `Decimal`, ils sont ramenés en centièmes entiers (`(value * 100).round()`) avant d'entrer dans `rank_within`, qui travaille sur des entiers : deux journées à un centième près restent distinctes, et rien ne se perd à l'échelle où l'on compare.
+
+La fenêtre devient `Option<i64>` :
+- `Some(n)` : la comparaison porte sur les journées dont la date tombe entre `jour - (n - 1)` et `jour`, comme aujourd'hui avec `n = 90` ;
+- `None` : elle porte sur toutes les journées relevées jusqu'à ce jour compris, ce qui suppose de charger l'historique depuis l'origine (`"0000-01-01"`) plutôt que depuis `from - 89`.
+
+Le rang « sur la période affichée » disparaît en tant que colonne : il devient le cas particulier où l'appelant demande une fenêtre égale à la longueur de la période. Le front le fait en passant le nombre de jours de la fenêtre courante.
+
+`RANK_WINDOW_DAYS` reste la valeur par défaut, et reste ce que `day_report` utilise : la page Journée continue d'annoncer le même rang qu'avant.
+
+- [ ] **Étape 5 : lancer les tests et vérifier qu'ils passent**
+
+Lancer : `cd C:\Users\ipmss\chartographer\src-tauri; cargo test`
+Attendu : SUCCÈS, y compris les tests de `day_report` inchangés.
+
+- [ ] **Étape 6 : la commande et le front**
+
+`day_rankings` gagne `by: Option<RankBy>` et `window_days: Option<i64>`. Absents, ils valent téléchargements et quatre-vingt-dix jours — l'appel reste valide sans réglage.
+
+Côté TypeScript : `DayRankRow` perd `rank_period` et `rank_at_the_time` au profit de `rank`, `api.dayRankings` prend `by: "downloads" | "revenue"` et `windowDays: number | null`.
+
+- [ ] **Étape 7 : les deux filtres dans la page**
+
+Dans `src/lib/views/detail/DaysDetail.svelte`, deux `Select` (le composant maison, jamais un `<select>` natif) prennent place dans les actions de la coque, à côté de la bascule des graphiques :
+
+- **Classer sur** : « Téléchargements » (défaut), « Revenus ».
+- **Comparer à** : « les 90 jours précédents » (défaut), « les 30 jours précédents », « toute l'histoire antérieure », « la période affichée ».
+
+Le tableau ne montre plus qu'une colonne « Rang », suivie de « comparé à N journées ». Le titre du panneau dit en clair ce qui est classé, et sa bulle d'aide explique la différence entre les quatre fenêtres — en gardant l'avertissement sur les revenus CurseForge, qui vaut plus que jamais quand on classe dessus.
+
+Les libellés à écrire, mot pour mot :
+
+```
+const WINDOW_HINT =
+  "À quoi chaque journée est comparée pour obtenir son rang. Sur une fenêtre glissante, une journée n'est jugée que sur celles qui la précèdent : le rang qu'elle avait le jour même, et que rien de ce qui est arrivé ensuite ne peut plus changer. Sur toute l'histoire antérieure, un pic ancien pèse sur toutes les journées qui le suivent. Sur la période affichée, le rang répond seulement à « où se situe ce jour dans ce que je regarde », et change avec les dates choisies.";
+const BY_HINT =
+  "Ce qui décide du rang. Les téléchargements comptent les deux plateformes visibles. Les revenus, eux, sont pour ainsi dire ceux de Modrinth : CurseForge n'en publie aucun par jour, ils ne sont reconstruits que par l'écart entre deux soldes de points relevés au passage, si bien que la plupart des journées n'en portent aucun.";
+```
+
+- [ ] **Étape 8 : vérifier**
+
+Lancer : `npm run test; npm run check` puis `cd src-tauri; cargo test`
+Attendu : tout au vert.
+
+- [ ] **Étape 9 : commit**
+
+```bash
+git add src-tauri/src/store/rankings.rs src-tauri/src/models.rs src-tauri/src/commands.rs src/lib/types.ts src/lib/api.ts src/lib/views/detail/DaysDetail.svelte src/lib/charts/dayRanking.ts
+git commit -m "Le classement se regle : critere et fenetre de comparaison"
+```
+
 ## Ce que ce plan ne fait pas
 
 - **Pas de nouvel appel réseau.** Tout le classement se calcule sur ce qui est déjà en base. Aucune limite d'API n'est approchée.

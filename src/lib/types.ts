@@ -371,6 +371,15 @@ export interface DayRankRow {
 export type RankBy = "downloads" | "revenue";
 
 /**
+ * Quelle plateforme alimente la métrique choisie par `RankBy`. Les deux axes
+ * sont indépendants : croisés, ils donnent les six classements proposés par
+ * l'interface. Classer sur une plateforme masquée par le filtre de la barre
+ * du haut ne rend rien : ce réglage choisit sur quoi classer parmi ce qui est
+ * visible, il ne remplace pas ce filtre.
+ */
+export type RankSource = "both" | "modrinth" | "curseforge";
+
+/**
  * À quoi une journée se compare pour obtenir son rang.
  *
  * Deux familles. `all` et `period` sont absolues : elles comparent un groupe

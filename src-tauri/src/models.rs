@@ -169,6 +169,9 @@ pub struct DayRankings {
 /// proposés, mais ils ne racontent pas la même chose : Modrinth les relève au
 /// jour le jour quand CurseForge n'en publie aucun, si bien qu'un classement
 /// par revenus est d'abord un classement Modrinth.
+///
+/// La métrique et la plateforme qui l'alimente sont deux questions
+/// indépendantes : voir `RankSource`, qui porte la seconde.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum RankBy {
@@ -179,6 +182,29 @@ pub enum RankBy {
 impl Default for RankBy {
     fn default() -> Self {
         Self::Downloads
+    }
+}
+
+/// Quelle plateforme alimente la métrique choisie par `RankBy`.
+///
+/// Croisé avec `RankBy`, cet axe donne les six classements que l'interface
+/// propose sans qu'il faille les écrire un par un : deux métriques, trois
+/// sources. Classer sur une plateforme que le filtre de la barre du haut a
+/// masquée ne rend rien plutôt qu'un rang bâti sur des zéros — ce réglage
+/// choisit sur quoi classer *parmi ce qui est visible*, il ne remplace pas
+/// ce filtre.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum RankSource {
+    /// Les deux plateformes additionnées.
+    Both,
+    Modrinth,
+    CurseForge,
+}
+
+impl Default for RankSource {
+    fn default() -> Self {
+        Self::Both
     }
 }
 

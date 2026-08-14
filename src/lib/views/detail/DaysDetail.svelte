@@ -3,13 +3,14 @@
    * Le classement des journées.
    *
    * La page Journée juge une journée à la fois ; celle-ci les met en rang. Le
-   * classement se règle plutôt que de s'imposer : sur quoi il porte —
-   * téléchargements ou revenus — et à quoi chaque journée se compare — tout
-   * l'historique ou la période affichée, comparés entre eux, ou une fenêtre
-   * glissante ou tout ce qui précède, jugés sans jamais regarder en avant.
-   * Deux filtres plutôt que deux colonnes figées : ils laissent choisir la
-   * question, là où deux rangs côte à côte auraient imposé les deux réponses
-   * à la fois.
+   * classement se règle plutôt que de s'imposer : sur quoi il porte — une
+   * métrique (téléchargements ou revenus) croisée avec une source (les deux
+   * plateformes, Modrinth seule, ou CurseForge seule) — et à quoi chaque
+   * journée se compare — tout l'historique ou la période affichée, comparés
+   * entre eux, ou une fenêtre glissante ou tout ce qui précède, jugés sans
+   * jamais regarder en avant. Deux filtres plutôt que deux colonnes figées :
+   * ils laissent choisir la question, là où des rangs côte à côte auraient
+   * imposé toutes les réponses à la fois.
    */
   import { api } from "../../api";
   import Chart from "../../charts/Chart.svelte";
@@ -24,7 +25,7 @@
   import { RANGES } from "../../ranges";
   import { dashboard } from "../../state.svelte";
   import { theme } from "../../theme.svelte";
-  import type { AppErrorPayload, DayRankings, RankBy, RankScope } from "../../types";
+  import type { AppErrorPayload, DayRankings, RankBy, RankScope, RankSource } from "../../types";
   import DetailShell from "./DetailShell.svelte";
 
   let data = $state<DayRankings | null>(null);
@@ -32,8 +33,38 @@
   let mode = $state<"jours" | "rang">("jours");
   let order = $state<"rang" | "date">("rang");
 
-  /** Sur quoi le classement porte. */
-  let rankBy = $state<RankBy>("downloads");
+  /**
+   * Les six entrées de « Classer sur » sont le produit de deux axes
+   * indépendants — la métrique et la plateforme qui l'alimente — plutôt que
+   * six lignes écrites à la main : même principe que les paliers de
+   * `RANGES`, construits une fois et déclinés partout où il en faut.
+   */
+  const METRICS: { by: RankBy; label: string }[] = [
+    { by: "downloads", label: "Téléchargements" },
+    { by: "revenue", label: "Revenus" },
+  ];
+  const SOURCES: { source: RankSource; suffix: string }[] = [
+    { source: "both", suffix: "" },
+    { source: "modrinth", suffix: " Modrinth" },
+    { source: "curseforge", suffix: " CurseForge" },
+  ];
+  const BY_OPTIONS = METRICS.flatMap((metric) =>
+    SOURCES.map((s) => ({
+      value: `${metric.by}:${s.source}`,
+      label: `${metric.label}${s.suffix}`,
+    })),
+  );
+
+  /**
+   * Sur quoi le classement porte, sous la forme `"downloads:both"` que rend
+   * `<Select>` : une seule liste à lire côté interface, deux réglages
+   * indépendants côté commande.
+   */
+  let rankChoice = $state<string>("downloads:both");
+  const byAndSource = $derived.by((): { by: RankBy; source: RankSource } => {
+    const [by, source] = rankChoice.split(":");
+    return { by: (by as RankBy) ?? "downloads", source: (source as RankSource) ?? "both" };
+  });
   /**
    * À quoi chaque journée se compare, tel que choisi dans le filtre. Par
    * défaut, toutes les journées relevées, comparées entre elles : la
@@ -77,13 +108,13 @@
     const from = dashboard.rangeFrom;
     const to = dashboard.rangeTo;
     const platforms = dashboard.visiblePlatforms;
-    const by = rankBy;
+    const { by, source } = byAndSource;
     const { scope, windowDays } = scopeAndWindow;
 
     const token = ++requestToken;
     loading = true;
     api
-      .dayRankings(days, from, to, platforms, by, scope, windowDays)
+      .dayRankings(days, from, to, platforms, by, source, scope, windowDays)
       .then((value) => {
         if (token !== requestToken) return;
         data = value;
@@ -128,13 +159,19 @@
   const WINDOW_HINT =
     "À quoi chaque journée est comparée pour obtenir son rang. Sur toutes les journées relevées ou sur la période affichée, les journées se classent entre elles : la première place veut dire la meilleure de tout le groupe, et une journée peut y reculer quand une meilleure arrive ensuite. Sur une fenêtre glissante ou sur toutes celles qui la précèdent, une journée n'est jugée que sur ce qui la précède : le rang qu'elle avait le jour même, et que rien de ce qui arrive ensuite ne peut plus changer.";
   const BY_HINT =
-    "Ce qui décide du rang. Les téléchargements comptent les deux plateformes visibles. Les revenus, eux, sont pour ainsi dire ceux de Modrinth : CurseForge n'en publie aucun par jour, ils ne sont reconstruits que par l'écart entre deux soldes de points relevés au passage, si bien que la plupart des journées n'en portent aucun.";
+    "Ce qui décide du rang : la métrique — téléchargements ou revenus — et la plateforme qui l'alimente — les deux réunies, Modrinth seule, ou CurseForge seule. Classer sur une plateforme masquée par le filtre du haut ne rend rien : la colonne est vide, un rang là-dessus ne voudrait rien dire. Les revenus CurseForge sont les plus rares des six : n'étant reconstruits que par l'écart entre deux soldes de points relevés au passage, la plupart des journées n'en portent aucun, et classer dessus laisse le tableau presque vide.";
   const REVENUE =
     "Modrinth relève ses revenus jour par jour. CurseForge n'en publie aucun : ce qui apparaît ici vient de l'écart entre deux soldes de points, relevés au passage seulement, si bien que la plupart des journées n'en portent aucun.";
   const coverage = $derived(
     `Modrinth est relevé depuis le ${data?.first_modrinth_day ? formatDayLong(data.first_modrinth_day) : "—"}, CurseForge depuis le ${data?.first_curseforge_day ? formatDayLong(data.first_curseforge_day) : "—"}. Avant ces dates, un total ne porte que sur l'autre plateforme : il paraît faible sans l'être.`,
   );
-  const rankedOn = $derived(rankBy === "downloads" ? "sur les téléchargements" : "sur les revenus");
+  /** Le titre du panneau suit le critère choisi, source comprise. */
+  const rankedOn = $derived.by(() => {
+    const { by, source } = byAndSource;
+    const metric = by === "downloads" ? "les téléchargements" : "les revenus";
+    const suffix = source === "modrinth" ? " Modrinth" : source === "curseforge" ? " CurseForge" : "";
+    return `sur ${metric}${suffix}`;
+  });
 </script>
 
 <DetailShell
@@ -144,14 +181,11 @@
   {#snippet actions()}
     <div class="filters">
       <Select
-        value={rankBy}
+        value={rankChoice}
         label="Classer sur"
         compact
-        onchange={(value) => (rankBy = (value as RankBy) ?? "downloads")}
-        options={[
-          { value: "downloads", label: "Téléchargements" },
-          { value: "revenue", label: "Revenus" },
-        ]}
+        onchange={(value) => (rankChoice = value ?? "downloads:both")}
+        options={BY_OPTIONS}
       />
       <Select
         value={windowChoice}

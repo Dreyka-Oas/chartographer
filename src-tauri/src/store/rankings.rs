@@ -7,7 +7,7 @@
 //! sans égard à leur ordre. `RankScope` documente les quatre.
 
 use crate::error::Result;
-use crate::models::{DayRankRow, DayRankings, Platform, RankBy, RankScope};
+use crate::models::{DayRankRow, DayRankings, Platform, RankBy, RankScope, RankSource};
 use crate::store::queries::{shift_day, timeline, PlatformFilter};
 use rusqlite::{params, Connection};
 use rust_decimal::Decimal;
@@ -103,18 +103,31 @@ fn first_day(conn: &Connection, platform: Platform) -> Result<Option<String>> {
     )?)
 }
 
-/// Valeur classée d'une journée, selon le critère demandé.
+/// Montant en centièmes : deux journées à un centime près restent distinctes,
+/// et rien ne se perd à l'échelle où `rank_within` compare des entiers.
+fn cents(amount: Decimal) -> i64 {
+    (amount * Decimal::from(100)).round().to_string().parse().unwrap_or(0)
+}
+
+/// Valeur classée d'une journée, selon le critère et la source demandés.
 ///
-/// Les revenus sont des `Decimal` ; `rank_within` travaille sur des entiers.
-/// On les ramène en centièmes : deux journées à un centime près restent
-/// distinctes, et rien ne se perd à l'échelle où l'on compare.
-fn ranked_value(point: &crate::models::TimelinePoint, revenue: &(Decimal, Decimal), by: RankBy) -> i64 {
-    match by {
-        RankBy::Downloads => point.modrinth + point.curseforge,
-        RankBy::Revenue => {
-            let cents = (revenue.0 + revenue.1) * Decimal::from(100);
-            cents.round().to_string().parse().unwrap_or(0)
-        }
+/// `by` choisit la métrique — téléchargements ou revenus — et `source` la
+/// plateforme qui l'alimente. Les deux sont des axes indépendants : croiser
+/// leurs deux valeurs suffit à couvrir les six classements possibles, sans
+/// qu'il faille écrire une variante par combinaison.
+fn ranked_value(
+    point: &crate::models::TimelinePoint,
+    revenue: &(Decimal, Decimal),
+    by: RankBy,
+    source: RankSource,
+) -> i64 {
+    match (by, source) {
+        (RankBy::Downloads, RankSource::Both) => point.modrinth + point.curseforge,
+        (RankBy::Downloads, RankSource::Modrinth) => point.modrinth,
+        (RankBy::Downloads, RankSource::CurseForge) => point.curseforge,
+        (RankBy::Revenue, RankSource::Both) => cents(revenue.0 + revenue.1),
+        (RankBy::Revenue, RankSource::Modrinth) => cents(revenue.0),
+        (RankBy::Revenue, RankSource::CurseForge) => cents(revenue.1),
     }
 }
 
@@ -129,15 +142,24 @@ fn empty_rankings() -> DayRankings {
 
 /// Classement absolu : toutes les journées d'une même plage se comparent
 /// entre elles, sans égard à leur ordre, contre une seule et même référence.
-/// C'est le cœur commun à `Period`, dont la plage est la période affichée, et
-/// à `All`, dont la plage est tout l'historique — les deux ne diffèrent que
-/// par `pool_start`, jamais par la règle de classement elle-même.
+/// C'est le cœur commun à `Period`, dont la plage de comparaison est la
+/// période affichée, et à `All`, dont la plage de comparaison est tout
+/// l'historique — les deux ne diffèrent que par `pool_start`, jamais par la
+/// règle de classement elle-même.
+///
+/// Ce que la comparaison regarde (`pool_start..to`) et ce que la page liste
+/// (`rows_from..to`) sont deux choses distinctes : les boutons de période de
+/// la barre du haut décident toujours ce qui s'affiche, la portée ne décide
+/// que ce à quoi ça se compare. Pour `Period`, les deux plages sont les
+/// mêmes ; pour `All`, la comparaison déborde largement ce qui est listé.
 fn rank_against_pool(
     conn: &Connection,
     pool_start: &str,
+    rows_from: &str,
     to: &str,
     filter: PlatformFilter,
     by: RankBy,
+    source: RankSource,
 ) -> Result<DayRankings> {
     let history = timeline(conn, pool_start, to, filter)?;
     let revenue = revenue_by_day(conn, pool_start, to, filter)?;
@@ -145,13 +167,16 @@ fn rank_against_pool(
         .iter()
         .map(|p| {
             let r = revenue.get(&p.day).copied().unwrap_or_default();
-            ranked_value(p, &r, by)
+            ranked_value(p, &r, by, source)
         })
         .collect();
 
     let pool: Vec<i64> = values.iter().copied().filter(|v| *v > 0).collect();
-    let mut rows = Vec::with_capacity(history.len());
+    let mut rows = Vec::new();
     for (i, point) in history.iter().enumerate() {
+        if point.day.as_str() < rows_from {
+            continue;
+        }
         let (modrinth_revenue, curseforge_revenue) =
             revenue.get(&point.day).copied().unwrap_or_default();
         rows.push(DayRankRow {
@@ -171,12 +196,17 @@ fn rank_against_pool(
     })
 }
 
-/// Classement des journées d'une période, `to` exclu.
+/// Classement des journées d'une période, `to` exclu. Les lignes rendues
+/// sont toujours celles de `[from, to)` — la période affichée en haut de
+/// page — quelle que soit la portée demandée ; seule la comparaison qui
+/// détermine leur rang change d'étendue.
 ///
 /// Une seule question se pose à chaque journée : quel rang les réglages
-/// demandés lui donnent-ils. `by` choisit ce qui est classé — téléchargements
-/// ou revenus. `scope` choisit à quoi une journée se compare, et se répartit
-/// en deux familles :
+/// demandés lui donnent-ils. `by` choisit la métrique — téléchargements ou
+/// revenus — et `source` la plateforme qui l'alimente, indépendamment l'une
+/// de l'autre. Classer sur une plateforme masquée par `filter` ne rend rien :
+/// la colonne serait vide, un rang là-dessus ne voudrait rien dire. `scope`
+/// choisit à quoi une journée se compare, et se répartit en deux familles :
 ///
 /// - `Period` et `All` sont absolues : elles comparent un groupe de journées
 ///   à lui-même, sans égard à leur ordre, si bien qu'une journée peut y être
@@ -194,17 +224,34 @@ pub fn day_rankings(
     to: &str,
     filter: PlatformFilter,
     by: RankBy,
+    source: RankSource,
     scope: RankScope,
     window_days: Option<i64>,
 ) -> Result<DayRankings> {
+    // Classer sur une plateforme que le filtre du haut a masquée n'a pas de
+    // sens : la colonne serait vide et le rang porterait sur des zéros.
+    // Plutôt que d'inventer un classement sur rien, on ne rend rien — le
+    // réglage choisit sur quoi classer *parmi ce qui est visible*, il ne
+    // remplace pas le filtre de plateformes.
+    let source_hidden = match source {
+        RankSource::Modrinth => !filter.modrinth,
+        RankSource::CurseForge => !filter.curseforge,
+        RankSource::Both => false,
+    };
+    if source_hidden {
+        return Ok(empty_rankings());
+    }
+
     if scope == RankScope::Period {
-        return rank_against_pool(conn, from, to, filter, by);
+        return rank_against_pool(conn, from, from, to, filter, by, source);
     }
     if scope == RankScope::All {
         // « Toutes les journées relevées » veut dire ce que la base contient
-        // réellement, pas l'origine du calendrier.
+        // réellement, pas l'origine du calendrier. Ce que la page liste reste
+        // la période affichée (`from`) ; seule la comparaison porte sur tout
+        // l'historique (`pool_start`).
         return match crate::store::metrics::first_metrics_day(conn)? {
-            Some(pool_start) => rank_against_pool(conn, &pool_start, to, filter, by),
+            Some(pool_start) => rank_against_pool(conn, &pool_start, from, to, filter, by, source),
             None => Ok(empty_rankings()),
         };
     }
@@ -229,7 +276,7 @@ pub fn day_rankings(
         .iter()
         .map(|p| {
             let r = revenue.get(&p.day).copied().unwrap_or_default();
-            ranked_value(p, &r, by)
+            ranked_value(p, &r, by, source)
         })
         .collect();
 
@@ -388,6 +435,7 @@ mod tests {
             "2026-08-12",
             PlatformFilter::default(),
             RankBy::Downloads,
+            RankSource::Both,
             RankScope::Sliding,
             Some(90),
         )
@@ -411,6 +459,7 @@ mod tests {
             "2026-08-11",
             PlatformFilter::default(),
             RankBy::Downloads,
+            RankSource::Both,
             RankScope::Retrospective,
             None,
         )
@@ -439,6 +488,7 @@ mod tests {
             "2026-08-12",
             PlatformFilter::default(),
             RankBy::Downloads,
+            RankSource::Both,
             RankScope::All,
             None,
         )
@@ -460,6 +510,7 @@ mod tests {
             "2026-08-12",
             PlatformFilter::default(),
             RankBy::Downloads,
+            RankSource::Both,
             RankScope::Retrospective,
             None,
         )
@@ -467,6 +518,43 @@ mod tests {
         let rank_of = |day: &str| out.rows.iter().find(|r| r.day == day).unwrap().rank;
         assert_eq!(rank_of("2026-08-10"), Some(1), "personne ne la précède le jour même");
         assert_eq!(rank_of("2026-08-11"), Some(1), "elle dépasse tout ce qu'elle voit derrière elle");
+    }
+
+    /// Ce que la page liste et ce à quoi elle compare sont deux choses
+    /// distinctes. Un historique large, une période étroite au milieu : la
+    /// portée `All` ne doit rendre que les journées de la période affichée —
+    /// pas tout l'historique — mais chacune de ces lignes doit porter son
+    /// rang parmi la totalité des journées relevées, pas seulement celles de
+    /// la période. C'est le défaut que les boutons de date muets aurait
+    /// laissé passer : la liste devait bouger avec eux, le dénominateur non.
+    #[test]
+    fn absolute_scope_lists_the_displayed_period_but_ranks_against_the_whole_history() {
+        let (conn, m, _) = seed();
+        upsert_daily(&conn, m, "2024-01-01", Some(900), None, None).unwrap();
+        upsert_daily(&conn, m, "2025-06-01", Some(50), None, None).unwrap();
+        upsert_daily(&conn, m, "2026-08-10", Some(100), None, None).unwrap();
+        upsert_daily(&conn, m, "2026-08-11", Some(500), None, None).unwrap();
+
+        let out = day_rankings(
+            &conn,
+            "2026-08-10",
+            "2026-08-12",
+            PlatformFilter::default(),
+            RankBy::Downloads,
+            RankSource::Both,
+            RankScope::All,
+            None,
+        )
+        .unwrap();
+        assert_eq!(
+            out.rows.len(),
+            2,
+            "seules les journées de la période affichée sont listées"
+        );
+        assert!(
+            out.rows.iter().all(|r| r.compared_days == 4),
+            "le dénominateur porte sur les quatre journées de tout l'historique"
+        );
     }
 
     /// La fenêtre courte ne voit pas ce que la longue voit.
@@ -482,6 +570,7 @@ mod tests {
             "2026-08-11",
             PlatformFilter::default(),
             RankBy::Downloads,
+            RankSource::Both,
             RankScope::Sliding,
             Some(30),
         )
@@ -505,6 +594,7 @@ mod tests {
             "2026-08-13",
             PlatformFilter::default(),
             RankBy::Revenue,
+            RankSource::Both,
             RankScope::Retrospective,
             None,
         )
@@ -526,6 +616,7 @@ mod tests {
             "2026-08-13",
             PlatformFilter::default(),
             RankBy::Downloads,
+            RankSource::Both,
             RankScope::Retrospective,
             None,
         )
@@ -535,6 +626,69 @@ mod tests {
             Some(1),
             "sur les téléchargements, le même jour passe première"
         );
+    }
+
+    /// La source décide vraiment, indépendamment de la métrique : une journée
+    /// forte sur Modrinth et faible sur CurseForge doit changer de rang selon
+    /// la plateforme choisie — l'inverse d'une journée forte sur CurseForge.
+    #[test]
+    fn source_decides_which_platform_the_ranking_reads() {
+        let (conn, m, c) = seed();
+        upsert_daily(&conn, m, "2026-08-10", Some(900), None, None).unwrap();
+        upsert_daily(&conn, c, "2026-08-10", Some(10), None, None).unwrap();
+        upsert_daily(&conn, m, "2026-08-11", Some(10), None, None).unwrap();
+        upsert_daily(&conn, c, "2026-08-11", Some(900), None, None).unwrap();
+
+        let rank_of = |source: RankSource, day: &str| {
+            day_rankings(
+                &conn,
+                "2026-08-10",
+                "2026-08-12",
+                PlatformFilter::default(),
+                RankBy::Downloads,
+                source,
+                RankScope::All,
+                None,
+            )
+            .unwrap()
+            .rows
+            .into_iter()
+            .find(|r| r.day == day)
+            .unwrap()
+            .rank
+        };
+
+        assert_eq!(rank_of(RankSource::Modrinth, "2026-08-10"), Some(1), "en tête sur Modrinth");
+        assert_eq!(rank_of(RankSource::Modrinth, "2026-08-11"), Some(2));
+        assert_eq!(
+            rank_of(RankSource::CurseForge, "2026-08-11"),
+            Some(1),
+            "en tête sur CurseForge, l'inverse de Modrinth"
+        );
+        assert_eq!(rank_of(RankSource::CurseForge, "2026-08-10"), Some(2));
+    }
+
+    /// Classer sur une plateforme masquée par le filtre du haut n'a pas de
+    /// sens : la colonne serait vide. Plutôt qu'un rang bâti sur des zéros,
+    /// la commande ne rend rien.
+    #[test]
+    fn ranking_on_a_platform_hidden_by_the_filter_returns_nothing() {
+        let (conn, m, _) = seed();
+        upsert_daily(&conn, m, "2026-08-10", Some(100), None, None).unwrap();
+        let filter = PlatformFilter { modrinth: true, curseforge: false };
+
+        let out = day_rankings(
+            &conn,
+            "2026-08-10",
+            "2026-08-11",
+            filter,
+            RankBy::Downloads,
+            RankSource::CurseForge,
+            RankScope::All,
+            None,
+        )
+        .unwrap();
+        assert!(out.rows.is_empty());
     }
 
     /// Le classement sur la période compare les journées entre elles, sans
@@ -553,6 +707,7 @@ mod tests {
             "2026-08-13",
             PlatformFilter::default(),
             RankBy::Downloads,
+            RankSource::Both,
             RankScope::Period,
             None,
         )
@@ -581,6 +736,7 @@ mod tests {
             "2026-08-13",
             PlatformFilter::default(),
             RankBy::Downloads,
+            RankSource::Both,
             RankScope::Sliding,
             Some(RANK_WINDOW_DAYS),
         )
@@ -590,11 +746,13 @@ mod tests {
     }
 
     /// Mesure ponctuelle sur la base réelle de l'utilisateur : la portée par
-    /// défaut de la page, `All`, classe désormais toutes les journées
-    /// relevées entre elles — elle doit répondre en un temps raisonnable, pas
-    /// geler l'interface. Ouverte en lecture seule, jamais modifiée. Ignoré
-    /// par défaut : le fichier n'existe pas sur les machines qui n'ont pas
-    /// cette base.
+    /// défaut de la page, `All`, compare chaque journée listée à tout
+    /// l'historique — les lignes rendues restent celles de la période
+    /// affichée, mais leur rang va chercher sa place dans les 383 journées de
+    /// la base. Ça doit répondre en un temps raisonnable, pas geler
+    /// l'interface. Ouverte en lecture seule, jamais modifiée. Ignoré par
+    /// défaut : le fichier n'existe pas sur les machines qui n'ont pas cette
+    /// base.
     #[test]
     #[ignore]
     fn day_rankings_all_scope_answers_quickly_on_the_real_database() {
@@ -615,6 +773,7 @@ mod tests {
             "2026-08-15",
             PlatformFilter::default(),
             RankBy::Revenue,
+            RankSource::Both,
             RankScope::All,
             None,
         )
@@ -646,6 +805,7 @@ mod tests {
             "2026-08-13",
             PlatformFilter::default(),
             RankBy::Downloads,
+            RankSource::Both,
             RankScope::Sliding,
             Some(RANK_WINDOW_DAYS),
         )

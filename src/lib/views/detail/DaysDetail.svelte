@@ -14,7 +14,7 @@
   import { palette } from "../../charts/theme";
   import Hint from "../../components/Hint.svelte";
   import RankedTable from "../../components/RankedTable.svelte";
-  import { PODIUM } from "../../components/rank";
+  import { podiumColor } from "../../components/rank";
   import StatRow from "../../components/StatRow.svelte";
   import { compactNumber, formatDay, formatDayLong, formatMoney } from "../../format";
   import { dashboard } from "../../state.svelte";
@@ -120,7 +120,9 @@
         <button class:active={order === "date"} onclick={() => (order = "date")}>Par date</button>
       </span>
     </h2>
-    {#if listed.length === 0}
+    {#if loading && data === null}
+      <p class="empty">Lecture du classement…</p>
+    {:else if listed.length === 0}
       <p class="empty">Aucune journée relevée sur cette période.</p>
     {:else}
       <RankedTable
@@ -139,7 +141,7 @@
         key={(row) => row.day}
       >
         {#snippet cells(row)}
-          {@const podium = row.rank_period !== null ? PODIUM[row.rank_period - 1] : null}
+          {@const podium = row.rank_period !== null ? podiumColor(row.rank_period - 1) : null}
           <td class="left">{formatDayLong(row.day)}</td>
           <td>
             <span class="badge" class:podium={podium !== null} style="--rank: {podium ?? ''}">

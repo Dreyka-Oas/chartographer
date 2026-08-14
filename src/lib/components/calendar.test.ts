@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { monthGrid, shiftMonth } from "./calendar";
+import { addDays, monthGrid, shiftMonth } from "./calendar";
 
 describe("monthGrid", () => {
   it("rend six semaines de sept jours, quel que soit le mois", () => {
@@ -33,5 +33,20 @@ describe("shiftMonth", () => {
   it("passe d'une année à l'autre", () => {
     expect(shiftMonth("2026-01", -1)).toBe("2025-12");
     expect(shiftMonth("2026-12", 1)).toBe("2027-01");
+  });
+});
+
+describe("addDays", () => {
+  it("passe d'un mois à l'autre", () => {
+    expect(addDays("2026-08-30", 3)).toBe("2026-09-02");
+  });
+
+  it("passe d'une année à l'autre", () => {
+    expect(addDays("2026-12-30", 3)).toBe("2027-01-02");
+  });
+
+  /** 2028 est bissextile : un pas qui traverse le 29 février doit le compter. */
+  it("traverse le 29 février d'une année bissextile", () => {
+    expect(addDays("2028-02-27", 3)).toBe("2028-03-01");
   });
 });

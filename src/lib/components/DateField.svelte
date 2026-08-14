@@ -211,11 +211,23 @@
     style="top:{box.top}px; left:{box.left}px; width:{PANEL_WIDTH}px"
   >
     <div class="head">
-      <button type="button" class="nav" aria-label="Mois précédent" onclick={() => changeMonth(-1)}>
+      <button
+        type="button"
+        class="nav"
+        tabindex="-1"
+        aria-label="Mois précédent"
+        onclick={() => changeMonth(-1)}
+      >
         ‹
       </button>
       <span class="title">{formatMonth(month)}</span>
-      <button type="button" class="nav" aria-label="Mois suivant" onclick={() => changeMonth(1)}>
+      <button
+        type="button"
+        class="nav"
+        tabindex="-1"
+        aria-label="Mois suivant"
+        onclick={() => changeMonth(1)}
+      >
         ›
       </button>
     </div>

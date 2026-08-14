@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { EventRow } from "../types";
+  import Tooltip from "./Tooltip.svelte";
 
   let { events }: { events: EventRow[] } = $props();
 </script>
@@ -11,9 +12,19 @@
     {#each events as event (event.occurred_at + event.title)}
       <li>
         <time>{event.occurred_at.slice(0, 10)}</time>
-        <span class="kind" title={event.kind}>{event.kind}</span>
-        <b title={event.title}>{event.title}</b>
-        <span class="detail" title={event.detail}>{event.detail}</span>
+        <!--
+          La bulle enveloppe le texte, pas la cellule : c'est la cellule qui
+          tient sa colonne dans la grille, et le texte tronqué à l'intérieur.
+        -->
+        <span class="kind">
+          <Tooltip block text={event.kind}><span class="cut">{event.kind}</span></Tooltip>
+        </span>
+        <b>
+          <Tooltip block text={event.title}><span class="cut">{event.title}</span></Tooltip>
+        </b>
+        <span class="detail">
+          <Tooltip block text={event.detail}><span class="cut">{event.detail}</span></Tooltip>
+        </span>
       </li>
     {/each}
   </ul>
@@ -46,8 +57,16 @@
     font-size: 0.82rem;
   }
   li > * {
+    min-width: 0;
+    overflow: hidden;
+  }
+  .cut {
+    display: block;
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  time {
     white-space: nowrap;
   }
   time,

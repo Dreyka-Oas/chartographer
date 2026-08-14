@@ -1,5 +1,6 @@
 <script lang="ts">
   import { formatAge } from "../format";
+  import Tooltip from "./Tooltip.svelte";
   import type { Freshness } from "../types";
 
   let { entries }: { entries: Freshness[] } = $props();
@@ -36,13 +37,15 @@
 </script>
 
 {#if entries.length > 0}
-  <span class:ok={failed.length === 0} class:ko={failed.length > 0} title={detail}>
-    {#if failed.length === 0}
-      Relevé {age}
-    {:else}
-      {failed.map((entry) => entry.provider).join(", ")} en échec
-    {/if}
-  </span>
+  <Tooltip text={detail} placement="bottom">
+    <span class:ok={failed.length === 0} class:ko={failed.length > 0}>
+      {#if failed.length === 0}
+        Relevé {age}
+      {:else}
+        {failed.map((entry) => entry.provider).join(", ")} en échec
+      {/if}
+    </span>
+  </Tooltip>
 {/if}
 
 <style>

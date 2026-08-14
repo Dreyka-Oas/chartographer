@@ -6,6 +6,8 @@
    * bascule une vue. Le curseur glisse, la piste prend la couleur d'accent, et
    * l'intitulé passe en pleine encre une fois enclenché.
    */
+  import Tooltip from "./Tooltip.svelte";
+
   let {
     checked = $bindable(false),
     label,
@@ -13,18 +15,19 @@
   }: { checked?: boolean; label: string; title?: string } = $props();
 </script>
 
-<button
-  type="button"
-  class="toggle"
-  class:on={checked}
-  role="switch"
-  aria-checked={checked}
-  {title}
-  onclick={() => (checked = !checked)}
->
-  <span class="track"><span class="knob"></span></span>
-  {label}
-</button>
+<Tooltip text={title}>
+  <button
+    type="button"
+    class="toggle"
+    class:on={checked}
+    role="switch"
+    aria-checked={checked}
+    onclick={() => (checked = !checked)}
+  >
+    <span class="track"><span class="knob"></span></span>
+    {label}
+  </button>
+</Tooltip>
 
 <style>
   .toggle {

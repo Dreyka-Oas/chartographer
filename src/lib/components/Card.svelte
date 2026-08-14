@@ -1,6 +1,8 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
 
+  import Tooltip from "./Tooltip.svelte";
+
   let {
     title,
     subtitle = "",
@@ -22,9 +24,11 @@
       {#if subtitle}<p>{subtitle}</p>{/if}
     </div>
     {#if onexpand}
-      <button onclick={onexpand} title="Ouvrir en plein écran" aria-label="Ouvrir {title}">
-        Détail <span aria-hidden="true">↗</span>
-      </button>
+      <Tooltip text="Ouvrir en plein écran">
+        <button onclick={onexpand} aria-label="Ouvrir {title}">
+          Détail <span aria-hidden="true">↗</span>
+        </button>
+      </Tooltip>
     {/if}
   </header>
 
@@ -67,7 +71,11 @@
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
   }
+  /* Les titres poussent le bouton de détail contre le bord droit. Un
+   * `margin-left: auto` sur le bouton ne le ferait plus : il est enveloppé
+   * d'une bulle d'aide, et n'est donc plus l'enfant direct de l'en-tête. */
   .titles {
+    flex: 1;
     min-width: 0;
   }
   .content {
@@ -89,7 +97,6 @@
     color: var(--text-dim);
   }
   button {
-    margin-left: auto;
     flex-shrink: 0;
     background: none;
     border: 1px solid transparent;

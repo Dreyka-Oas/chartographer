@@ -1,6 +1,7 @@
 <script lang="ts">
   /** Colonne de gauche : titre, sommaire et comptes reliés. */
   import { api } from "../../api";
+  import Tooltip from "../../components/Tooltip.svelte";
   import { dashboard } from "../../state.svelte";
   import type { AppErrorPayload } from "../../types";
 
@@ -51,22 +52,26 @@
   <div class="accounts">
     <span class="legend-label">Comptes reliés</span>
     {#each accounts as account (account.platform)}
-      <button
-        class="account {account.key}"
-        class:off={account.name === null}
-        disabled={account.name === null}
-        title={account.name === null
+      <Tooltip
+        block
+        text={account.name === null
           ? `Aucun compte ${account.platform} détecté`
           : `Ouvrir la page ${account.platform} de ${account.name}`}
-        onclick={() => open(account.key, account.name)}
       >
-        <span class="tick"></span>
-        <span class="who">
-          <b>{account.name ?? "non détecté"}</b>
-          <span>{account.platform} · {account.count} projets</span>
-        </span>
-        <span class="go" aria-hidden="true">↗</span>
-      </button>
+        <button
+          class="account {account.key}"
+          class:off={account.name === null}
+          disabled={account.name === null}
+          onclick={() => open(account.key, account.name)}
+        >
+          <span class="tick"></span>
+          <span class="who">
+            <b>{account.name ?? "non détecté"}</b>
+            <span>{account.platform} · {account.count} projets</span>
+          </span>
+          <span class="go" aria-hidden="true">↗</span>
+        </button>
+      </Tooltip>
     {/each}
   </div>
 </aside>

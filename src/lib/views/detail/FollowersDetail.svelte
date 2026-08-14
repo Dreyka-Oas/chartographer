@@ -21,6 +21,7 @@
   import { palette } from "../../charts/theme";
   import Hint from "../../components/Hint.svelte";
   import StatRow from "../../components/StatRow.svelte";
+  import Tooltip from "../../components/Tooltip.svelte";
   import { formatDayLong } from "../../format";
   import { dashboard } from "../../state.svelte";
   import { theme } from "../../theme.svelte";
@@ -118,10 +119,12 @@
         La répartition du dernier relevé, lisible dès le premier jour. La barre
         donne la proportion d'un coup d'œil, les deux mentions le compte exact.
       -->
-      <div class="bar" title="{latest.modrinth} Modrinth · {latest.curseforge} CurseForge">
-        <span class="modrinth" style="width:{modrinthShare}%"></span>
-        <span class="curseforge"></span>
-      </div>
+      <Tooltip block text="{latest.modrinth} Modrinth · {latest.curseforge} CurseForge">
+        <div class="bar">
+          <span class="modrinth" style="width:{modrinthShare}%"></span>
+          <span class="curseforge"></span>
+        </div>
+      </Tooltip>
       <div class="split">
         <span><i class="dot modrinth"></i>{latest.modrinth} Modrinth</span>
         <span><i class="dot curseforge"></i>{latest.curseforge} CurseForge</span>

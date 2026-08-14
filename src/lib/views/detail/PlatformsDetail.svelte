@@ -3,6 +3,7 @@
   import { splitOption } from "../../charts/split";
   import { palette } from "../../charts/theme";
   import StatRow from "../../components/StatRow.svelte";
+  import Tooltip from "../../components/Tooltip.svelte";
   import { compactNumber } from "../../format";
   import { dashboard } from "../../state.svelte";
   import { theme } from "../../theme.svelte";
@@ -94,10 +95,12 @@
                   {row.curseforge_id === null ? "Modrinth seul" : "CurseForge seul"}
                 </span>
               {:else}
-                <div class="balance" title="{Math.round(share(row))} % Modrinth">
-                  <span class="m" style="width: {share(row)}%"></span>
-                  <span class="c" style="width: {100 - share(row)}%"></span>
-                </div>
+                <Tooltip block text="{Math.round(share(row))} % Modrinth">
+                  <div class="balance">
+                    <span class="m" style="width: {share(row)}%"></span>
+                    <span class="c" style="width: {100 - share(row)}%"></span>
+                  </div>
+                </Tooltip>
               {/if}
             </td>
           </tr>

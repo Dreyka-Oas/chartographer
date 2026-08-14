@@ -30,10 +30,17 @@
     text,
     /** Bord privilégié. La bulle bascule d'elle-même si la place manque. */
     placement = "top",
+    /**
+     * L'enveloppe s'aligne par défaut comme un mot, ce qui convient aux boutons
+     * et aux étiquettes. Une barre ou un bloc qui tenait toute la largeur la
+     * perdrait en devenant du texte : `block` la lui rend.
+     */
+    block = false,
     children,
   }: {
     text: string;
     placement?: "top" | "bottom";
+    block?: boolean;
     children: Snippet;
   } = $props();
 
@@ -122,7 +129,7 @@
   });
 </script>
 
-<span bind:this={anchor} class="anchor">
+<span bind:this={anchor} class="anchor" class:block>
   {@render children()}
 </span>
 
@@ -141,6 +148,10 @@
 <style>
   .anchor {
     display: inline-flex;
+  }
+  .anchor.block {
+    display: block;
+    width: 100%;
   }
   .bubble {
     position: fixed;

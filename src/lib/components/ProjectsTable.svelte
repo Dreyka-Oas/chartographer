@@ -3,6 +3,7 @@
   import { dashboard } from "../state.svelte";
   import type { ProjectSummary } from "../types";
   import Sparkline from "./Sparkline.svelte";
+  import Tooltip from "./Tooltip.svelte";
 
   let {
     projects,
@@ -74,9 +75,9 @@
               {#if row.icon_url}<img src={row.icon_url} alt="" loading="lazy" />{/if}
               <span class="label">{row.title}</span>
               {#if row.link_confidence !== null && row.link_confidence < 1}
-                <em title="Appariement automatique incertain">
-                  lien ~{Math.round(row.link_confidence * 100)} %
-                </em>
+                <Tooltip text="Appariement automatique incertain">
+                  <em>lien ~{Math.round(row.link_confidence * 100)} %</em>
+                </Tooltip>
               {/if}
               {#if row.curseforge_id === null}<em class="solo">Modrinth seul</em>{/if}
               {#if row.modrinth_id === null}<em class="solo">CurseForge seul</em>{/if}
@@ -91,7 +92,9 @@
             {#if row.spark.some((value) => value > 0)}
               <Sparkline values={row.spark} />
             {:else}
-              <span class="flat" title="Aucun écart quotidien relevé sur la période">—</span>
+              <Tooltip text="Aucun écart quotidien relevé sur la période">
+                <span class="flat">—</span>
+              </Tooltip>
             {/if}
           </td>
           {#if dashboard.platforms.modrinth}

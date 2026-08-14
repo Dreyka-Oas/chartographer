@@ -1,5 +1,6 @@
 <script lang="ts">
   import Select from "./Select.svelte";
+  import Tooltip from "./Tooltip.svelte";
   import { formatMonth, formatRange, lastDayOfMonth } from "../format";
   import { dashboard } from "../state.svelte";
 
@@ -86,7 +87,9 @@
   </label>
 
   {#if overview}
-    <span class="window" title="Fenêtre affichée">{formatRange(overview.from, overview.to)}</span>
+    <Tooltip text="Fenêtre affichée" placement="bottom">
+      <span class="window">{formatRange(overview.from, overview.to)}</span>
+    </Tooltip>
   {/if}
 </div>
 

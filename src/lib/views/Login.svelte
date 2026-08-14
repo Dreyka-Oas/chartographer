@@ -1,6 +1,7 @@
 <script lang="ts">
   import { api } from "../api";
   import ThemeToggle from "../components/ThemeToggle.svelte";
+  import Tooltip from "../components/Tooltip.svelte";
   import { dashboard } from "../state.svelte";
 
   let token = $state("");
@@ -72,7 +73,7 @@
         Coche ces six autorisations, toutes en lecture :
         <span class="scopes">
           {#each READ_SCOPES as scope (scope.label)}
-            <code title={scope.why}>{scope.label}</code>
+            <Tooltip text={scope.why}><code>{scope.label}</code></Tooltip>
           {/each}
         </span>
       </li>
@@ -84,7 +85,7 @@
         {#if publishing}
           <span class="scopes">
             {#each WRITE_SCOPES as scope (scope.label)}
-              <code title={scope.why}>{scope.label}</code>
+              <Tooltip text={scope.why}><code>{scope.label}</code></Tooltip>
             {/each}
           </span>
           <span class="aside">

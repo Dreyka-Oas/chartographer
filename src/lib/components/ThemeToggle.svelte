@@ -1,5 +1,6 @@
 <script lang="ts">
   import { theme } from "../theme.svelte";
+  import Tooltip from "./Tooltip.svelte";
 
   const icon = $derived(theme.mode === "auto" ? "◐" : theme.mode === "dark" ? "☾" : "☀");
   const hint = $derived(
@@ -9,10 +10,12 @@
   );
 </script>
 
-<button onclick={() => theme.cycle()} title={hint} aria-label={hint}>
-  <span aria-hidden="true">{icon}</span>
-  {theme.label}
-</button>
+<Tooltip text={hint} placement="bottom">
+  <button onclick={() => theme.cycle()} aria-label={hint}>
+    <span aria-hidden="true">{icon}</span>
+    {theme.label}
+  </button>
+</Tooltip>
 
 <style>
   button {

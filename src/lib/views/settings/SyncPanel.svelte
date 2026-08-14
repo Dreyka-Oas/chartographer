@@ -2,6 +2,7 @@
   /** Section « Synchronisation » : relevé manuel et dernier passage par source. */
   import { formatAge } from "../../format";
   import { dashboard } from "../../state.svelte";
+  import Tooltip from "../../components/Tooltip.svelte";
   import SettingRow from "./SettingRow.svelte";
 
   const freshness = $derived(dashboard.overview?.freshness ?? []);
@@ -24,10 +25,12 @@
     <SettingRow name="Dernier passage par source">
       {#snippet control()}
         {#each freshness as entry (entry.provider)}
-          <span class="chip" class:ko={entry.status !== "ok"} title={entry.detail}>
-            {entry.provider}
-            <b>{entry.finished_at ? entry.finished_at.slice(11, 16) : "jamais"}</b>
-          </span>
+          <Tooltip text={entry.detail ?? ""}>
+            <span class="chip" class:ko={entry.status !== "ok"}>
+              {entry.provider}
+              <b>{entry.finished_at ? entry.finished_at.slice(11, 16) : "jamais"}</b>
+            </span>
+          </Tooltip>
         {/each}
       {/snippet}
     </SettingRow>

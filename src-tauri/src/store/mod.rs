@@ -2,6 +2,7 @@ pub mod followers;
 pub mod metrics;
 pub mod projects;
 pub mod queries;
+pub mod rankings;
 pub mod schema;
 
 use crate::error::Result;

@@ -223,18 +223,20 @@
       </div>
       <strong>{tile.value}</strong>
 
-      <div
-        class="bar"
-        title="{tile.parts.show(tile.parts.modrinth)} Modrinth · {tile.parts.show(
+      <Tooltip
+        block
+        text="{tile.parts.show(tile.parts.modrinth)} Modrinth · {tile.parts.show(
           tile.parts.curseforge,
         )} CurseForge"
       >
-        <span class="modrinth" style="width:{share(tile.parts)}%"></span>
-        <span class="curseforge"></span>
-        <!-- Trait de partage : il dépasse en haut et en bas pour marquer la
-             frontière sans dépendre du contraste entre les deux couleurs. -->
-        <span class="cut" style="left:{share(tile.parts)}%"></span>
-      </div>
+        <div class="bar">
+          <span class="modrinth" style="width:{share(tile.parts)}%"></span>
+          <span class="curseforge"></span>
+          <!-- Trait de partage : il dépasse en haut et en bas pour marquer la
+               frontière sans dépendre du contraste entre les deux couleurs. -->
+          <span class="cut" style="left:{share(tile.parts)}%"></span>
+        </div>
+      </Tooltip>
       <div class="split">
         <span><i class="dot modrinth"></i>{tile.parts.show(tile.parts.modrinth)}</span>
         <span><i class="dot curseforge"></i>{tile.parts.show(tile.parts.curseforge)}</span>

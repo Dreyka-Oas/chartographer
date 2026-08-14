@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
   import RangePicker from "../../components/RangePicker.svelte";
+  import Tooltip from "../../components/Tooltip.svelte";
   import { dashboard } from "../../state.svelte";
 
   let {
@@ -26,9 +27,11 @@
 
 <section class="shell">
   <header>
-    <button class="back" onclick={() => dashboard.closeDetail()} title="Échap pour fermer">
-      <span aria-hidden="true">←</span> Retour
-    </button>
+    <Tooltip text="Échap pour fermer" placement="bottom">
+      <button class="back" onclick={() => dashboard.closeDetail()}>
+        <span aria-hidden="true">←</span> Retour
+      </button>
+    </Tooltip>
 
     <div class="identity">
       {#if icon}<img src={icon} alt="" />{/if}

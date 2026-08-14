@@ -137,6 +137,35 @@ pub struct DayProject {
     pub previous: i64,
 }
 
+/// Une journée dans le classement, avec les deux rangs qui la situent.
+#[derive(Debug, Clone, Serialize)]
+pub struct DayRankRow {
+    pub day: String,
+    pub modrinth: i64,
+    pub curseforge: i64,
+    pub total: i64,
+    /// Revenus du jour, en dollars, tels que la base les connaît.
+    pub revenue: String,
+    /// Rang dans la période affichée. Changer les dates le change.
+    pub rank_period: Option<i64>,
+    /// Rang parmi les quatre-vingt-dix journées qui la précèdent, elle comprise :
+    /// le rang qu'elle avait le jour où elle s'est produite.
+    pub rank_at_the_time: Option<i64>,
+    /// Journées réellement comparées pour ce dernier rang.
+    pub compared_days: i64,
+}
+
+/// Le classement des journées d'une période, et de quoi le lire sans se tromper.
+#[derive(Debug, Clone, Serialize)]
+pub struct DayRankings {
+    /// Les journées relevées, de la plus ancienne à la plus récente.
+    pub rows: Vec<DayRankRow>,
+    /// Première journée relevée pour chaque plateforme, toutes périodes
+    /// confondues : avant elle, un total ne porte que sur l'autre plateforme.
+    pub first_modrinth_day: Option<String>,
+    pub first_curseforge_day: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct TimelinePoint {
     pub day: String,

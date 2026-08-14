@@ -5,8 +5,8 @@
 //! produit ». Il ne regarde donc jamais en avant.
 
 use crate::error::Result;
-use crate::models::Platform;
-use crate::store::queries::{shift_day, PlatformFilter};
+use crate::models::{DayRankRow, DayRankings, Platform};
+use crate::store::queries::{shift_day, timeline, PlatformFilter};
 use rusqlite::{params, Connection};
 use rust_decimal::Decimal;
 use std::collections::BTreeMap;
@@ -74,6 +74,85 @@ pub fn revenue_by_day(
     }
 
     Ok(out)
+}
+
+/// Première journée relevée pour une plateforme, toutes périodes confondues.
+fn first_day(conn: &Connection, platform: Platform) -> Result<Option<String>> {
+    Ok(conn.query_row(
+        "SELECT MIN(m.day) FROM metrics_daily m JOIN projects p ON p.id = m.project_id
+         WHERE p.platform = ?1 AND COALESCE(m.downloads, 0) > 0",
+        params![platform.as_str()],
+        |r| r.get::<_, Option<String>>(0),
+    )?)
+}
+
+/// Classement des journées d'une période, `to` exclu.
+///
+/// Chaque journée porte deux rangs, parce que deux questions différentes se
+/// posent à son sujet. Le rang sur la période répond à « où se situe-t-elle
+/// dans ce que je regarde » et change avec les dates choisies. Le rang du jour
+/// répond à « était-ce un bon jour quand il s'est produit » : il ne compare
+/// qu'aux quatre-vingt-dix journées qui la précèdent, et rien de ce qui est
+/// arrivé ensuite ne peut plus le modifier.
+///
+/// La fenêtre du second rang déborde la période demandée : les journées qui
+/// précèdent le premier jour affiché servent de comparaison sans figurer dans
+/// la liste.
+pub fn day_rankings(
+    conn: &Connection,
+    from: &str,
+    to: &str,
+    filter: PlatformFilter,
+) -> Result<DayRankings> {
+    let history_start = shift_day(from, -(RANK_WINDOW_DAYS - 1));
+    let history = timeline(conn, &history_start, to, filter)?;
+    let revenue = revenue_by_day(conn, from, to, filter)?;
+
+    let totals: Vec<i64> = history.iter().map(|p| p.modrinth + p.curseforge).collect();
+
+    // Les rangs sur la période se lisent d'un tri unique : trier chaque ligne
+    // séparément coûterait un parcours complet par journée.
+    let mut period_totals: Vec<i64> = history
+        .iter()
+        .zip(&totals)
+        .filter(|(p, total)| p.day.as_str() >= from && **total > 0)
+        .map(|(_, total)| *total)
+        .collect();
+    period_totals.sort_unstable_by(|a, b| b.cmp(a));
+
+    let mut rows = Vec::new();
+    // Borne basse glissante de la fenêtre : elle n'avance jamais en arrière, ce
+    // qui laisse le parcours linéaire au lieu de rouvrir la fenêtre à chaque jour.
+    let mut start = 0usize;
+    for (i, point) in history.iter().enumerate() {
+        let window_start = shift_day(&point.day, -(RANK_WINDOW_DAYS - 1));
+        while history[start].day < window_start {
+            start += 1;
+        }
+        if point.day.as_str() < from {
+            continue;
+        }
+        let window: Vec<i64> = totals[start..=i].iter().copied().filter(|t| *t > 0).collect();
+        let total = totals[i];
+        let (modrinth_revenue, curseforge_revenue) =
+            revenue.get(&point.day).copied().unwrap_or_default();
+        rows.push(DayRankRow {
+            day: point.day.clone(),
+            modrinth: point.modrinth,
+            curseforge: point.curseforge,
+            total,
+            revenue: (modrinth_revenue + curseforge_revenue).normalize().to_string(),
+            rank_period: rank_within(&period_totals, total),
+            rank_at_the_time: rank_within(&window, total),
+            compared_days: window.len() as i64,
+        });
+    }
+
+    Ok(DayRankings {
+        rows,
+        first_modrinth_day: first_day(conn, Platform::Modrinth)?,
+        first_curseforge_day: first_day(conn, Platform::CurseForge)?,
+    })
 }
 
 #[cfg(test)]
@@ -152,5 +231,66 @@ mod tests {
         let filter = PlatformFilter { modrinth: false, curseforge: true };
         let by_day = revenue_by_day(&conn, "2026-08-10", "2026-08-11", filter).unwrap();
         assert!(by_day.get("2026-08-10").map(|v| v.0).unwrap_or_default().is_zero());
+    }
+
+    /// Le rang du jour ne connaît que le passé : une journée énorme survenue
+    /// après ne peut pas rétrograder celles d'avant.
+    #[test]
+    fn the_rank_of_a_day_never_looks_ahead() {
+        let (conn, m, _) = seed();
+        upsert_daily(&conn, m, "2026-08-10", Some(100), None, None).unwrap();
+        upsert_daily(&conn, m, "2026-08-11", Some(500), None, None).unwrap();
+
+        let out = day_rankings(&conn, "2026-08-10", "2026-08-12", PlatformFilter::default())
+            .unwrap();
+        let first = out.rows.iter().find(|r| r.day == "2026-08-10").unwrap();
+        assert_eq!(first.rank_at_the_time, Some(1), "elle était première le jour même");
+        assert_eq!(first.rank_period, Some(2), "mais seconde sur la période");
+    }
+
+    /// Le rang sur la période, lui, regarde toute la période.
+    #[test]
+    fn the_period_rank_orders_the_whole_range() {
+        let (conn, m, _) = seed();
+        upsert_daily(&conn, m, "2026-08-10", Some(100), None, None).unwrap();
+        upsert_daily(&conn, m, "2026-08-11", Some(500), None, None).unwrap();
+        upsert_daily(&conn, m, "2026-08-12", Some(300), None, None).unwrap();
+
+        let out = day_rankings(&conn, "2026-08-10", "2026-08-13", PlatformFilter::default())
+            .unwrap();
+        let rank_of = |day: &str| {
+            out.rows.iter().find(|r| r.day == day).unwrap().rank_period
+        };
+        assert_eq!(rank_of("2026-08-11"), Some(1));
+        assert_eq!(rank_of("2026-08-12"), Some(2));
+        assert_eq!(rank_of("2026-08-10"), Some(3));
+    }
+
+    /// Les journées sont rendues dans l'ordre du temps : c'est ce que le
+    /// graphique attend, et le tableau les retrie comme il veut.
+    #[test]
+    fn rows_are_returned_in_chronological_order() {
+        let (conn, m, _) = seed();
+        upsert_daily(&conn, m, "2026-08-12", Some(300), None, None).unwrap();
+        upsert_daily(&conn, m, "2026-08-10", Some(100), None, None).unwrap();
+
+        let out = day_rankings(&conn, "2026-08-10", "2026-08-13", PlatformFilter::default())
+            .unwrap();
+        let days: Vec<&str> = out.rows.iter().map(|r| r.day.as_str()).collect();
+        assert_eq!(days, vec!["2026-08-10", "2026-08-12"]);
+    }
+
+    /// Les deux plateformes n'ont pas commencé le même jour : la page doit
+    /// pouvoir le dire, sinon les vieux totaux paraissent effondrés.
+    #[test]
+    fn the_first_day_of_each_platform_is_reported() {
+        let (conn, m, c) = seed();
+        upsert_daily(&conn, c, "2024-03-19", Some(10), None, None).unwrap();
+        upsert_daily(&conn, m, "2025-08-11", Some(20), None, None).unwrap();
+
+        let out = day_rankings(&conn, "2024-03-19", "2026-08-13", PlatformFilter::default())
+            .unwrap();
+        assert_eq!(out.first_curseforge_day.as_deref(), Some("2024-03-19"));
+        assert_eq!(out.first_modrinth_day.as_deref(), Some("2025-08-11"));
     }
 }

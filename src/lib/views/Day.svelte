@@ -12,6 +12,7 @@
    * et ses chiffres monteraient encore sous les yeux.
    */
   import { api } from "../api";
+  import DateField from "../components/DateField.svelte";
   import Hint from "../components/Hint.svelte";
   import { compactNumber, deltaPercent, formatDayLong, formatMoney } from "../format";
   import { dashboard } from "../state.svelte";
@@ -89,7 +90,7 @@
 
 <div class="bar">
   <button class="nav" onclick={() => step(-1)} aria-label="Jour précédent">←</button>
-  <input type="date" bind:value={day} max={iso(today)} />
+  <DateField bind:value={day} max={iso(today)} label="Jour du bilan" />
   <button class="nav" onclick={() => step(1)} disabled={day >= iso(today)} aria-label="Jour suivant">
     →
   </button>
@@ -245,7 +246,6 @@
     flex-wrap: wrap;
     margin-bottom: 16px;
   }
-  input,
   button {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -257,8 +257,7 @@
     cursor: pointer;
     font-variant-numeric: tabular-nums;
   }
-  button:hover:not(:disabled),
-  input:hover {
+  button:hover:not(:disabled) {
     border-color: var(--accent);
   }
   button:disabled {

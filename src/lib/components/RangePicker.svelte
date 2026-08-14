@@ -1,4 +1,5 @@
 <script lang="ts">
+  import DateField from "./DateField.svelte";
   import Select from "./Select.svelte";
   import Tooltip from "./Tooltip.svelte";
   import { formatMonth, formatRange, lastDayOfMonth } from "../format";
@@ -79,12 +80,12 @@
     </div>
   </div>
 
-  <label class="days">
+  <div class="days">
     <span class="legend-label">Du</span>
-    <input type="date" bind:value={from} max={to} onchange={applyDates} />
+    <DateField bind:value={from} max={to} label="Début de la plage" onchange={applyDates} />
     <span class="legend-label">au</span>
-    <input type="date" bind:value={to} min={from} onchange={applyDates} />
-  </label>
+    <DateField bind:value={to} min={from} label="Fin de la plage" onchange={applyDates} />
+  </div>
 
   {#if overview}
     <Tooltip text="Fenêtre affichée" placement="bottom">
@@ -104,7 +105,7 @@
     display: flex;
     gap: 4px;
   }
-  label,
+  .days,
   .month {
     display: flex;
     align-items: center;
@@ -114,8 +115,7 @@
   .list {
     width: 148px;
   }
-  button,
-  input {
+  button {
     background-color: var(--surface);
     border: 1px solid var(--border);
     color: var(--text-dim);
@@ -128,13 +128,8 @@
       color 120ms ease,
       border-color 120ms ease;
   }
-  input {
-    color: var(--text);
-    font-variant-numeric: tabular-nums;
-  }
   button.active,
-  button:hover:not(:disabled),
-  input:hover {
+  button:hover:not(:disabled) {
     color: var(--text);
     border-color: var(--accent);
   }

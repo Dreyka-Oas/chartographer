@@ -45,6 +45,15 @@ export function worldMapOption(countries: CountryTotal[], p: Palette = DARK) {
         type: "map",
         map: "world",
         roam: true,
+        /*
+         * Le panneau est bien plus large que haut : ajustée à sa hauteur, la
+         * carte laissait de larges bandes vides de part et d'autre. On
+         * l'agrandit un peu et on la recentre sur les latitudes habitées, ce
+         * qui remplit le cadre sans rogner de pays qui compte. Le fond de
+         * carte est déjà privé de l'Antarctique, voir `WorldMap.svelte`.
+         */
+        center: [10, 14],
+        zoom: 1.3,
         itemStyle: { areaColor: p.empty, borderColor: p.grid },
         emphasis: { label: { show: false }, itemStyle: { areaColor: p.accent } },
         nameProperty: "iso_a2",

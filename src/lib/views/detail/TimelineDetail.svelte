@@ -4,6 +4,7 @@
   import { palette } from "../../charts/theme";
   import { timelineOption } from "../../charts/timeline";
   import Hint from "../../components/Hint.svelte";
+  import RankedTable from "../../components/RankedTable.svelte";
   import StatRow from "../../components/StatRow.svelte";
   import Switch from "../../components/Switch.svelte";
   import { compactNumber, formatDay } from "../../format";
@@ -45,13 +46,6 @@
     ),
   );
   const average = $derived(overview.timeline.length ? Math.round(total / overview.timeline.length) : 0);
-
-  /**
-   * Or, argent, bronze pour les trois meilleures journées. Ces teintes sont
-   * écrites en clair plutôt que prises au thème : elles ne veulent rien dire
-   * d'autre qu'un rang, et doivent se lire pareil en clair comme en sombre.
-   */
-  const PODIUM = ["#d4a72c", "#9aa4ad", "#b97a45"];
 
   const top = $derived(
     [...overview.timeline]
@@ -110,26 +104,23 @@
           text="Les douze jours les mieux servis de la période affichée, du plus fort au plus faible. Les trois premiers sont marqués d'un rang coloré. Changer les dates change ce classement."
         />
       </h2>
-      <table>
-        <thead>
-          <tr><th class="left">Jour</th><th>Modrinth</th><th>CurseForge</th><th>Total</th></tr>
-        </thead>
-        <tbody>
-          {#each top as row, i (row.day)}
-            <tr>
-              <td class="left">
-                <span class="rank" class:podium={i < 3} style="--rank: {PODIUM[i] ?? ''}">
-                  {i + 1}
-                </span>
-                {formatDay(row.day)}
-              </td>
-              <td>{compactNumber(row.modrinth)}</td>
-              <td>{compactNumber(row.curseforge)}</td>
-              <td><b class:lead={i === 0}>{compactNumber(row.total)}</b></td>
-            </tr>
-          {/each}
-        </tbody>
-      </table>
+      <RankedTable
+        columns={[
+          { label: "Jour", align: "left" },
+          { label: "Modrinth" },
+          { label: "CurseForge" },
+          { label: "Total" },
+        ]}
+        rows={top}
+        key={(row) => row.day}
+      >
+        {#snippet cells(row, i)}
+          <td class="left">{formatDay(row.day)}</td>
+          <td>{compactNumber(row.modrinth)}</td>
+          <td>{compactNumber(row.curseforge)}</td>
+          <td><b class:lead={i === 0}>{compactNumber(row.total)}</b></td>
+        {/snippet}
+      </RankedTable>
     </div>
 
     <div class="panel">
@@ -139,29 +130,25 @@
           text="Ce que chaque mod a rapporté de téléchargements sur la période, et la part que cela représente dans le total. La pastille reprend sa couleur dans le graphique ci-dessus. Cliquer sur une ligne ouvre la fiche du mod."
         />
       </h2>
-      <table>
-        <thead>
-          <tr><th class="left">Mod</th><th>Période</th><th>Part</th></tr>
-        </thead>
-        <tbody>
-          {#each series as s, i (s.name)}
-            {@const sum = s.values.reduce((a, v) => a + v, 0)}
-            <tr
-              onclick={() => {
-                const found = overview.per_project.find((p) => p.title === s.name);
-                if (found) dashboard.openProject(found);
-              }}
-            >
-              <td class="left">
-                <span class="dot" style="background: {seriesColor(i)}"></span>
-                {s.name}
-              </td>
-              <td>{compactNumber(sum)}</td>
-              <td>{total ? Math.round((sum / total) * 100) : 0} %</td>
-            </tr>
-          {/each}
-        </tbody>
-      </table>
+      <RankedTable
+        columns={[{ label: "Mod", align: "left" }, { label: "Période" }, { label: "Part" }]}
+        rows={series}
+        key={(s) => s.name}
+        onselect={(s) => {
+          const found = overview.per_project.find((p) => p.title === s.name);
+          if (found) dashboard.openProject(found);
+        }}
+      >
+        {#snippet cells(s, i)}
+          {@const sum = s.values.reduce((a, v) => a + v, 0)}
+          <td class="left">
+            <span class="dot" style="background: {seriesColor(i)}"></span>
+            {s.name}
+          </td>
+          <td>{compactNumber(sum)}</td>
+          <td>{total ? Math.round((sum / total) * 100) : 0} %</td>
+        {/snippet}
+      </RankedTable>
     </div>
   </div>
 </DetailShell>
@@ -212,27 +199,8 @@
     font-size: 0.9rem;
     font-weight: 600;
   }
-  .rank {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 18px;
-    height: 18px;
-    margin-right: 8px;
-    border-radius: 999px;
-    background: var(--surface-2);
-    color: var(--text-dim);
-    font-size: 0.68rem;
-    font-variant-numeric: tabular-nums;
-    /* Le rang est déjà donné par l'ordre des lignes : la couleur le redit,
-     * elle ne le porte pas seule. */
-    vertical-align: middle;
-  }
-  .rank.podium {
-    background: color-mix(in srgb, var(--rank) 22%, transparent);
-    color: var(--rank);
-    font-weight: 600;
-  }
+  /* Filets, alignements et survol vivent dans `RankedTable` ; ne restent ici
+   * que les marques propres à ces deux tableaux. */
   .lead {
     color: var(--accent);
   }
@@ -243,32 +211,5 @@
     margin-right: 8px;
     border-radius: 999px;
     vertical-align: middle;
-  }
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.84rem;
-  }
-  th {
-    text-align: right;
-    padding: 5px 8px;
-    border-bottom: 1px solid var(--border);
-    color: var(--text-dim);
-    font-weight: 500;
-  }
-  td {
-    text-align: right;
-    padding: 5px 8px;
-    border-bottom: 1px solid var(--border);
-    font-variant-numeric: tabular-nums;
-  }
-  .left {
-    text-align: left;
-  }
-  tbody tr:hover {
-    background: var(--surface-2);
-  }
-  .panel:last-child tbody tr {
-    cursor: pointer;
   }
 </style>

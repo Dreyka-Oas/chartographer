@@ -2,6 +2,8 @@
   import Chart from "../../charts/Chart.svelte";
   import { rankingOption } from "../../charts/multiseries";
   import { palette } from "../../charts/theme";
+  import Hint from "../../components/Hint.svelte";
+  import RankedTable from "../../components/RankedTable.svelte";
   import StatRow from "../../components/StatRow.svelte";
   import WorldMap from "../../components/WorldMap.svelte";
   import { compactNumber, countryLabel } from "../../format";
@@ -66,35 +68,40 @@
   </div>
 
   <div class="panel wide">
-    <h2>Tous les pays</h2>
-    <table>
-      <thead>
-        <tr><th class="left">Pays</th><th>Code</th><th>Téléchargements</th><th>Part</th></tr>
-      </thead>
-      <tbody>
-        {#each known as row (row.country)}
-          <tr>
-            <td class="left">{countryLabel(row.country)}</td>
-            <td class="dim">{row.country}</td>
-            <td>{compactNumber(row.downloads)}</td>
-            <td>
-              <div class="bar">
-                <span style="width: {totalKnown ? (row.downloads / totalKnown) * 100 : 0}%"></span>
-              </div>
-              {totalKnown ? ((row.downloads / totalKnown) * 100).toFixed(1) : "0"} %
-            </td>
-          </tr>
-        {/each}
-        {#if unknown}
-          <tr class="unknown">
-            <td class="left">Origine inconnue</td>
-            <td class="dim">??</td>
-            <td>{compactNumber(unknown.downloads)}</td>
-            <td class="dim">hors carte</td>
-          </tr>
-        {/if}
-      </tbody>
-    </table>
+    <h2>
+      Tous les pays
+      <Hint
+        text="Tous les pays relevés, du plus gros au plus petit, les trois premiers marqués d'un rang coloré. La part se lit sur le total localisé, hors téléchargements d'origine inconnue. Ces origines viennent de Modrinth seul : CurseForge n'en publie aucune."
+      />
+    </h2>
+    <RankedTable
+      columns={[
+        { label: "Pays", align: "left" },
+        { label: "Code" },
+        { label: "Téléchargements" },
+        { label: "Part" },
+      ]}
+      rows={known}
+      key={(row) => row.country}
+    >
+      {#snippet cells(row)}
+        <td class="left">{countryLabel(row.country)}</td>
+        <td class="dim">{row.country}</td>
+        <td>{compactNumber(row.downloads)}</td>
+        <td class="share">
+          <div class="bar">
+            <span style="width: {totalKnown ? (row.downloads / totalKnown) * 100 : 0}%"></span>
+          </div>
+          {totalKnown ? ((row.downloads / totalKnown) * 100).toFixed(1) : "0"} %
+        </td>
+      {/snippet}
+    </RankedTable>
+    {#if unknown}
+      <p class="unknown">
+        Origine inconnue : {compactNumber(unknown.downloads)} téléchargements, hors carte et hors
+        classement.
+      </p>
+    {/if}
   </div>
 </DetailShell>
 
@@ -114,39 +121,20 @@
     margin-top: 14px;
   }
   h2 {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     margin: 0 0 10px;
     font-size: 0.9rem;
     font-weight: 600;
   }
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.84rem;
-  }
-  th {
-    text-align: right;
-    padding: 5px 8px;
-    border-bottom: 1px solid var(--border);
-    color: var(--text-dim);
-    font-weight: 500;
-  }
-  td {
-    text-align: right;
-    padding: 5px 8px;
-    border-bottom: 1px solid var(--border);
-    font-variant-numeric: tabular-nums;
-  }
-  td:last-child {
+  /* Filets, alignements, rangs et survol viennent de `RankedTable` : ne reste
+   * ici que la barre de part, propre à ce tableau. */
+  .share {
     display: flex;
     align-items: center;
     justify-content: flex-end;
     gap: 8px;
-  }
-  .left {
-    text-align: left;
-  }
-  .dim {
-    color: var(--text-dim);
   }
   .bar {
     width: 110px;
@@ -160,7 +148,9 @@
     height: 100%;
     background: var(--accent);
   }
-  .unknown td {
+  .unknown {
+    margin: 10px 0 0;
+    font-size: 0.8rem;
     color: var(--warn);
   }
   @media (max-width: 1100px) {

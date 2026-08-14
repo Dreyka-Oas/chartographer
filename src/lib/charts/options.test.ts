@@ -7,7 +7,7 @@ import { sparklinePath } from "./sparkline";
 import { splitOption } from "./split";
 import { DARK, dayAxis, dayTooltipHtml, monthAxis } from "./theme";
 import { timelineOption } from "./timeline";
-import { countryTooltipHtml, worldMapOption } from "./worldmap";
+import { countryTooltipHtml, fillZoom, MAP_ASPECT, worldMapOption } from "./worldmap";
 
 const points = [
   { day: "2026-08-09", modrinth: 40, curseforge: 0 },
@@ -295,6 +295,27 @@ describe("worldMapOption", () => {
 
   it("annonce un pays sans relevé plutôt qu'une valeur vide", () => {
     expect(countryTooltipHtml("FR", Number.NaN, 100)).toContain("aucun téléchargement relevé");
+  });
+});
+
+describe("fillZoom", () => {
+  /** Un cadre aux proportions de la carte n'a rien à combler. */
+  it("laisse la carte telle quelle quand le cadre a ses proportions", () => {
+    expect(fillZoom(1000, 1000 / MAP_ASPECT)).toBeCloseTo(1, 2);
+  });
+
+  it("agrandit la carte dans un cadre plus large qu'elle", () => {
+    // Le panneau de la vue dépliée : bien plus large que la carte, il laissait
+    // sinon deux marges vides de part et d'autre.
+    expect(fillZoom(1080, 410)).toBeGreaterThan(1.1);
+  });
+
+  it("ne rapetisse jamais la carte, et ne l'agrandit pas sans fin", () => {
+    // Un cadre plus haut que large laisserait des bandes en haut et en bas,
+    // mais les combler exigerait de rogner des continents entiers.
+    expect(fillZoom(400, 600)).toBe(1);
+    expect(fillZoom(4000, 100)).toBe(1.15);
+    expect(fillZoom(0, 0)).toBe(1);
   });
 });
 

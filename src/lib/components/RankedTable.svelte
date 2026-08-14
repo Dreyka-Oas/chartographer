@@ -32,6 +32,12 @@
     cells,
     /** Colonne de rang. La couper laisse le tableau, ses filets et son survol. */
     ranked = true,
+    /**
+     * Hauteur au-delà de laquelle le tableau défile chez lui, en pixels. `0` le
+     * laisse s'étendre. Passé quelques dizaines de lignes, une liste complète
+     * repousse tout ce qui la suit hors de l'écran sans rien apprendre de plus.
+     */
+    maxHeight = 0,
     /** Rend les lignes cliquables ; le curseur le dit. */
     onselect,
   }: {
@@ -40,52 +46,66 @@
     key: (row: Row, index: number) => string;
     cells: Snippet<[Row, number]>;
     ranked?: boolean;
+    maxHeight?: number;
     onselect?: (row: Row, index: number) => void;
   } = $props();
 </script>
 
-<table class:clickable={Boolean(onselect)}>
-  <thead>
-    <tr>
-      {#if ranked}
-        <th class="rank-head" aria-label="Rang"></th>
-      {/if}
-      {#each columns as column (column.label)}
-        <th class:left={column.align === "left"}>{column.label}</th>
-      {/each}
-    </tr>
-  </thead>
-  <tbody>
-    {#each rows as row, i (key(row, i))}
-      <tr
-        onclick={onselect ? () => onselect(row, i) : undefined}
-        onkeydown={onselect
-          ? (event) => {
-              // Une ligne cliquable doit s'ouvrir au clavier aussi.
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                onselect(row, i);
-              }
-            }
-          : undefined}
-        tabindex={onselect ? 0 : undefined}
-        role={onselect ? "button" : undefined}
-      >
+<div
+  class="scroller"
+  class:capped={maxHeight > 0}
+  style={maxHeight > 0 ? `max-height: ${maxHeight}px` : ""}
+>
+  <table class:clickable={Boolean(onselect)}>
+    <thead>
+      <tr>
         {#if ranked}
-          {@const color = podiumColor(i)}
-          <td class="rank">
-            <span class="badge" class:podium={color !== null} style="--rank: {color ?? ''}">
-              {i + 1}
-            </span>
-          </td>
+          <th class="rank-head" aria-label="Rang"></th>
         {/if}
-        {@render cells(row, i)}
+        {#each columns as column (column.label)}
+          <th class:left={column.align === "left"}>{column.label}</th>
+        {/each}
       </tr>
-    {/each}
-  </tbody>
-</table>
+    </thead>
+    <tbody>
+      {#each rows as row, i (key(row, i))}
+        <tr
+          onclick={onselect ? () => onselect(row, i) : undefined}
+          onkeydown={onselect
+            ? (event) => {
+                // Une ligne cliquable doit s'ouvrir au clavier aussi.
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onselect(row, i);
+                }
+              }
+            : undefined}
+          tabindex={onselect ? 0 : undefined}
+          role={onselect ? "button" : undefined}
+        >
+          {#if ranked}
+            {@const color = podiumColor(i)}
+            <td class="rank">
+              <span class="badge" class:podium={color !== null} style="--rank: {color ?? ''}">
+                {i + 1}
+              </span>
+            </td>
+          {/if}
+          {@render cells(row, i)}
+        </tr>
+      {/each}
+    </tbody>
+  </table>
+</div>
 
 <style>
+  .scroller {
+    /* La gouttière est réservée en permanence : sans elle, l'apparition de la
+     * barre décalerait les colonnes d'une dizaine de pixels. */
+    overflow: auto;
+    scrollbar-gutter: stable;
+    overscroll-behavior: contain;
+  }
   table {
     width: 100%;
     border-collapse: collapse;
@@ -97,6 +117,17 @@
     border-bottom: 1px solid var(--border);
     color: var(--text-dim);
     font-weight: 500;
+  }
+  /* Tableau plafonné : l'en-tête reste lisible pendant le défilement. Le filet
+   * passe en ombre intérieure, une bordure de cellule ne suivant pas un
+   * en-tête collé. */
+  .capped th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--surface);
+    border-bottom: 0;
+    box-shadow: inset 0 -1px 0 var(--border);
   }
   th.left {
     text-align: left;

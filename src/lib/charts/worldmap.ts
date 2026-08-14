@@ -17,8 +17,38 @@ export function countryTooltipHtml(name: string, value: number, total: number): 
   return `<b>${label}</b><br>${compactNumber(value)} téléchargements${share}`;
 }
 
+/**
+ * ECharts resserre les longitudes d'un quart par défaut, ce qui étire la carte
+ * en largeur. On garde les degrés tels quels : le dessin est alors moins large
+ * et se rapproche de la forme du panneau, qu'il remplit d'autant mieux.
+ */
+export const ASPECT_SCALE = 1;
+
+/**
+ * Proportions du dessin, l'Antarctique retirée, relevées sur le rendu.
+ *
+ * Le calcul théorique — 360° de longitude sur 143° de latitude — ne tombe pas
+ * juste : ECharts ajuste la géométrie dans son cadre avec ses propres marges.
+ * C'est donc une mesure, à reprendre si le fond de carte change.
+ */
+export const MAP_ASPECT = 2.12;
+
+/**
+ * Grossissement qui comble les bandes vides d'un panneau plus large que la
+ * carte.
+ *
+ * Ajustée pour tenir entière, la carte laisse deux marges à gauche et à droite
+ * dès que le panneau s'allonge. L'agrandir les réduit, mais rogne d'autant en
+ * haut et en bas : le plafond est ce qu'on peut perdre en latitude sans
+ * entamer la Nouvelle-Zélande ni le Groenland, soit un huitième environ.
+ */
+export function fillZoom(width: number, height: number, max = 1.15): number {
+  if (!(width > 0) || !(height > 0)) return 1;
+  return Math.min(max, Math.max(1, width / height / MAP_ASPECT));
+}
+
 /** Le code `??` agrège `XX` et la chaîne vide côté Rust : il n'a pas de géométrie. */
-export function worldMapOption(countries: CountryTotal[], p: Palette = DARK) {
+export function worldMapOption(countries: CountryTotal[], p: Palette = DARK, zoom = 1) {
   const mapped = countries.filter((c) => c.country !== "??");
   const max = mapped.reduce((acc, c) => Math.max(acc, c.downloads), 0);
   const total = mapped.reduce((acc, c) => acc + c.downloads, 0);
@@ -46,14 +76,15 @@ export function worldMapOption(countries: CountryTotal[], p: Palette = DARK) {
         map: "world",
         roam: true,
         /*
-         * Le panneau est bien plus large que haut : ajustée à sa hauteur, la
-         * carte laissait de larges bandes vides de part et d'autre. On
-         * l'agrandit un peu et on la recentre sur les latitudes habitées, ce
-         * qui remplit le cadre sans rogner de pays qui compte. Le fond de
-         * carte est déjà privé de l'Antarctique, voir `WorldMap.svelte`.
+         * Le centre est le milieu des terres restantes, l'Antarctique retirée
+         * (voir `WorldMap.svelte`) : c'est autour de lui que le panneau rogne
+         * quand il est plus large que la carte, et le grossissement se règle sur
+         * sa forme (voir `fillZoom`) plutôt que sur une valeur figée, puisqu'il
+         * change de la vue d'ensemble à la vue détaillée.
          */
-        center: [10, 14],
-        zoom: 1.3,
+        center: [10, 15],
+        zoom,
+        aspectScale: ASPECT_SCALE,
         itemStyle: { areaColor: p.empty, borderColor: p.grid },
         emphasis: { label: { show: false }, itemStyle: { areaColor: p.accent } },
         nameProperty: "iso_a2",

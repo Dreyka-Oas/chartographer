@@ -83,6 +83,7 @@
       ]}
       rows={known}
       key={(row) => row.country}
+      maxHeight={420}
     >
       {#snippet cells(row)}
         <td class="left">{countryLabel(row.country)}</td>
@@ -108,7 +109,10 @@
 <style>
   .grid {
     display: grid;
-    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+    /* La carte n'est pas beaucoup plus large que haute : lui donner la moitié
+     * du rang plutôt que les trois cinquièmes lui évite deux marges vides, et
+     * le classement à côté n'en est que plus lisible. */
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
     gap: 14px;
   }
   .panel {
@@ -116,6 +120,16 @@
     border: 1px solid var(--border);
     border-radius: var(--radius);
     padding: 14px 16px;
+  }
+  /*
+   * Le panneau de la carte est étiré à la hauteur du Top 15 par la grille, mais
+   * la carte ne s'y étendait pas : `Chart height="fill"` se règle en `flex: 1`,
+   * qui ne veut rien dire hors d'un conteneur flex. Le panneau en devient un, et
+   * la carte prend tout ce que la liste des pays lui laisse.
+   */
+  .map {
+    display: flex;
+    flex-direction: column;
   }
   .wide {
     margin-top: 14px;

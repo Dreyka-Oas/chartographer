@@ -4,7 +4,7 @@
   import worldTopology from "world-atlas/countries-110m.json";
   import Chart from "../charts/Chart.svelte";
   import { palette } from "../charts/theme";
-  import { worldMapOption } from "../charts/worldmap";
+  import { fillZoom, worldMapOption } from "../charts/worldmap";
   import { compactNumber, countryLabel } from "../format";
   import { theme } from "../theme.svelte";
   import type { CountryTotal } from "../types";
@@ -47,12 +47,21 @@
 
   ensureMap();
 
+  // Mesures du cadre : le grossissement de la carte s'y règle, pour qu'elle le
+  // remplisse aussi bien dans la carte d'accueil que dans la vue dépliée.
+  let width = $state(0);
+  let height = $state(0);
+
   const unknown = $derived(countries.find((c) => c.country === "??"));
-  const option = $derived(worldMapOption(countries, palette(theme.dark)));
+  const option = $derived(
+    worldMapOption(countries, palette(theme.dark), fillZoom(width, height)),
+  );
   const top = $derived(countries.filter((c) => c.country !== "??").slice(0, 6));
 </script>
 
-<Chart {option} height="fill" />
+<div class="canvas" bind:clientWidth={width} bind:clientHeight={height}>
+  <Chart {option} height="fill" />
+</div>
 
 <div class="side">
   <ul>
@@ -69,7 +78,15 @@
 </div>
 
 <style>
+  .canvas {
+    flex: 1;
+    min-height: 220px;
+    display: flex;
+    flex-direction: column;
+  }
   .side {
+    /* La liste garde sa taille : c'est la carte au-dessus qui absorbe le reste. */
+    flex-shrink: 0;
     margin-top: 10px;
     display: flex;
     flex-direction: column;

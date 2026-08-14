@@ -11,6 +11,7 @@ import type {
   CurrencyView,
   DayRankings,
   DayReport,
+  RankBy,
   FollowersReport,
   GameVersion,
   Overview,
@@ -65,8 +66,14 @@ export const api = {
   openCurseforgeWindow: () => invoke<void>("open_curseforge_window"),
   dayReport: (day: string | null, platforms: string[]) =>
     invoke<DayReport>("day_report", { day, platforms }),
-  dayRankings: (rangeDays: number, from: string | null, to: string | null, platforms: string[]) =>
-    invoke<DayRankings>("day_rankings", { rangeDays, from, to, platforms }),
+  dayRankings: (
+    rangeDays: number,
+    from: string | null,
+    to: string | null,
+    platforms: string[],
+    by: RankBy,
+    windowDays: number | null,
+  ) => invoke<DayRankings>("day_rankings", { rangeDays, from, to, platforms, by, windowDays }),
   curseforgeSession: () => invoke<CfSession>("curseforge_session"),
   curseforgeFollowers: () => invoke<FollowersReport>("curseforge_followers"),
   collectCurseforgeFollowers: () => invoke<FollowersReport>("collect_curseforge_followers"),

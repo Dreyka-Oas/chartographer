@@ -18,7 +18,7 @@ const ZOOM = [
 export function dailyBarsOption(rows: DayRankRow[], p: Palette = DARK) {
   const axis = axisStyle(p);
   const crown = (row: DayRankRow, top: boolean) => {
-    const color = row.rank_period !== null ? PODIUM[row.rank_period - 1] : undefined;
+    const color = row.rank !== null ? PODIUM[row.rank - 1] : undefined;
     return top && color ? { itemStyle: { borderColor: color, borderWidth: 2 } } : {};
   };
   return {
@@ -50,7 +50,7 @@ export function dailyBarsOption(rows: DayRankRow[], p: Palette = DARK) {
 }
 
 /**
- * Le rang qu'avait chaque journée le jour où elle s'est produite.
+ * Le rang de chaque journée, selon le critère et la fenêtre choisis.
  *
  * L'axe est retourné : un premier rang est un sommet, et le lire au fond du
  * graphique demanderait au lecteur de renverser mentalement toute la courbe.
@@ -75,7 +75,7 @@ export function rankCurveOption(rows: DayRankRow[], p: Palette = DARK) {
         showSymbol: false,
         connectNulls: false,
         itemStyle: { color: p.accent },
-        data: rows.map((r) => r.rank_at_the_time),
+        data: rows.map((r) => r.rank),
       },
     ],
   };

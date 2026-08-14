@@ -222,7 +222,14 @@ pub fn day_report(
 ///
 /// Les bornes se résolvent comme celles de la page de vision : la page de
 /// classement partage son sélecteur de dates, et deux règles de fenêtre
-/// donneraient deux périodes pour un même réglage.
+/// donneraient deux périodes pour un même réglage. `by` absent vaut
+/// téléchargements, ce qui reproduit le classement d'avant ce réglage.
+///
+/// `window_days` est transmis tel quel : `None` porte un sens pour l'appelant,
+/// « toute l'histoire antérieure », qu'un repli sur quatre-vingt-dix jours
+/// écraserait sans recours. C'est au front de partir de quatre-vingt-dix par
+/// défaut, dans son propre état, plutôt qu'à la commande de deviner ce que
+/// signifie une valeur absente.
 #[tauri::command]
 pub fn day_rankings(
     state: State<'_, AppState>,
@@ -230,14 +237,17 @@ pub fn day_rankings(
     from: Option<String>,
     to: Option<String>,
     platforms: Option<Vec<String>>,
+    by: Option<crate::models::RankBy>,
+    window_days: Option<i64>,
 ) -> Result<crate::models::DayRankings> {
     let today = sync::today_utc();
     let range = range_days.clamp(7, 730);
     let (from, to) = queries::resolve_range(&today, range, from.as_deref(), to.as_deref());
     let filter = queries::PlatformFilter::from_names(platforms.as_deref());
-    state
-        .store
-        .with(|conn| crate::store::rankings::day_rankings(conn, &from, &to, filter))
+    let by = by.unwrap_or_default();
+    state.store.with(|conn| {
+        crate::store::rankings::day_rankings(conn, &from, &to, filter, by, window_days)
+    })
 }
 
 /// Chaque étape du cycle est annoncée sur `sync:step` au fil de l'eau : l'écran

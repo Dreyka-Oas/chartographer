@@ -137,7 +137,7 @@ pub struct DayProject {
     pub previous: i64,
 }
 
-/// Une journée dans le classement, avec les deux rangs qui la situent.
+/// Une journée dans le classement, avec le rang que les réglages ont produit.
 #[derive(Debug, Clone, Serialize)]
 pub struct DayRankRow {
     pub day: String,
@@ -146,12 +146,9 @@ pub struct DayRankRow {
     pub total: i64,
     /// Revenus du jour, en dollars, tels que la base les connaît.
     pub revenue: String,
-    /// Rang dans la période affichée. Changer les dates le change.
-    pub rank_period: Option<i64>,
-    /// Rang parmi les quatre-vingt-dix journées qui la précèdent, elle comprise :
-    /// le rang qu'elle avait le jour où elle s'est produite.
-    pub rank_at_the_time: Option<i64>,
-    /// Journées réellement comparées pour ce dernier rang.
+    /// Rang de la journée selon les réglages demandés, 1 étant le meilleur.
+    pub rank: Option<i64>,
+    /// Journées réellement comparées pour établir ce rang.
     pub compared_days: i64,
 }
 
@@ -164,6 +161,25 @@ pub struct DayRankings {
     /// confondues : avant elle, un total ne porte que sur l'autre plateforme.
     pub first_modrinth_day: Option<String>,
     pub first_curseforge_day: Option<String>,
+}
+
+/// Ce sur quoi les journées se classent.
+///
+/// Le classement porte sur les téléchargements par défaut. Les revenus sont
+/// proposés, mais ils ne racontent pas la même chose : Modrinth les relève au
+/// jour le jour quand CurseForge n'en publie aucun, si bien qu'un classement
+/// par revenus est d'abord un classement Modrinth.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum RankBy {
+    Downloads,
+    Revenue,
+}
+
+impl Default for RankBy {
+    fn default() -> Self {
+        Self::Downloads
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]

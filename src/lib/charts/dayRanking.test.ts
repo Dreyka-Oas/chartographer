@@ -10,16 +10,15 @@ function row(partial: Partial<DayRankRow>): DayRankRow {
     curseforge: 0,
     total: 0,
     revenue: "0",
-    rank_period: null,
-    rank_at_the_time: null,
+    rank: null,
     compared_days: 0,
     ...partial,
   };
 }
 
 const rows = [
-  row({ day: "2026-08-09", modrinth: 40, curseforge: 10, total: 50, rank_period: 2, rank_at_the_time: 1 }),
-  row({ day: "2026-08-10", modrinth: 80, curseforge: 20, total: 100, rank_period: 1, rank_at_the_time: 1 }),
+  row({ day: "2026-08-09", modrinth: 40, curseforge: 10, total: 50, rank: 2 }),
+  row({ day: "2026-08-10", modrinth: 80, curseforge: 20, total: 100, rank: 1 }),
 ];
 
 describe("dailyBarsOption", () => {

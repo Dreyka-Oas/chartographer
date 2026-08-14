@@ -353,7 +353,7 @@ export interface DayReport {
   events: EventRow[];
 }
 
-/** Une journée dans le classement, avec les deux rangs qui la situent. */
+/** Une journée dans le classement, avec le rang que les réglages ont produit. */
 export interface DayRankRow {
   day: string;
   modrinth: number;
@@ -361,12 +361,14 @@ export interface DayRankRow {
   total: number;
   /** Revenus du jour, en dollars, tels que la base les connaît. */
   revenue: string;
-  /** Rang dans la période affichée : changer les dates le change. */
-  rank_period: number | null;
-  /** Rang qu'avait la journée le jour où elle s'est produite. */
-  rank_at_the_time: number | null;
+  /** Rang de la journée selon les réglages demandés, 1 étant le meilleur. */
+  rank: number | null;
+  /** Journées réellement comparées pour établir ce rang. */
   compared_days: number;
 }
+
+/** Ce sur quoi les journées se classent. */
+export type RankBy = "downloads" | "revenue";
 
 export interface DayRankings {
   /** Les journées relevées, de la plus ancienne à la plus récente. */

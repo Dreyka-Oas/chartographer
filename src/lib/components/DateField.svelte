@@ -216,6 +216,7 @@
         class="nav"
         tabindex="-1"
         aria-label="Mois précédent"
+        onmousedown={(event) => event.preventDefault()}
         onclick={() => changeMonth(-1)}
       >
         ‹
@@ -226,6 +227,7 @@
         class="nav"
         tabindex="-1"
         aria-label="Mois suivant"
+        onmousedown={(event) => event.preventDefault()}
         onclick={() => changeMonth(1)}
       >
         ›

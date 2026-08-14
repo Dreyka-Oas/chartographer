@@ -114,10 +114,11 @@
     <span class="word">{verdict.word}</span>
     <span class="date">{formatDayLong(report.day)}</span>
     {#if report.rank !== null}
-      <span class="rank">
+      <button class="rank" onclick={() => dashboard.openDetail("days")}>
         {report.rank}<sup>{report.rank === 1 ? "re" : "e"}</sup> journée sur {report.ranked_days}
-        <Hint text={RANK} />
-      </span>
+        <span class="more">voir le classement</span>
+      </button>
+      <Hint text={RANK} />
     {/if}
   </div>
 
@@ -328,6 +329,19 @@
   }
   .rank sup {
     font-size: 0.62rem;
+  }
+  .rank {
+    border: 0;
+    background: none;
+    padding: 0;
+  }
+  .rank:hover .more {
+    color: var(--accent);
+  }
+  .more {
+    font-size: 0.72rem;
+    text-decoration: underline;
+    text-underline-offset: 3px;
   }
   .cards {
     display: grid;

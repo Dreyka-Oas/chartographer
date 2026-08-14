@@ -7,6 +7,7 @@
   import Boot from "./lib/views/Boot.svelte";
   import Day from "./lib/views/Day.svelte";
   import CountriesDetail from "./lib/views/detail/CountriesDetail.svelte";
+  import DaysDetail from "./lib/views/detail/DaysDetail.svelte";
   import EventsDetail from "./lib/views/detail/EventsDetail.svelte";
   import FollowersDetail from "./lib/views/detail/FollowersDetail.svelte";
   import LoadersDetail from "./lib/views/detail/LoadersDetail.svelte";
@@ -154,6 +155,9 @@
   {:else if dashboard.detail === "followers"}
     <!-- Les abonnés ne viennent pas de l'aperçu : cette vue les relève elle-même. -->
     <FollowersDetail />
+  {:else if dashboard.detail === "days"}
+    <!-- Le classement ne vient pas de l'aperçu non plus : il se relève lui-même. -->
+    <DaysDetail />
   {:else if overview}
     {#if dashboard.detail === "timeline"}
       <TimelineDetail {overview} />

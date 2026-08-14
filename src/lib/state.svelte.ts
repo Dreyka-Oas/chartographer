@@ -24,7 +24,8 @@ export type DetailView =
   | "loaders"
   | "events"
   | "projects"
-  | "followers";
+  | "followers"
+  | "days";
 
 /**
  * Cadence par défaut, en minutes, tant que les réglages n'ont pas répondu.

@@ -79,6 +79,7 @@ pub fn run() {
             commands::open_curseforge_site,
             commands::open_curseforge_window,
             commands::day_report,
+            commands::day_rankings,
             commands::curseforge_session,
             commands::curseforge_followers,
             commands::collect_curseforge_followers,

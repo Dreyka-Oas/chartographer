@@ -353,6 +353,28 @@ export interface DayReport {
   events: EventRow[];
 }
 
+/** Une journée dans le classement, avec les deux rangs qui la situent. */
+export interface DayRankRow {
+  day: string;
+  modrinth: number;
+  curseforge: number;
+  total: number;
+  /** Revenus du jour, en dollars, tels que la base les connaît. */
+  revenue: string;
+  /** Rang dans la période affichée : changer les dates le change. */
+  rank_period: number | null;
+  /** Rang qu'avait la journée le jour où elle s'est produite. */
+  rank_at_the_time: number | null;
+  compared_days: number;
+}
+
+export interface DayRankings {
+  /** Les journées relevées, de la plus ancienne à la plus récente. */
+  rows: DayRankRow[];
+  first_modrinth_day: string | null;
+  first_curseforge_day: string | null;
+}
+
 /** Un jour de la courbe des abonnés, plateforme par plateforme. */
 export interface FollowerDay {
   day: string;
@@ -405,6 +427,13 @@ export interface SyncReport {
   provider: string;
   status: string;
   detail: string;
+}
+
+/** Jalon posé par le cycle de synchronisation, à l'ouverture puis à la clôture
+ * de chacune de ses étapes. Le compte rendu est nul tant qu'elle est en cours. */
+export interface SyncStep {
+  provider: string;
+  report: SyncReport | null;
 }
 
 export interface AppErrorPayload {

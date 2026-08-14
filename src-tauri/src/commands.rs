@@ -7,7 +7,7 @@ use crate::sync::{self, SyncContext, SyncReport};
 use chrono::Utc;
 use serde::Serialize;
 use std::path::PathBuf;
-use tauri::{Manager, State};
+use tauri::{Emitter, Manager, State};
 use tauri_plugin_opener::OpenerExt;
 
 /// Page où l'utilisateur génère son token personnel. Ouverte pour lui depuis
@@ -218,10 +218,39 @@ pub fn day_report(
         .with(|conn| queries::day_report(conn, &day, &today, filter))
 }
 
+/// Classement des journées de la période choisie.
+///
+/// Les bornes se résolvent comme celles de la page de vision : la page de
+/// classement partage son sélecteur de dates, et deux règles de fenêtre
+/// donneraient deux périodes pour un même réglage.
 #[tauri::command]
-pub async fn sync_now(state: State<'_, AppState>) -> Result<Vec<SyncReport>> {
+pub fn day_rankings(
+    state: State<'_, AppState>,
+    range_days: i64,
+    from: Option<String>,
+    to: Option<String>,
+    platforms: Option<Vec<String>>,
+) -> Result<crate::models::DayRankings> {
+    let today = sync::today_utc();
+    let range = range_days.clamp(7, 730);
+    let (from, to) = queries::resolve_range(&today, range, from.as_deref(), to.as_deref());
+    let filter = queries::PlatformFilter::from_names(platforms.as_deref());
+    state
+        .store
+        .with(|conn| crate::store::rankings::day_rankings(conn, &from, &to, filter))
+}
+
+/// Chaque étape du cycle est annoncée sur `sync:step` au fil de l'eau : l'écran
+/// de démarrage l'affiche en direct, au lieu d'attendre le compte rendu final.
+#[tauri::command]
+pub async fn sync_now(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<Vec<SyncReport>> {
     let ctx = state.context()?;
-    Ok(sync::full(&state.store, &ctx).await)
+    Ok(
+        sync::full_with_progress(&state.store, &ctx, move |step| {
+            let _ = app.emit("sync:step", step);
+        })
+        .await,
+    )
 }
 
 /// `from` et `to` sont des dates incluses `YYYY-MM-DD`. Absentes, on retombe sur

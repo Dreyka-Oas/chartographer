@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import type {
   AuthStatus,
   CfAnalysis,
@@ -8,6 +9,7 @@ import type {
   CfScrape,
   CfSession,
   CurrencyView,
+  DayRankings,
   DayReport,
   FollowersReport,
   GameVersion,
@@ -59,6 +61,8 @@ export const api = {
   openCurseforgeWindow: () => invoke<void>("open_curseforge_window"),
   dayReport: (day: string | null, platforms: string[]) =>
     invoke<DayReport>("day_report", { day, platforms }),
+  dayRankings: (rangeDays: number, from: string | null, to: string | null, platforms: string[]) =>
+    invoke<DayRankings>("day_rankings", { rangeDays, from, to, platforms }),
   curseforgeSession: () => invoke<CfSession>("curseforge_session"),
   curseforgeFollowers: () => invoke<FollowersReport>("curseforge_followers"),
   collectCurseforgeFollowers: () => invoke<FollowersReport>("collect_curseforge_followers"),

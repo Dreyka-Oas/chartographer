@@ -1,4 +1,6 @@
 import { api } from "./api";
+import { SYNC_KEYS } from "./boot";
+import { boot } from "./boot.svelte";
 import { lastDayOfMonth, setCurrency } from "./format";
 import type {
   AppErrorPayload,
@@ -127,9 +129,27 @@ class Dashboard {
    * Démarrage : on établit l'état des deux comptes, et la suite s'enchaîne
    * d'elle-même dès qu'ils sont tous les deux reliés — au lancement comme
    * après une connexion faite depuis l'écran d'accueil.
+   *
+   * Rien n'est rendu tant que ce chemin n'a pas abouti : l'écran d'ouverture
+   * couvre la page et rapporte chaque étape.
    */
-  async boot() {
-    await this.refreshAuth();
+  async start() {
+    boot.reset();
+    boot.open("comptes");
+    // Les jalons du cycle Rust arrivent par événement. Hors de la fenêtre de
+    // l'application — une page ouverte dans un navigateur, le temps d'un
+    // essai — il n'y a rien à écouter : les comptes rendus finaux suffiront.
+    void api.onSyncStep((step) => boot.fromSync(step)).catch(() => {});
+    try {
+      await this.refreshAuth();
+    } catch (e) {
+      // Sans réponse du socle, il n'y a ni page à ouvrir ni compte à relier :
+      // l'écran de démarrage garde la main et propose de reprendre.
+      this.error = message(e);
+      // La note reste courte : le message entier a sa place sous la liste.
+      boot.close("comptes", false, "sans réponse");
+      return;
+    }
     await this.checkCurseforge();
   }
 
@@ -146,24 +166,33 @@ class Dashboard {
    */
   private async enterIfReady() {
     if (this.entered) return;
-    if (!this.auth?.connected || this.curseforgeSession !== true) return;
+    if (!this.auth?.connected || this.curseforgeSession !== true) {
+      // Un compte manque : l'écran de démarrage s'efface sur la page de
+      // connexion, et reprendra la main dès que les deux répondront présents.
+      boot.release();
+      return;
+    }
     this.entered = true;
+    boot.reset();
+    boot.close("comptes", true, this.auth.username ?? "");
+
     // La cadence vient des réglages : la lire avant d'armer le réveil évite un
     // premier cycle à la mauvaise fréquence.
+    boot.open("reglages");
     try {
       this.autoSyncMinutes = (await api.getSettings()).auto_sync_minutes;
+      boot.close("reglages", true, `relevé toutes les ${this.autoSyncMinutes} minutes`);
     } catch {
       this.autoSyncMinutes = DEFAULT_AUTO_SYNC_MINUTES;
+      boot.close("reglages", false, "valeurs par défaut");
     }
-    await this.load();
-    const synced = await this.autoSync();
-    // La collecte CurseForge n'attend pas la péremption générale : elle est la
-    // seule source de son historique et ne coûte qu'une fenêtre cachée. Elle
-    // est déjà faite si une synchronisation vient d'avoir lieu.
-    if (!synced) {
-      await this.collectCurseforge();
-      await this.load();
-    }
+
+    // Tout est relevé avant d'ouvrir, sans regarder l'âge des données : une
+    // page qui paraît d'abord sur les chiffres d'hier, puis se corrige d'un
+    // coup quelques secondes plus tard, ne se lit pas — on ignore, devant un
+    // total bas, s'il est faible ou seulement pas encore arrivé.
+    await this.sync();
+    boot.release();
     this.startAutoSync();
   }
 
@@ -250,6 +279,8 @@ class Dashboard {
     // La prochaine connexion refera la mise en route depuis le début : sans
     // cela, l'application reviendrait sur des chiffres qui ne sont plus lus.
     this.entered = false;
+    boot.reset();
+    boot.release();
     this.stopAutoSync();
   }
 
@@ -355,15 +386,28 @@ class Dashboard {
     this.error = null;
     try {
       this.lastSync = await api.syncNow();
+      boot.adopt(this.lastSync);
+      boot.settle(SYNC_KEYS, true);
       // Le tableau de bord CurseForge se relève dans la foulée : sa fenêtre
       // reste invisible tant que la session tient.
+      boot.open("tableau");
       await this.collectCurseforge();
+      boot.close("tableau", this.curseforge?.failed !== true, this.curseforge?.detail ?? "");
+      boot.open("agregation");
       await this.load();
+      boot.close("agregation", this.error === null, this.error ?? this.countedMods());
     } catch (e) {
       this.error = message(e);
+      boot.settle([...SYNC_KEYS, "tableau", "agregation"], false, "interrompu");
     } finally {
       this.syncing = false;
     }
+  }
+
+  /** Ce que la page a fini par rassembler, dit en une ligne. */
+  private countedMods(): string {
+    const mods = this.overview?.per_project.length ?? 0;
+    return `${mods} mod${mods > 1 ? "s" : ""} sur la période`;
   }
 
   /**

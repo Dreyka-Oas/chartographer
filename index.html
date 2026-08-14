@@ -4,6 +4,35 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Chartographer</title>
+    <!--
+      Le thème est posé avant la première peinture. Appliqué au montage de
+      l'application, il laisserait paraître un éclair de l'autre couleur : la
+      fenêtre s'ouvre avant que le module ne soit évalué.
+
+      Les deux fonds sont recopiés ici pour la même raison — ce sont les
+      `--bg` de `app.css`, qui n'est chargé qu'avec le module.
+    -->
+    <script>
+      try {
+        const mode = localStorage.getItem("chartographer:theme");
+        if (mode === "light" || mode === "dark") document.documentElement.dataset.theme = mode;
+      } catch {
+        // Stockage indisponible : le thème automatique fera l'affaire.
+      }
+    </script>
+    <style>
+      :root {
+        background-color: #efece4;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme="light"]) {
+          background-color: #0a1114;
+        }
+      }
+      :root[data-theme="dark"] {
+        background-color: #0a1114;
+      }
+    </style>
   </head>
   <body>
     <div id="app"></div>

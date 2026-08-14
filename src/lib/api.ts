@@ -21,6 +21,7 @@ import type {
   PublishReport,
   Settings,
   SyncReport,
+  SyncStep,
 } from "./types";
 
 export const api = {
@@ -39,6 +40,9 @@ export const api = {
   ) => invoke<void>("save_settings", { curseforgeUsername, rangeDays, currency, autoSyncMinutes }),
   refreshExchangeRate: () => invoke<CurrencyView>("refresh_exchange_rate"),
   syncNow: () => invoke<SyncReport[]>("sync_now"),
+  /** Jalons posés par le cycle en cours, étape après étape. */
+  onSyncStep: (handler: (step: SyncStep) => void) =>
+    listen<SyncStep>("sync:step", (event) => handler(event.payload)),
   overview: (rangeDays: number, from: string | null, to: string | null, platforms: string[]) =>
     invoke<Overview>("overview", { rangeDays, from, to, platforms }),
   projectDetail: (

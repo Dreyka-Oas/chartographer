@@ -22,6 +22,30 @@ pub struct SyncReport {
     pub detail: String,
 }
 
+/// Jalon d'une étape du cycle, posé à son ouverture puis à sa clôture.
+#[derive(Debug, Clone, Serialize)]
+pub struct SyncStep {
+    pub provider: String,
+    /// Compte rendu de l'étape, nul tant qu'elle est en cours.
+    pub report: Option<SyncReport>,
+}
+
+impl SyncStep {
+    fn opening(provider: &str) -> Self {
+        Self {
+            provider: provider.to_string(),
+            report: None,
+        }
+    }
+
+    fn closing(report: &SyncReport) -> Self {
+        Self {
+            provider: report.provider.clone(),
+            report: Some(report.clone()),
+        }
+    }
+}
+
 /// Tout ce dont la synchronisation a besoin : la session OAuth et les réglages.
 pub struct SyncContext {
     pub session: Session,
@@ -449,21 +473,58 @@ async fn snapshot_curseforge(store: &Store) -> Result<String> {
 /// Cycle complet : découverte, appariement, rafraîchissement, snapshot.
 /// Aucun échec ne bloque les autres providers.
 pub async fn full(store: &Store, ctx: &SyncContext) -> Vec<SyncReport> {
-    let mut reports = Vec::new();
-    reports.push(run_provider(store, "modrinth", discover_modrinth(store, ctx)).await);
-    reports.push(run_provider(store, "curseforge", discover_curseforge(store, ctx)).await);
+    full_with_progress(store, ctx, |_| {}).await
+}
 
-    if let Err(e) = store.with(apply_matches) {
-        reports.push(SyncReport {
+/// Le même cycle, chaque étape annoncée à son ouverture puis à sa clôture.
+///
+/// L'écran de démarrage joue toute la synchronisation avant d'ouvrir la page.
+/// Sans ces jalons, il n'aurait qu'une longue attente muette à montrer, alors
+/// que le cycle enchaîne cinq travaux bien distincts.
+pub async fn full_with_progress<F>(store: &Store, ctx: &SyncContext, on: F) -> Vec<SyncReport>
+where
+    F: Fn(SyncStep) + Send + Sync,
+{
+    let mut reports = Vec::new();
+    reports.push(staged(store, "modrinth", discover_modrinth(store, ctx), &on).await);
+    reports.push(staged(store, "curseforge", discover_curseforge(store, ctx), &on).await);
+
+    on(SyncStep::opening("matching"));
+    let matched = store.with(apply_matches);
+    let matching = match &matched {
+        Ok(count) => SyncReport {
+            provider: "matching".into(),
+            status: "ok".into(),
+            detail: format!("{count} liens automatiques"),
+        },
+        Err(e) => SyncReport {
             provider: "matching".into(),
             status: "failed".into(),
             detail: e.to_string(),
-        });
+        },
+    };
+    on(SyncStep::closing(&matching));
+    // L'appariement ne figure au compte rendu que s'il a échoué : réussi, il
+    // n'apprend rien de plus que les liens qu'il vient d'écrire.
+    if matched.is_err() {
+        reports.push(matching);
     }
 
-    reports.push(run_provider(store, "modrinth-analytics", refresh_modrinth(store, ctx)).await);
-    reports.push(run_provider(store, "curseforge-snapshot", snapshot_curseforge(store)).await);
+    reports.push(staged(store, "modrinth-analytics", refresh_modrinth(store, ctx), &on).await);
+    reports.push(staged(store, "curseforge-snapshot", snapshot_curseforge(store), &on).await);
     reports
+}
+
+/// Un provider joué entre ses deux jalons.
+async fn staged<F, W>(store: &Store, provider: &str, work: W, on: &F) -> SyncReport
+where
+    F: Fn(SyncStep) + Send + Sync,
+    W: std::future::Future<Output = Result<String>>,
+{
+    on(SyncStep::opening(provider));
+    let report = run_provider(store, provider, work).await;
+    on(SyncStep::closing(&report));
+    report
 }
 
 #[cfg(test)]

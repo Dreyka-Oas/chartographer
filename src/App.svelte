@@ -1,8 +1,10 @@
 <script lang="ts">
   import { cubicOut } from "svelte/easing";
+  import { boot } from "./lib/boot.svelte";
   import PlatformBadge from "./lib/components/PlatformBadge.svelte";
   import ThemeToggle from "./lib/components/ThemeToggle.svelte";
   import { dashboard } from "./lib/state.svelte";
+  import Boot from "./lib/views/Boot.svelte";
   import Day from "./lib/views/Day.svelte";
   import CountriesDetail from "./lib/views/detail/CountriesDetail.svelte";
   import EventsDetail from "./lib/views/detail/EventsDetail.svelte";
@@ -24,7 +26,7 @@
   $effect(() => {
     if (ready) return;
     ready = true;
-    dashboard.boot();
+    dashboard.start();
   });
 
   const overview = $derived(dashboard.overview);
@@ -49,15 +51,22 @@
 </script>
 
 <!--
+  L'écran d'ouverture couvre la page, et s'efface une fois le relevé du jour
+  rentré. Ce qui suit se rend dessous pendant qu'il disparaît : l'application
+  ne passe donc jamais par une page vide.
+-->
+<Boot />
+
+<!--
   L'application ne s'ouvre qu'avec ses deux comptes. Chartographer met les deux
   plateformes côte à côte : entrer avec une seule montrerait des totaux amputés
   sans qu'aucun chiffre ne signale ce qui manque.
 -->
 {#if !dashboard.auth}
-  <p class="boot">Démarrage…</p>
+  <!-- Les comptes n'ont pas encore répondu : l'écran d'ouverture tient la page. -->
 {:else if !dashboard.auth.connected || dashboard.curseforgeSession !== true}
   <Login />
-{:else}
+{:else if boot.done}
   <nav>
     <strong>Chartographer</strong>
     <button
@@ -223,10 +232,6 @@
   main.fixed {
     overflow: hidden;
     padding-bottom: 16px;
-  }
-  .boot {
-    padding: 24px;
-    color: var(--text-dim);
   }
   .error {
     background: var(--surface-2);

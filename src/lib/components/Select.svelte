@@ -97,7 +97,11 @@
     }
     if (!open) return;
     if (event.key === "Escape") {
+      // Sans quoi l'évènement remonte jusqu'à la coque plein écran, qui se
+      // ferme sur Échap sans regarder sa cible : fermer le menu fermerait la
+      // page entière avec lui.
       event.preventDefault();
+      event.stopPropagation();
       open = false;
       trigger?.focus();
     } else if (event.key === "ArrowDown") {

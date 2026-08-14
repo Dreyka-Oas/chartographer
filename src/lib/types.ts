@@ -370,6 +370,16 @@ export interface DayRankRow {
 /** Ce sur quoi les journées se classent. */
 export type RankBy = "downloads" | "revenue";
 
+/**
+ * À quoi une journée se compare pour obtenir son rang.
+ *
+ * `sliding` et `all` ne regardent jamais en avant ; `all` n'est qu'une
+ * fenêtre glissante sans borne basse. `period` rompt cette règle par
+ * construction : elle classe les journées affichées les unes par rapport aux
+ * autres, sans égard à leur ordre.
+ */
+export type RankScope = "sliding" | "all" | "period";
+
 export interface DayRankings {
   /** Les journées relevées, de la plus ancienne à la plus récente. */
   rows: DayRankRow[];

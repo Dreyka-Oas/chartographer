@@ -1,4 +1,4 @@
-import { PODIUM } from "../components/rank";
+import { podiumColor } from "../components/rank";
 import type { DayRankRow } from "../types";
 import { axisStyle, BASE_GRID, DARK, dayAxis, dayTooltip, type Palette } from "./theme";
 
@@ -18,7 +18,7 @@ const ZOOM = [
 export function dailyBarsOption(rows: DayRankRow[], p: Palette = DARK) {
   const axis = axisStyle(p);
   const crown = (row: DayRankRow, top: boolean) => {
-    const color = row.rank !== null ? PODIUM[row.rank - 1] : undefined;
+    const color = row.rank !== null ? podiumColor(row.rank - 1) : null;
     return top && color ? { itemStyle: { borderColor: color, borderWidth: 2 } } : {};
   };
   return {

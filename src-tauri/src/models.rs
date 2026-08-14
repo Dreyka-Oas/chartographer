@@ -182,6 +182,32 @@ impl Default for RankBy {
     }
 }
 
+/// À quoi une journée se compare pour obtenir son rang.
+///
+/// La règle de la page — un rang une fois acquis ne bouge plus — vaut pour
+/// `Sliding` et `All` : toutes deux ne regardent jamais en avant, la seconde
+/// n'ayant simplement pas de borne basse. `Period` rompt cette règle par
+/// construction : elle classe les journées affichées les unes par rapport aux
+/// autres, si bien qu'une journée peut y être dépassée par une autre qui la
+/// suit. C'est le prix d'une vraie réponse à « où se situe ce jour dans ce que
+/// je regarde », qui change avec les dates choisies.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum RankScope {
+    /// Aux `window_days` journées qui précèdent, elle comprise.
+    Sliding,
+    /// À tout ce qui précède, elle comprise, sans borne basse.
+    All,
+    /// Aux autres journées de la période affichée, toutes comparées entre elles.
+    Period,
+}
+
+impl Default for RankScope {
+    fn default() -> Self {
+        Self::Sliding
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct TimelinePoint {
     pub day: String,

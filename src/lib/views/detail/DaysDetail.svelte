@@ -21,7 +21,7 @@
   import { compactNumber, formatDay, formatDayLong, formatMoney } from "../../format";
   import { dashboard } from "../../state.svelte";
   import { theme } from "../../theme.svelte";
-  import type { AppErrorPayload, DayRankings, RankBy } from "../../types";
+  import type { AppErrorPayload, DayRankings, RankBy, RankScope } from "../../types";
   import DetailShell from "./DetailShell.svelte";
 
   let data = $state<DayRankings | null>(null);
@@ -34,47 +34,57 @@
   /** À quoi chaque journée se compare, tel que choisi dans le filtre. */
   let windowChoice = $state<"90" | "30" | "all" | "period">("90");
 
-  /** Longueur de la période affichée, en jours, bornes incluses. */
-  const periodLength = $derived.by(() => {
-    if (dashboard.rangeFrom && dashboard.rangeTo) {
-      const span = new Date(dashboard.rangeTo).getTime() - new Date(dashboard.rangeFrom).getTime();
-      return Math.round(span / 86_400_000) + 1;
+  /**
+   * `scope` et `windowDays` transmis à la commande. « La période affichée »
+   * est un mode à part côté backend, pas une fenêtre glissante de la longueur
+   * de la période : celle-ci referait toujours de la première journée la
+   * première, sans jamais laisser une journée en dépasser une autre qui la
+   * précède.
+   */
+  const scopeAndWindow = $derived.by((): { scope: RankScope; windowDays: number | null } => {
+    switch (windowChoice) {
+      case "90":
+        return { scope: "sliding", windowDays: 90 };
+      case "30":
+        return { scope: "sliding", windowDays: 30 };
+      case "all":
+        return { scope: "all", windowDays: null };
+      case "period":
+        return { scope: "period", windowDays: null };
     }
-    return dashboard.rangeDays;
   });
 
-  /**
-   * Fenêtre transmise à la commande. « La période affichée » n'est pas un cas
-   * particulier côté backend : c'est ici qu'elle devient un nombre de jours
-   * comme un autre.
-   */
-  const windowDays = $derived(
-    windowChoice === "90"
-      ? 90
-      : windowChoice === "30"
-        ? 30
-        : windowChoice === "all"
-          ? null
-          : periodLength,
-  );
+  // Un jeton de séquence, pour ignorer une réponse arrivée après une plus
+  // récente : trois changements de réglage rapprochés lancent trois appels
+  // concurrents, sans garantie que le dernier arrivé soit le dernier demandé.
+  let requestToken = 0;
 
   // Les bornes, les plateformes visibles et les deux réglages du classement
   // commandent le résultat : il se relève dès que l'un d'eux change.
   $effect(() => {
-    const [days, from, to, platforms, by, window] = [
-      dashboard.rangeDays,
-      dashboard.rangeFrom,
-      dashboard.rangeTo,
-      dashboard.visiblePlatforms,
-      rankBy,
-      windowDays,
-    ];
+    const days = dashboard.rangeDays;
+    const from = dashboard.rangeFrom;
+    const to = dashboard.rangeTo;
+    const platforms = dashboard.visiblePlatforms;
+    const by = rankBy;
+    const { scope, windowDays } = scopeAndWindow;
+
+    const token = ++requestToken;
     loading = true;
     api
-      .dayRankings(days, from, to, platforms, by, window)
-      .then((value) => (data = value))
-      .catch((e) => (dashboard.error = (e as AppErrorPayload)?.message ?? String(e)))
-      .finally(() => (loading = false));
+      .dayRankings(days, from, to, platforms, by, scope, windowDays)
+      .then((value) => {
+        if (token !== requestToken) return;
+        data = value;
+      })
+      .catch((e) => {
+        if (token !== requestToken) return;
+        dashboard.error = (e as AppErrorPayload)?.message ?? String(e);
+      })
+      .finally(() => {
+        if (token !== requestToken) return;
+        loading = false;
+      });
   });
 
   const rows = $derived(data?.rows ?? []);

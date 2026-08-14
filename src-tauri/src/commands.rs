@@ -223,13 +223,11 @@ pub fn day_report(
 /// Les bornes se résolvent comme celles de la page de vision : la page de
 /// classement partage son sélecteur de dates, et deux règles de fenêtre
 /// donneraient deux périodes pour un même réglage. `by` absent vaut
-/// téléchargements, ce qui reproduit le classement d'avant ce réglage.
-///
-/// `window_days` est transmis tel quel : `None` porte un sens pour l'appelant,
-/// « toute l'histoire antérieure », qu'un repli sur quatre-vingt-dix jours
-/// écraserait sans recours. C'est au front de partir de quatre-vingt-dix par
-/// défaut, dans son propre état, plutôt qu'à la commande de deviner ce que
-/// signifie une valeur absente.
+/// téléchargements, `scope` absent vaut fenêtre glissante — ce qui reproduit
+/// le classement d'avant ces réglages. `window_days` n'a de sens que pour
+/// `scope: "sliding"` ; absent dans ce cas, il retombe sur les quatre-vingt-dix
+/// jours d'avant ce réglage, sans ambiguïté possible avec « toute l'histoire
+/// antérieure » puisque celle-ci passe désormais par `scope: "all"`.
 #[tauri::command]
 pub fn day_rankings(
     state: State<'_, AppState>,
@@ -238,6 +236,7 @@ pub fn day_rankings(
     to: Option<String>,
     platforms: Option<Vec<String>>,
     by: Option<crate::models::RankBy>,
+    scope: Option<crate::models::RankScope>,
     window_days: Option<i64>,
 ) -> Result<crate::models::DayRankings> {
     let today = sync::today_utc();
@@ -245,8 +244,15 @@ pub fn day_rankings(
     let (from, to) = queries::resolve_range(&today, range, from.as_deref(), to.as_deref());
     let filter = queries::PlatformFilter::from_names(platforms.as_deref());
     let by = by.unwrap_or_default();
+    let scope = scope.unwrap_or_default();
+    let window_days = match scope {
+        crate::models::RankScope::Sliding => {
+            Some(window_days.unwrap_or(crate::store::rankings::RANK_WINDOW_DAYS))
+        }
+        _ => window_days,
+    };
     state.store.with(|conn| {
-        crate::store::rankings::day_rankings(conn, &from, &to, filter, by, window_days)
+        crate::store::rankings::day_rankings(conn, &from, &to, filter, by, scope, window_days)
     })
 }
 

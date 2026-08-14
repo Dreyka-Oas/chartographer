@@ -914,7 +914,15 @@ pub fn day_report(
     // n'existaient pas encore. Les journées sans le moindre téléchargement sont
     // écartées : ce sont des jours sans relevé, pas des jours creux, et elles
     // flatteraient le classement.
-    let neighbours: Vec<i64> = timeline(conn, "0000-01-01", &next, filter)?
+    //
+    // La borne basse part de la première journée réellement relevée, jamais
+    // de l'origine du calendrier : `timeline` reste une requête unique quelle
+    // que soit la largeur de la plage, mais autant lui donner une plage qui
+    // correspond à ce que la base contient.
+    let history_start =
+        crate::store::metrics::first_metrics_day(conn)?.unwrap_or_else(|| day.to_string());
+    let history = timeline(conn, &history_start, &next, filter)?;
+    let neighbours: Vec<i64> = history
         .iter()
         .map(|p| p.modrinth + p.curseforge)
         .filter(|total| *total > 0)
@@ -923,8 +931,7 @@ pub fn day_report(
     let rank = crate::store::rankings::rank_within(&neighbours, total);
 
     // Meilleure journée connue, toutes plateformes visibles confondues.
-    let all = timeline(conn, "0000-01-01", &next, filter)?;
-    let best = all
+    let best = history
         .iter()
         .max_by_key(|p| p.modrinth + p.curseforge)
         .map(|p| (p.day.clone(), p.modrinth + p.curseforge));

@@ -173,6 +173,15 @@ pub fn last_metrics_day(conn: &Connection) -> Result<Option<String>> {
     Ok(conn.query_row("SELECT MAX(day) FROM metrics_daily", [], |r| r.get(0))?)
 }
 
+/// Première journée jamais relevée, tous projets confondus.
+///
+/// Sert de borne basse réelle là où l'historique complet est demandé : partir
+/// de l'origine du calendrier ferait porter le calcul sur des millénaires
+/// vides plutôt que sur ce que la base contient effectivement.
+pub fn first_metrics_day(conn: &Connection) -> Result<Option<String>> {
+    Ok(conn.query_row("SELECT MIN(day) FROM metrics_daily", [], |r| r.get(0))?)
+}
+
 pub fn upsert_country(
     conn: &Connection,
     project_id: i64,

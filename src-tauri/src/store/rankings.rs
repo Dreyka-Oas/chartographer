@@ -64,14 +64,29 @@ pub fn revenue_by_day(
     }
 
     if filter.curseforge {
-        let mut day = from.to_string();
-        while day.as_str() < to {
-            let next = shift_day(&day, 1);
-            let gained = crate::store::metrics::cf_points_gained(conn, &day, &next)?;
+        // Même principe que `cf_points_gained`, mais pour toute la plage en une
+        // seule requête : les relevés sont rares (quatre dans la base réelle),
+        // les jours qui séparent deux relevés ne le sont pas. Boucler sur les
+        // jours faisait dépendre le coût de la largeur de la plage plutôt que
+        // du nombre de relevés — un gel assuré dès que la plage remonte loin.
+        let mut stmt = conn.prepare(
+            "SELECT day, points FROM cf_points
+             WHERE day < ?2
+               AND (day >= ?1 OR day = (SELECT MAX(day) FROM cf_points WHERE day < ?1))
+             ORDER BY day",
+        )?;
+        let readings = stmt
+            .query_map(params![from, to], |r| {
+                Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?))
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        for pair in readings.windows(2) {
+            // Une baisse de solde est un retrait, jamais un gain négatif : la
+            // même règle qu'à côté, dans `cf_points_gained`.
+            let gained = (pair[1].1 - pair[0].1).max(0);
             if gained != 0 {
-                out.entry(day.clone()).or_default().1 += Decimal::from(gained) * point_value();
+                out.entry(pair[1].0.clone()).or_default().1 += Decimal::from(gained) * point_value();
             }
-            day = next;
         }
     }
 
@@ -129,13 +144,24 @@ pub fn day_rankings(
     scope: RankScope,
     window_days: Option<i64>,
 ) -> Result<DayRankings> {
+    // « Toutes les journées relevées » veut dire ce que la base contient
+    // réellement, pas l'origine du calendrier : partir de l'an zéro ferait
+    // porter `timeline` et `revenue_by_day` sur des millénaires vides.
     let history_start = match scope {
         RankScope::Sliding => match window_days {
-            Some(n) => shift_day(from, -(n - 1)),
-            None => "0000-01-01".to_string(),
+            Some(n) => Some(shift_day(from, -(n - 1))),
+            None => crate::store::metrics::first_metrics_day(conn)?,
         },
-        RankScope::All => "0000-01-01".to_string(),
-        RankScope::Period => from.to_string(),
+        RankScope::All => crate::store::metrics::first_metrics_day(conn)?,
+        RankScope::Period => Some(from.to_string()),
+    };
+    let Some(history_start) = history_start else {
+        // Base vide : aucune journée relevée, donc aucun classement à faire.
+        return Ok(DayRankings {
+            rows: Vec::new(),
+            first_modrinth_day: None,
+            first_curseforge_day: None,
+        });
     };
     let history = timeline(conn, &history_start, to, filter)?;
     let revenue = revenue_by_day(conn, &history_start, to, filter)?;
@@ -280,6 +306,31 @@ mod tests {
         assert_eq!(by_day.get("2026-08-10").unwrap().0, Decimal::from_str("1.25").unwrap());
         assert_eq!(by_day.get("2026-08-11").unwrap().0, Decimal::from_str("3.50").unwrap());
         assert_eq!(by_day.len(), 2, "les jours sans revenu ne sont pas inventés");
+    }
+
+    /// Une plage large comme celle que produit `All` — de l'an zéro à
+    /// aujourd'hui — doit rendre le même résultat qu'une plage étroite qui
+    /// contient les mêmes relevés, et le rendre sans boucler sur les jours :
+    /// c'est exactement le gel que la version précédente provoquait.
+    #[test]
+    fn a_wide_range_matches_a_narrow_one_and_does_not_loop_over_days() {
+        let (conn, _, c) = seed();
+        crate::store::metrics::record_cf_points(&conn, "2024-03-19", 1_000, "x").unwrap();
+        crate::store::metrics::record_cf_points(&conn, "2025-01-10", 1_400, "x").unwrap();
+        crate::store::metrics::record_cf_points(&conn, "2026-08-10", 1_900, "x").unwrap();
+        crate::store::metrics::record_cf_points(&conn, "2026-08-14", 2_100, "x").unwrap();
+        upsert_daily(&conn, c, "2024-03-19", Some(1), None, None).unwrap();
+
+        let narrow =
+            revenue_by_day(&conn, "2024-03-19", "2026-08-15", PlatformFilter::default()).unwrap();
+        let wide =
+            revenue_by_day(&conn, "0000-01-01", "2026-08-15", PlatformFilter::default()).unwrap();
+        assert_eq!(wide, narrow, "même relevés, même résultat, quelle que soit la borne basse");
+        assert_eq!(
+            wide.get("2026-08-14").unwrap().1,
+            Decimal::from(200) * point_value(),
+            "200 points gagnés entre le 10 et le 14 aout"
+        );
     }
 
     /// Masquer Modrinth doit vider ses revenus, pas les laisser passer sous un
@@ -456,6 +507,47 @@ mod tests {
         .unwrap();
         let days: Vec<&str> = out.rows.iter().map(|r| r.day.as_str()).collect();
         assert_eq!(days, vec!["2026-08-10", "2026-08-12"]);
+    }
+
+    /// Mesure ponctuelle sur la base réelle de l'utilisateur : la portée
+    /// `All` doit répondre en un temps raisonnable, pas geler l'interface.
+    /// Ouverte en lecture seule, jamais modifiée. Ignoré par défaut : le
+    /// fichier n'existe pas sur les machines qui n'ont pas cette base.
+    #[test]
+    #[ignore]
+    fn day_rankings_all_scope_answers_quickly_on_the_real_database() {
+        let path = std::path::PathBuf::from(std::env::var("APPDATA").unwrap())
+            .join("fr.dreykaoas.chartographer")
+            .join("chartographer.db");
+        if !path.exists() {
+            eprintln!("base reelle absente, mesure ignoree");
+            return;
+        }
+        let flags = rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY;
+        let conn = Connection::open_with_flags(&path, flags).unwrap();
+
+        let started = std::time::Instant::now();
+        let out = day_rankings(
+            &conn,
+            "2026-08-01",
+            "2026-08-15",
+            PlatformFilter::default(),
+            RankBy::Revenue,
+            RankScope::All,
+            None,
+        )
+        .unwrap();
+        let elapsed = started.elapsed();
+
+        eprintln!(
+            "day_rankings(All) sur la base reelle : {} lignes en {:?}",
+            out.rows.len(),
+            elapsed
+        );
+        assert!(
+            elapsed.as_secs() < 5,
+            "la portee All doit repondre en quelques secondes, pas geler la page"
+        );
     }
 
     /// Les deux plateformes n'ont pas commencé le même jour : la page doit

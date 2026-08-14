@@ -62,6 +62,35 @@ function ownValue(entry: AxisParam): number {
   return Number(entry.value ?? 0);
 }
 
+/** Réglages du tooltip d'un axe de jours. */
+export interface DayTooltipOptions {
+  format?: (value: number) => string;
+  /** Trie les lignes de la plus grosse à la plus petite. */
+  sorted?: boolean;
+  /**
+   * Logo à poser devant le nom d'une série, quand elle en a un. Le tooltip
+   * d'ECharts est du HTML : l'adresse y est insérée telle quelle, d'où le
+   * filtre de `iconTag`.
+   */
+  icon?: (seriesName: string) => string | null | undefined;
+}
+
+/**
+ * Vignette d'une série, ou un blanc de même largeur pour que les noms restent
+ * alignés quand une seule série sur dix n'a pas de logo.
+ *
+ * Seules les adresses `http(s)` sans guillemet ni chevron sont posées : elles
+ * viennent des plateformes, mais elles finissent dans un attribut HTML monté à
+ * la main, et rien ne garantit leur forme.
+ */
+function iconTag(url: string | null | undefined): string {
+  const size = "width:14px;height:14px;vertical-align:-3px;margin-right:4px";
+  if (typeof url !== "string" || !/^https?:\/\/[^"'<>\s]+$/.test(url)) {
+    return `<span style="display:inline-block;${size}"></span>`;
+  }
+  return `<img src="${url}" alt="" style="${size};border-radius:3px;object-fit:cover">`;
+}
+
 /**
  * Axe de jours lisible : l'étiquette porte le jour et le mois abrégé au lieu
  * de la date ISO brute, et ECharts efface celles qui se chevaucheraient.
@@ -95,12 +124,8 @@ export function monthAxis(months: string[], p: Palette) {
 }
 
 /** Corps du tooltip d'un axe de jours, titre en date complète. */
-export function dayTooltipHtml(
-  params: AxisParam[],
-  format: (value: number) => string = compactNumber,
-  /** Trie les lignes de la plus grosse à la plus petite. */
-  sorted = false,
-): string {
+export function dayTooltipHtml(params: AxisParam[], options: DayTooltipOptions = {}): string {
+  const { format = compactNumber, sorted = false, icon } = options;
   const head = formatDayLong(String(params[0]?.axisValue ?? ""));
   let sum = 0;
   const entries = sorted ? [...params].sort((a, b) => ownValue(b) - ownValue(a)) : params;
@@ -108,7 +133,8 @@ export function dayTooltipHtml(
     const value = ownValue(entry);
     if (Number.isFinite(value)) sum += value;
     const amount = Number.isFinite(value) ? format(value) : "—";
-    return `${entry.marker ?? ""} ${entry.seriesName ?? ""} <b>${amount}</b>`;
+    const logo = icon ? iconTag(icon(String(entry.seriesName ?? ""))) : "";
+    return `${entry.marker ?? ""} ${logo}${entry.seriesName ?? ""} <b>${amount}</b>`;
   });
   // Plusieurs séries : la question qui vient d'abord est « combien ce jour-là,
   // en tout ». On la met au pied, séparée du détail par un filet.
@@ -121,16 +147,12 @@ export function dayTooltipHtml(
 }
 
 /** Tooltip d'axe temporel, daté au jour près. */
-export function dayTooltip(
-  p: Palette,
-  format: (value: number) => string = compactNumber,
-  sorted = false,
-) {
+export function dayTooltip(p: Palette, options: DayTooltipOptions = {}) {
   return {
     trigger: "axis",
     confine: true,
     ...tooltip(p),
-    formatter: (params: AxisParam[]) => dayTooltipHtml(params, format, sorted),
+    formatter: (params: AxisParam[]) => dayTooltipHtml(params, options),
   };
 }
 

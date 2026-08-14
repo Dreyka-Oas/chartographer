@@ -212,10 +212,36 @@ describe("dayTooltipHtml", () => {
         { axisValue: "2026-08-09", seriesName: "Petit", value: 10, data: { value: 1000, own: 10 } },
         { axisValue: "2026-08-09", seriesName: "Gros", value: 990, data: { value: 990, own: 990 } },
       ],
-      undefined,
-      true,
+      { sorted: true },
     );
     expect(html.indexOf("Gros")).toBeLessThan(html.indexOf("Petit"));
+  });
+
+  /** Le logo est ce qui distingue douze courbes plus vite qu'une pastille. */
+  it("pose le logo du mod devant son nom", () => {
+    const html = dayTooltipHtml(
+      [{ axisValue: "2026-08-09", seriesName: "Vein Vantage", value: 887 }],
+      { icon: () => "https://cdn.modrinth.com/data/abc/icon.png" },
+    );
+    expect(html).toContain('<img src="https://cdn.modrinth.com/data/abc/icon.png"');
+    expect(html.indexOf("icon.png")).toBeLessThan(html.indexOf("Vein Vantage"));
+  });
+
+  /**
+   * L'adresse est insérée dans un attribut HTML monté à la main : une valeur
+   * qui n'est pas une URL simple ne doit pas y entrer.
+   */
+  it("refuse une adresse douteuse et garde la colonne alignee", () => {
+    const html = dayTooltipHtml(
+      [
+        { axisValue: "2026-08-09", seriesName: "Avec", value: 1 },
+        { axisValue: "2026-08-09", seriesName: "Sans", value: 1 },
+      ],
+      { icon: (name) => (name === "Avec" ? '" onerror="alert(1)' : null) },
+    );
+    expect(html).not.toContain("onerror");
+    expect(html).not.toContain("<img");
+    expect(html.match(/<span style="display:inline-block/g)).toHaveLength(2);
   });
 });
 

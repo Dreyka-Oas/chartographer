@@ -3,6 +3,12 @@ import { axisStyle, BASE_GRID, DARK, dayAxis, dayTooltip, tooltip, type Palette 
 export interface NamedSeries {
   name: string;
   values: number[];
+  /**
+   * Logo du mod, quand la plateforme en publie un. Une pastille de couleur dit
+   * quelle courbe est laquelle, mais douze pastilles se ressemblent : le logo
+   * est ce que l'auteur reconnaît d'un coup d'œil.
+   */
+  icon?: string | null;
 }
 
 /**
@@ -86,6 +92,8 @@ export function stackedProjectsOption(
 ) {
   const axis = axisStyle(p);
   const drawn = stacked ? stackValues(series.map((s) => s.values)) : series.map((s) => s.values);
+  // Le tooltip ne reçoit que des noms de séries : le logo se retrouve par là.
+  const icons = new Map(series.map((s) => [s.name, s.icon ?? null]));
   return {
     /*
      * Le basculement se joue sur les mêmes séries, que leur `id` fait
@@ -101,7 +109,7 @@ export function stackedProjectsOption(
      */
     animationDurationUpdate: 700,
     grid: { ...BASE_GRID, top: 40, bottom: 72 },
-    tooltip: dayTooltip(p, undefined, true),
+    tooltip: dayTooltip(p, { sorted: true, icon: (name) => icons.get(name) }),
     legend: {
       type: "scroll",
       data: series.map((s) => s.name),

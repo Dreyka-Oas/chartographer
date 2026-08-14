@@ -14,7 +14,7 @@ export function timelineOption(points: TimelinePoint[], stacked: boolean, p: Pal
     // nommer une courbe d'accélération l'annulerait.
     animationDurationUpdate: 700,
     grid: BASE_GRID,
-    tooltip: dayTooltip(p, undefined, true),
+    tooltip: dayTooltip(p, { sorted: true }),
     legend: { data: ["Modrinth", "CurseForge"], textStyle: { color: p.textDim }, top: 0 },
     xAxis: dayAxis(
       points.map((x) => x.day),

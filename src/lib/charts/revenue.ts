@@ -13,7 +13,7 @@ export function revenueOption(points: RevenuePoint[], p: Palette = DARK) {
 
   return {
     grid: BASE_GRID,
-    tooltip: dayTooltip(p, (value) => formatMoney(String(value))),
+    tooltip: dayTooltip(p, { format: (value) => formatMoney(String(value)) }),
     legend: { data: ["Journalier", "Cumulé"], textStyle: { color: p.textDim }, top: 0 },
     xAxis: dayAxis(
       points.map((x) => x.day),

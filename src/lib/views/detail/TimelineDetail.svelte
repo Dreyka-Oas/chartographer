@@ -27,7 +27,7 @@
       .sort(
         (a, b) => b.spark.reduce((s, v) => s + v, 0) - a.spark.reduce((s, v) => s + v, 0),
       )
-      .map((p) => ({ name: p.title, values: p.spark })),
+      .map((p) => ({ name: p.title, values: p.spark, icon: p.icon_url })),
   );
   const series = $derived(foldSeriesTail(active, MAX_SERIES));
   const folded = $derived(Math.max(0, active.length - MAX_SERIES));
@@ -127,7 +127,7 @@
       <h2>
         Contribution par mod
         <Hint
-          text="Ce que chaque mod a rapporté de téléchargements sur la période, et la part que cela représente dans le total. La pastille reprend sa couleur dans le graphique ci-dessus. Cliquer sur une ligne ouvre la fiche du mod."
+          text="Ce que chaque mod a rapporté de téléchargements sur la période, et la part que cela représente dans le total. Le logo est cerné de la couleur que le mod porte dans le graphique ci-dessus. Cliquer sur une ligne ouvre la fiche du mod."
         />
       </h2>
       <RankedTable
@@ -142,8 +142,22 @@
         {#snippet cells(s, i)}
           {@const sum = s.values.reduce((a, v) => a + v, 0)}
           <td class="left">
-            <span class="dot" style="background: {seriesColor(i)}"></span>
-            {s.name}
+            <span class="mod">
+              {#if s.icon}
+                <img
+                  class="logo"
+                  src={s.icon}
+                  alt=""
+                  loading="lazy"
+                  style="box-shadow: 0 0 0 2px {seriesColor(i)}"
+                />
+              {:else}
+                <!-- Mod sans logo, et la courbe de repli qui n'en aura jamais :
+                     un carré de sa couleur tient la colonne alignée. -->
+                <span class="logo" style="background: {seriesColor(i)}"></span>
+              {/if}
+              {s.name}
+            </span>
           </td>
           <td>{compactNumber(sum)}</td>
           <td>{total ? Math.round((sum / total) * 100) : 0} %</td>
@@ -204,12 +218,19 @@
   .lead {
     color: var(--accent);
   }
-  .dot {
+  .mod {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .logo {
+    /* Le liseré est posé en ombre : il cerne le logo sans agrandir la cellule
+     * ni décaler les noms. */
     display: inline-block;
-    width: 9px;
-    height: 9px;
-    margin-right: 8px;
-    border-radius: 999px;
-    vertical-align: middle;
+    width: 20px;
+    height: 20px;
+    border-radius: 5px;
+    object-fit: cover;
+    flex-shrink: 0;
   }
 </style>

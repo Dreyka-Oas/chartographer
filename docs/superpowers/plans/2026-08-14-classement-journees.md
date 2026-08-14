@@ -1281,6 +1281,166 @@ Le dépôt est `Dreyka-Oas/chartographer` : pousser avec ce compte-là (un mauva
 
 ---
 
+## Tâche 8 : un calendrier aux couleurs de l'application
+
+Demande venue en cours d'exécution : les champs de dates ouvrent le calendrier natif de Windows, qui ignore le thème. Le dépôt a déjà tranché ce cas une fois — `src/lib/components/Select.svelte` refait le `<select>` natif pour exactement cette raison, et son en-tête l'explique. Le calendrier suit le même chemin, dans un composant unique que les trois champs de dates de l'application partagent : aucun d'eux ne redessine sa propre grille.
+
+**Fichiers :**
+- Créer : `src/lib/components/DateField.svelte`
+- Créer : `src/lib/components/calendar.ts` — la grille d'un mois, en pur calcul, testable sans DOM.
+- Créer : `src/lib/components/calendar.test.ts`
+- Modifier : `src/lib/components/RangePicker.svelte:82-87` (deux champs)
+- Modifier : `src/lib/views/Day.svelte:92` (un champ)
+
+**Interfaces :**
+- Consomme : `format` (`formatDayLong`), les jetons de thème (`--surface`, `--surface-2`, `--border`, `--accent`, `--text`, `--text-dim`, `--radius-sm`, `--lift`).
+- Produit :
+  - `calendar.ts` : `export function monthGrid(month: string, weekStartsOn?: number): string[][]` — six semaines de sept jours ISO, débordements des mois voisins compris ; `export function shiftMonth(month: string, by: number): string`.
+  - `DateField.svelte` : props `value` (`$bindable`, `YYYY-MM-DD`), `min?`, `max?`, `label?`, `onchange?`.
+
+- [ ] **Étape 1 : écrire les tests de la grille**
+
+Créer `src/lib/components/calendar.test.ts` :
+
+```ts
+import { describe, expect, it } from "vitest";
+import { monthGrid, shiftMonth } from "./calendar";
+
+describe("monthGrid", () => {
+  it("rend six semaines de sept jours, quel que soit le mois", () => {
+    for (const month of ["2026-02", "2026-08", "2027-01"]) {
+      const grid = monthGrid(month);
+      expect(grid).toHaveLength(6);
+      expect(grid.every((week) => week.length === 7)).toBe(true);
+    }
+  });
+
+  it("commence la semaine au lundi", () => {
+    // Le 1er août 2026 est un samedi : la première semaine s'ouvre le lundi 27 juillet.
+    expect(monthGrid("2026-08")[0][0]).toBe("2026-07-27");
+  });
+
+  it("couvre le mois entier sans trou ni doublon", () => {
+    const days = monthGrid("2026-02").flat();
+    expect(new Set(days).size).toBe(days.length);
+    expect(days).toContain("2026-02-01");
+    expect(days).toContain("2026-02-28");
+  });
+
+  /** Février 2028 est bissextile : le 29 doit être là, et une seule fois. */
+  it("connaît les années bissextiles", () => {
+    const days = monthGrid("2028-02").flat();
+    expect(days.filter((day) => day === "2028-02-29")).toHaveLength(1);
+  });
+});
+
+describe("shiftMonth", () => {
+  it("passe d'une année à l'autre", () => {
+    expect(shiftMonth("2026-01", -1)).toBe("2025-12");
+    expect(shiftMonth("2026-12", 1)).toBe("2027-01");
+  });
+});
+```
+
+- [ ] **Étape 2 : lancer les tests et vérifier qu'ils échouent**
+
+Lancer : `npx vitest run src/lib/components/calendar.test.ts`
+Attendu : ÉCHEC, `Failed to resolve import "./calendar"`.
+
+- [ ] **Étape 3 : écrire la grille**
+
+Créer `src/lib/components/calendar.ts` :
+
+```ts
+/**
+ * La grille d'un mois, en dates ISO.
+ *
+ * Le calcul vit à part du composant pour être vérifié sans DOM : les mois qui
+ * débordent, les semaines à cheval et les années bissextiles sont exactement
+ * ce qu'un calendrier rate, et ce sont des questions de calcul, pas d'affichage.
+ *
+ * Tout passe par l'UTC. En heure locale, une date construite à minuit peut
+ * reculer d'un jour au passage à l'heure d'été, et la grille se décale d'une
+ * case pour la moitié de l'année.
+ */
+
+/** Six semaines pleines : la hauteur du panneau ne saute pas d'un mois à l'autre. */
+const WEEKS = 6;
+
+function utc(year: number, month: number, day: number): Date {
+  return new Date(Date.UTC(year, month, day));
+}
+
+function iso(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+/**
+ * Les six semaines qui couvrent `month` (`YYYY-MM`), lundi en tête.
+ *
+ * Les cases des mois voisins sont rendues avec les autres : le composant les
+ * grise, mais elles restent cliquables — c'est ainsi qu'on passe au mois suivant
+ * sans viser la flèche.
+ */
+export function monthGrid(month: string, weekStartsOn = 1): string[][] {
+  const [year, index] = month.split("-").map(Number);
+  const first = utc(year, index - 1, 1);
+  // `getUTCDay` rend 0 pour dimanche : le décalage ramène le premier jour de la
+  // semaine choisie en tête, sans jamais passer en négatif.
+  const lead = (first.getUTCDay() - weekStartsOn + 7) % 7;
+  const start = utc(year, index - 1, 1 - lead);
+
+  return Array.from({ length: WEEKS }, (_, week) =>
+    Array.from({ length: 7 }, (_, day) =>
+      iso(utc(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate() + week * 7 + day)),
+    ),
+  );
+}
+
+/** Déplace un mois `YYYY-MM` de `by` mois, année comprise. */
+export function shiftMonth(month: string, by: number): string {
+  const [year, index] = month.split("-").map(Number);
+  const moved = utc(year, index - 1 + by, 1);
+  return `${moved.getUTCFullYear()}-${String(moved.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+```
+
+- [ ] **Étape 4 : lancer les tests et vérifier qu'ils passent**
+
+Lancer : `npx vitest run src/lib/components/calendar.test.ts`
+Attendu : SUCCÈS, 5 tests.
+
+- [ ] **Étape 5 : écrire le champ**
+
+Créer `src/lib/components/DateField.svelte`. Le composant reprend point pour point les partis pris de `Select.svelte`, qu'il faut relire avant d'écrire : panneau en `position: fixed` placé d'après le bouton, repli vers le haut quand la place manque en bas, fermeture au clic extérieur, au défilement qui emporte le bouton hors de l'écran et au redimensionnement, contour en ombre intérieure plutôt qu'en bordure, animation annulée sous `prefers-reduced-motion`.
+
+Ce que le composant doit tenir :
+- Un bouton qui affiche la date choisie en toutes lettres (`formatDayLong`), ou « — » quand elle est vide.
+- Un panneau : l'en-tête porte le mois et l'année, une flèche vers le mois précédent, une flèche vers le mois suivant ; puis la ligne des initiales de jours (`lu ma me je ve sa di`) ; puis la grille de `monthGrid`.
+- Les jours des mois voisins sont grisés ; le jour choisi porte la couleur d'accent ; le jour d'aujourd'hui porte un liseré ; les jours hors de `min`/`max` sont désactivés et ne réagissent pas.
+- Au clavier : `Entrée`/`Espace`/`Flèche bas` ouvrent, `Échap` ferme et rend le focus au bouton, les quatre flèches déplacent le jour actif d'un jour ou d'une semaine, `Page haut`/`Page bas` changent de mois, `Entrée` valide.
+- `aria-haspopup="dialog"`, `role="grid"` sur la grille, `aria-selected` sur le jour choisi, un nom accessible pris de `label`.
+- Aucun `<input type="date">` ne subsiste dans le composant : c'est tout l'objet de la tâche.
+
+- [ ] **Étape 6 : brancher les trois champs**
+
+Dans `src/lib/components/RangePicker.svelte`, remplacer les deux `<input type="date">` (lignes 84 et 86) par deux `DateField`, en gardant `max={to}` sur le premier et `min={from}` sur le second, et `onchange={applyDates}` sur les deux. Retirer ensuite du bloc `<style>` ce qui ne servait qu'aux `input` : la règle `input { … }` et la part `input:hover` du sélecteur de survol.
+
+Dans `src/lib/views/Day.svelte`, remplacer le `<input type="date">` (ligne 92) par un `DateField` avec `max={iso(today)}`, et retirer `input` des sélecteurs de style qui ne visent plus rien.
+
+- [ ] **Étape 7 : vérifier**
+
+Lancer : `npm run test; npm run check`
+Attendu : tous les tests au vert, aucune erreur de type.
+Puis vérifier à l'œil, application lancée : ouvrir les trois champs, changer de mois, choisir une date, vérifier que la fenêtre affichée suit, que le panneau se replie vers le haut quand le champ est en bas de l'écran, et que le thème clair comme le thème sombre restent lisibles.
+
+- [ ] **Étape 8 : commit**
+
+```bash
+git add src/lib/components/DateField.svelte src/lib/components/calendar.ts src/lib/components/calendar.test.ts src/lib/components/RangePicker.svelte src/lib/views/Day.svelte
+git commit -m "Calendrier maison aux couleurs de l application"
+```
+
 ## Ce que ce plan ne fait pas
 
 - **Pas de nouvel appel réseau.** Tout le classement se calcule sur ce qui est déjà en base. Aucune limite d'API n'est approchée.

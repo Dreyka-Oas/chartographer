@@ -31,8 +31,13 @@
 
   /** Sur quoi le classement porte. */
   let rankBy = $state<RankBy>("downloads");
-  /** À quoi chaque journée se compare, tel que choisi dans le filtre. */
-  let windowChoice = $state<"90" | "30" | "all" | "period">("90");
+  /**
+   * À quoi chaque journée se compare, tel que choisi dans le filtre. Par
+   * défaut, toute l'histoire disponible : une fenêtre de quatre-vingt-dix
+   * jours par défaut donnait des rangs qui ne suivaient pas les boutons de
+   * période de la barre du haut, sans que rien à l'écran ne le dise.
+   */
+  let windowChoice = $state<"all" | "90" | "30" | "period">("all");
 
   /**
    * `scope` et `windowDays` transmis à la commande. « La période affichée »
@@ -146,11 +151,11 @@
         value={windowChoice}
         label="Comparer à"
         compact
-        onchange={(value) => (windowChoice = (value as typeof windowChoice) ?? "90")}
+        onchange={(value) => (windowChoice = (value as typeof windowChoice) ?? "all")}
         options={[
+          { value: "all", label: "toute l'histoire antérieure" },
           { value: "90", label: "les 90 jours précédents" },
           { value: "30", label: "les 30 jours précédents" },
-          { value: "all", label: "toute l'histoire antérieure" },
           { value: "period", label: "la période affichée" },
         ]}
       />

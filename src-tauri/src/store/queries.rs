@@ -905,15 +905,16 @@ pub fn day_report(
     let previous_day = shift_day(day, -1);
     let (previous_modrinth, previous_curseforge) = revenue_of(&previous_day, day)?;
 
-    // Rang du jour parmi les quatre-vingt-dix qui le précèdent, lui compris.
+    // Rang du jour parmi toutes celles relevées jusqu'à lui, lui compris —
+    // la même règle que le mode « toute l'histoire antérieure » du
+    // classement, pour que les deux pages ne se contredisent jamais.
     //
     // Le classement ne regarde jamais en avant : la question est de savoir si
     // c'était un bon jour quand il s'est produit, et les journées suivantes
     // n'existaient pas encore. Les journées sans le moindre téléchargement sont
     // écartées : ce sont des jours sans relevé, pas des jours creux, et elles
     // flatteraient le classement.
-    let window_start = shift_day(day, -(crate::store::rankings::RANK_WINDOW_DAYS - 1));
-    let neighbours: Vec<i64> = timeline(conn, &window_start, &next, filter)?
+    let neighbours: Vec<i64> = timeline(conn, "0000-01-01", &next, filter)?
         .iter()
         .map(|p| p.modrinth + p.curseforge)
         .filter(|total| *total > 0)
@@ -1546,10 +1547,15 @@ mod tests {
     }
 
     /// Le bilan d'une journée se juge par ce qui l'entoure : la veille, les
-    /// moyennes récentes, et le rang parmi les journées relevées.
+    /// moyennes récentes, et le rang parmi toutes les journées relevées
+    /// jusqu'à elle — sans borne basse : une grosse journée bien plus
+    /// ancienne que l'ancienne fenêtre de quatre-vingt-dix jours doit quand
+    /// même compter, sans quoi ce test ne prouverait rien que l'ancienne
+    /// fenêtre ne prouvait déjà.
     #[test]
     fn a_day_is_judged_against_the_days_around_it() {
         let (conn, m, c) = seed();
+        upsert_daily(&conn, m, "2024-01-01", Some(900), None, None).unwrap();
         upsert_daily(&conn, m, "2026-08-10", Some(100), None, Some("1.00")).unwrap();
         upsert_daily(&conn, m, "2026-08-11", Some(300), None, Some("3.00")).unwrap();
         upsert_daily(&conn, c, "2026-08-11", Some(50), None, None).unwrap();
@@ -1564,11 +1570,17 @@ mod tests {
         assert!((day.downloads.average_7 - 100.0 / 7.0).abs() < 0.001);
         assert_eq!(day.revenue.total, "3");
         assert_eq!(day.revenue.previous, "1");
-        // Le classement ne regarde qu'en arrière : le 12 ne compte pas, il
-        // n'existait pas encore le jour où l'on juge.
-        assert_eq!(day.rank, Some(1));
-        assert_eq!(day.ranked_days, 2);
-        assert_eq!(day.best_day.as_deref(), Some("2026-08-11"));
+        // Le 1er janvier 2024 précède de bien plus de quatre-vingt-dix jours,
+        // et la dépasse quand même : le classement porte sur tout ce qui
+        // précède, pas sur une fenêtre. Le 12 ne compte toujours pas : le
+        // classement ne regarde jamais en avant.
+        assert_eq!(day.rank, Some(2));
+        assert_eq!(day.ranked_days, 3);
+        assert_eq!(
+            day.best_day.as_deref(),
+            Some("2024-01-01"),
+            "la plus grosse journée connue, même ancienne"
+        );
         assert!(!day.partial, "la journée est finie");
     }
 

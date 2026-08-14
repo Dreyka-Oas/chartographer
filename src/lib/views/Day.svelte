@@ -81,7 +81,7 @@
   };
 
   const RANK =
-    "Rang de la journée parmi les quatre-vingt-dix qui la précèdent, celle-ci comprise. Le classement ne regarde jamais en avant : la question est de savoir si c'était un bon jour quand il s'est produit. Les journées sans aucun relevé sont écartées, elles flatteraient le rang.";
+    "Rang de la journée parmi toutes celles relevées jusqu'à elle, celle-ci comprise. Le classement ne regarde jamais en avant : la question est de savoir si c'était un bon jour quand il s'est produit. Les journées sans aucun relevé sont écartées, elles flatteraient le rang.";
   const AVERAGE =
     "Moyennes des sept et des vingt-huit journées qui précèdent, celle-ci exclue : s'y inclure reviendrait à se comparer à soi-même.";
   const REVENUE =

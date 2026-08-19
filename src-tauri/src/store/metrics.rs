@@ -96,10 +96,7 @@ pub fn cf_points_gained(conn: &Connection, from: &str, to: &str) -> Result<i64> 
     let rows = stmt
         .query_map(params![from, to], |r| r.get::<_, i64>(0))?
         .collect::<rusqlite::Result<Vec<_>>>()?;
-    Ok(rows
-        .windows(2)
-        .map(|pair| (pair[1] - pair[0]).max(0))
-        .sum())
+    Ok(rows.windows(2).map(|pair| (pair[1] - pair[0]).max(0)).sum())
 }
 
 pub fn delete_cf_points(conn: &Connection, day: &str) -> Result<usize> {
@@ -408,10 +405,19 @@ mod point_tests {
         record_cf_points(&conn, "2026-08-10", 155, "x").unwrap();
 
         // Le relevé du 8 précède la fenêtre : il sert d'origine au gain du 9.
-        assert_eq!(cf_points_gained(&conn, "2026-08-09", "2026-08-11").unwrap(), 55);
-        assert_eq!(cf_points_gained(&conn, "2026-08-10", "2026-08-11").unwrap(), 15);
+        assert_eq!(
+            cf_points_gained(&conn, "2026-08-09", "2026-08-11").unwrap(),
+            55
+        );
+        assert_eq!(
+            cf_points_gained(&conn, "2026-08-10", "2026-08-11").unwrap(),
+            15
+        );
         // Sans relevé antérieur, le premier de la fenêtre n'est qu'une origine.
-        assert_eq!(cf_points_gained(&conn, "2026-08-08", "2026-08-10").unwrap(), 40);
+        assert_eq!(
+            cf_points_gained(&conn, "2026-08-08", "2026-08-10").unwrap(),
+            40
+        );
     }
 
     /// Un solde qui baisse est un retrait, pas un revenu négatif.
@@ -422,7 +428,10 @@ mod point_tests {
         record_cf_points(&conn, "2026-08-09", 0, "x").unwrap();
         record_cf_points(&conn, "2026-08-10", 30, "x").unwrap();
 
-        assert_eq!(cf_points_gained(&conn, "2026-08-08", "2026-08-11").unwrap(), 30);
+        assert_eq!(
+            cf_points_gained(&conn, "2026-08-08", "2026-08-11").unwrap(),
+            30
+        );
     }
 
     #[test]

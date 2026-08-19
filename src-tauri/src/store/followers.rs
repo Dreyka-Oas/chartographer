@@ -263,7 +263,10 @@ mod tests {
         let all = list(&conn).unwrap();
         let bob = all.iter().find(|f| f.name == "bob").unwrap();
         assert!(bob.lost_on.is_none());
-        assert_eq!(bob.first_seen, "2026-08-13", "sa venue d'origine est gardée");
+        assert_eq!(
+            bob.first_seen, "2026-08-13",
+            "sa venue d'origine est gardée"
+        );
     }
 
     /// Le compte lui-même n'est pas son propre abonné : son lien figure en tête
@@ -288,11 +291,14 @@ mod tests {
 
         let days = history(&conn).unwrap();
         assert_eq!(days.len(), 2);
-        assert_eq!(days[0], FollowerDay {
-            day: "2026-08-12".into(),
-            modrinth: 121,
-            curseforge: 6,
-        });
+        assert_eq!(
+            days[0],
+            FollowerDay {
+                day: "2026-08-12".into(),
+                modrinth: 121,
+                curseforge: 6,
+            }
+        );
         // Une plateforme non relevée ce jour-là vaut zéro, faute de mesure.
         assert_eq!(days[1].curseforge, 0);
     }

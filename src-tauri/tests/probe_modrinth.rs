@@ -48,9 +48,18 @@ async fn look_for_a_followers_listing() {
         format!("https://api.modrinth.com/v3/project/{project}/follows"),
         format!("https://api.modrinth.com/v3/project/{project}/follower"),
         format!("https://api.modrinth.com/v2/project/{project}/follow"),
-        format!("https://api.modrinth.com/v3/user/{}/followers", session.user_id),
-        format!("https://api.modrinth.com/v2/user/{}/followers", session.user_id),
-        format!("https://api.modrinth.com/v3/user/{}/follows", session.user_id),
+        format!(
+            "https://api.modrinth.com/v3/user/{}/followers",
+            session.user_id
+        ),
+        format!(
+            "https://api.modrinth.com/v2/user/{}/followers",
+            session.user_id
+        ),
+        format!(
+            "https://api.modrinth.com/v3/user/{}/follows",
+            session.user_id
+        ),
         // Les analytics couvrent téléchargements, vues et revenus : on demande
         // la même forme pour les abonnés, au cas où elle existerait.
         format!(

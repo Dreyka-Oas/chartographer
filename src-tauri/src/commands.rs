@@ -265,7 +265,14 @@ pub fn day_rankings(
     };
     state.store.with(|conn| {
         crate::store::rankings::day_rankings(
-            conn, &from, &to, filter, by, source, scope, window_days,
+            conn,
+            &from,
+            &to,
+            filter,
+            by,
+            source,
+            scope,
+            window_days,
         )
     })
 }
@@ -273,14 +280,15 @@ pub fn day_rankings(
 /// Chaque étape du cycle est annoncée sur `sync:step` au fil de l'eau : l'écran
 /// de démarrage l'affiche en direct, au lieu d'attendre le compte rendu final.
 #[tauri::command]
-pub async fn sync_now(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<Vec<SyncReport>> {
+pub async fn sync_now(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Vec<SyncReport>> {
     let ctx = state.context()?;
-    Ok(
-        sync::full_with_progress(&state.store, &ctx, move |step| {
-            let _ = app.emit("sync:step", step);
-        })
-        .await,
-    )
+    Ok(sync::full_with_progress(&state.store, &ctx, move |step| {
+        let _ = app.emit("sync:step", step);
+    })
+    .await)
 }
 
 /// `from` et `to` sont des dates incluses `YYYY-MM-DD`. Absentes, on retombe sur
@@ -547,7 +555,11 @@ pub struct FollowersReport {
 /// publique. Les chercher toutes vaut mieux que d'en élire une et de rester
 /// aveugle sur les bases où seules les autres existent.
 fn curseforge_account(state: &AppState) -> Result<Option<String>> {
-    for key in ["curseforge_account", "curseforge_author", "curseforge_username"] {
+    for key in [
+        "curseforge_account",
+        "curseforge_author",
+        "curseforge_username",
+    ] {
         let found = state
             .store
             .with(|conn| crate::store::metrics::get_meta(conn, key))?

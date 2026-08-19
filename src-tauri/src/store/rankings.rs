@@ -85,7 +85,8 @@ pub fn revenue_by_day(
             // même règle qu'à côté, dans `cf_points_gained`.
             let gained = (pair[1].1 - pair[0].1).max(0);
             if gained != 0 {
-                out.entry(pair[1].0.clone()).or_default().1 += Decimal::from(gained) * point_value();
+                out.entry(pair[1].0.clone()).or_default().1 +=
+                    Decimal::from(gained) * point_value();
             }
         }
     }
@@ -106,7 +107,11 @@ fn first_day(conn: &Connection, platform: Platform) -> Result<Option<String>> {
 /// Montant en centièmes : deux journées à un centime près restent distinctes,
 /// et rien ne se perd à l'échelle où `rank_within` compare des entiers.
 fn cents(amount: Decimal) -> i64 {
-    (amount * Decimal::from(100)).round().to_string().parse().unwrap_or(0)
+    (amount * Decimal::from(100))
+        .round()
+        .to_string()
+        .parse()
+        .unwrap_or(0)
 }
 
 /// Valeur classée d'une journée, selon le critère et la source demandés.
@@ -189,7 +194,9 @@ fn rank_against_pool(
             modrinth: point.modrinth,
             curseforge: point.curseforge,
             total: point.modrinth + point.curseforge,
-            revenue: (modrinth_revenue + curseforge_revenue).normalize().to_string(),
+            revenue: (modrinth_revenue + curseforge_revenue)
+                .normalize()
+                .to_string(),
             rank: rank_within(&pool, values[i]),
             compared_days: pool.len() as i64,
         });
@@ -289,7 +296,11 @@ pub fn day_rankings(
         })
         .collect();
 
-    let bound = if scope == RankScope::Sliding { window_days } else { None };
+    let bound = if scope == RankScope::Sliding {
+        window_days
+    } else {
+        None
+    };
 
     // Borne basse glissante de la fenêtre : elle n'avance jamais en arrière, ce
     // qui laisse le parcours linéaire au lieu de rouvrir la fenêtre à chaque jour.
@@ -305,7 +316,11 @@ pub fn day_rankings(
                 start += 1;
             }
         }
-        let window: Vec<i64> = values[start..=i].iter().copied().filter(|v| *v > 0).collect();
+        let window: Vec<i64> = values[start..=i]
+            .iter()
+            .copied()
+            .filter(|v| *v > 0)
+            .collect();
         let compared_days = window.len() as i64;
         let rank = rank_within(&window, values[i]);
         let (modrinth_revenue, curseforge_revenue) =
@@ -315,7 +330,9 @@ pub fn day_rankings(
             modrinth: point.modrinth,
             curseforge: point.curseforge,
             total: point.modrinth + point.curseforge,
-            revenue: (modrinth_revenue + curseforge_revenue).normalize().to_string(),
+            revenue: (modrinth_revenue + curseforge_revenue)
+                .normalize()
+                .to_string(),
             rank,
             compared_days,
         });
@@ -388,11 +405,21 @@ mod tests {
         upsert_daily(&conn, m, "2026-08-10", Some(100), None, Some("1.25")).unwrap();
         upsert_daily(&conn, m, "2026-08-11", Some(300), None, Some("3.50")).unwrap();
 
-        let by_day = revenue_by_day(&conn, "2026-08-10", "2026-08-12", PlatformFilter::default())
-            .unwrap();
-        assert_eq!(by_day.get("2026-08-10").unwrap().0, Decimal::from_str("1.25").unwrap());
-        assert_eq!(by_day.get("2026-08-11").unwrap().0, Decimal::from_str("3.50").unwrap());
-        assert_eq!(by_day.len(), 2, "les jours sans revenu ne sont pas inventés");
+        let by_day =
+            revenue_by_day(&conn, "2026-08-10", "2026-08-12", PlatformFilter::default()).unwrap();
+        assert_eq!(
+            by_day.get("2026-08-10").unwrap().0,
+            Decimal::from_str("1.25").unwrap()
+        );
+        assert_eq!(
+            by_day.get("2026-08-11").unwrap().0,
+            Decimal::from_str("3.50").unwrap()
+        );
+        assert_eq!(
+            by_day.len(),
+            2,
+            "les jours sans revenu ne sont pas inventés"
+        );
     }
 
     /// Une plage large comme celle que produit `All` — de l'an zéro à
@@ -412,7 +439,10 @@ mod tests {
             revenue_by_day(&conn, "2024-03-19", "2026-08-15", PlatformFilter::default()).unwrap();
         let wide =
             revenue_by_day(&conn, "0000-01-01", "2026-08-15", PlatformFilter::default()).unwrap();
-        assert_eq!(wide, narrow, "même relevés, même résultat, quelle que soit la borne basse");
+        assert_eq!(
+            wide, narrow,
+            "même relevés, même résultat, quelle que soit la borne basse"
+        );
         assert_eq!(
             wide.get("2026-08-14").unwrap().1,
             Decimal::from(200) * point_value(),
@@ -426,9 +456,16 @@ mod tests {
     fn hiding_modrinth_hides_its_revenue() {
         let (conn, m, _) = seed();
         upsert_daily(&conn, m, "2026-08-10", Some(100), None, Some("1.25")).unwrap();
-        let filter = PlatformFilter { modrinth: false, curseforge: true };
+        let filter = PlatformFilter {
+            modrinth: false,
+            curseforge: true,
+        };
         let by_day = revenue_by_day(&conn, "2026-08-10", "2026-08-11", filter).unwrap();
-        assert!(by_day.get("2026-08-10").map(|v| v.0).unwrap_or_default().is_zero());
+        assert!(by_day
+            .get("2026-08-10")
+            .map(|v| v.0)
+            .unwrap_or_default()
+            .is_zero());
     }
 
     /// Fenêtre glissante : le rang ne regarde que les journées qui précèdent.
@@ -474,7 +511,11 @@ mod tests {
         )
         .unwrap();
         let day = &out.rows[0];
-        assert_eq!(day.rank, Some(2), "la journée de 2024 la précède et la dépasse");
+        assert_eq!(
+            day.rank,
+            Some(2),
+            "la journée de 2024 la précède et la dépasse"
+        );
         assert_eq!(day.compared_days, 2);
     }
 
@@ -503,7 +544,11 @@ mod tests {
         )
         .unwrap();
         let rank_of = |day: &str| out.rows.iter().find(|r| r.day == day).unwrap().rank;
-        assert_eq!(rank_of("2026-08-10"), Some(2), "dépassée par la journée qui la suit");
+        assert_eq!(
+            rank_of("2026-08-10"),
+            Some(2),
+            "dépassée par la journée qui la suit"
+        );
         assert_eq!(rank_of("2026-08-11"), Some(1));
     }
 
@@ -525,8 +570,16 @@ mod tests {
         )
         .unwrap();
         let rank_of = |day: &str| out.rows.iter().find(|r| r.day == day).unwrap().rank;
-        assert_eq!(rank_of("2026-08-10"), Some(1), "personne ne la précède le jour même");
-        assert_eq!(rank_of("2026-08-11"), Some(1), "elle dépasse tout ce qu'elle voit derrière elle");
+        assert_eq!(
+            rank_of("2026-08-10"),
+            Some(1),
+            "personne ne la précède le jour même"
+        );
+        assert_eq!(
+            rank_of("2026-08-11"),
+            Some(1),
+            "elle dépasse tout ce qu'elle voit derrière elle"
+        );
     }
 
     /// Ce que la page liste et ce à quoi elle compare sont deux choses
@@ -608,11 +661,18 @@ mod tests {
             None,
         )
         .unwrap();
-        let rank_of = |out: &DayRankings, day: &str| {
-            out.rows.iter().find(|r| r.day == day).unwrap().rank
-        };
-        assert_eq!(rank_of(&by_revenue, "2026-08-10"), Some(1), "première journée relevée");
-        assert_eq!(rank_of(&by_revenue, "2026-08-11"), Some(1), "dépasse le 10 en revenus");
+        let rank_of =
+            |out: &DayRankings, day: &str| out.rows.iter().find(|r| r.day == day).unwrap().rank;
+        assert_eq!(
+            rank_of(&by_revenue, "2026-08-10"),
+            Some(1),
+            "première journée relevée"
+        );
+        assert_eq!(
+            rank_of(&by_revenue, "2026-08-11"),
+            Some(1),
+            "dépasse le 10 en revenus"
+        );
         assert_eq!(
             rank_of(&by_revenue, "2026-08-12"),
             Some(2),
@@ -667,7 +727,11 @@ mod tests {
             .rank
         };
 
-        assert_eq!(rank_of(RankSource::Modrinth, "2026-08-10"), Some(1), "en tête sur Modrinth");
+        assert_eq!(
+            rank_of(RankSource::Modrinth, "2026-08-10"),
+            Some(1),
+            "en tête sur Modrinth"
+        );
         assert_eq!(rank_of(RankSource::Modrinth, "2026-08-11"), Some(2));
         assert_eq!(
             rank_of(RankSource::CurseForge, "2026-08-11"),
@@ -684,7 +748,10 @@ mod tests {
     fn ranking_on_a_platform_hidden_by_the_filter_returns_nothing() {
         let (conn, m, _) = seed();
         upsert_daily(&conn, m, "2026-08-10", Some(100), None, None).unwrap();
-        let filter = PlatformFilter { modrinth: true, curseforge: false };
+        let filter = PlatformFilter {
+            modrinth: true,
+            curseforge: false,
+        };
 
         let out = day_rankings(
             &conn,

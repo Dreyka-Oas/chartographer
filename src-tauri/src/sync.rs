@@ -510,8 +510,24 @@ where
         reports.push(matching);
     }
 
-    reports.push(staged(store, "modrinth-analytics", refresh_modrinth(store, ctx), &on).await);
-    reports.push(staged(store, "curseforge-snapshot", snapshot_curseforge(store), &on).await);
+    reports.push(
+        staged(
+            store,
+            "modrinth-analytics",
+            refresh_modrinth(store, ctx),
+            &on,
+        )
+        .await,
+    );
+    reports.push(
+        staged(
+            store,
+            "curseforge-snapshot",
+            snapshot_curseforge(store),
+            &on,
+        )
+        .await,
+    );
     reports
 }
 

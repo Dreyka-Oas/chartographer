@@ -16,7 +16,8 @@ use rusqlite::Connection;
 use std::collections::BTreeMap;
 
 fn data_dir() -> std::path::PathBuf {
-    std::path::Path::new(&std::env::var("APPDATA").expect("APPDATA")).join("fr.dreykaoas.chartographer")
+    std::path::Path::new(&std::env::var("APPDATA").expect("APPDATA"))
+        .join("fr.dreykaoas.chartographer")
 }
 
 /// D'où vient le nombre d'abonnés Modrinth, et vaut-il ce que l'API annonce.

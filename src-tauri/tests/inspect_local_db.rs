@@ -331,7 +331,9 @@ fn resume_local_database() {
         );
         println!(
             "  revenus          : {} (modrinth {} · curseforge {}), veille {}",
-            report.revenue.total, report.revenue.modrinth, report.revenue.curseforge,
+            report.revenue.total,
+            report.revenue.modrinth,
+            report.revenue.curseforge,
             report.revenue.previous
         );
         println!(
@@ -349,10 +351,17 @@ fn resume_local_database() {
             sum += project.total;
             println!(
                 "    {:26} {:6} (m {:5} · c {:5})  veille {:6}",
-                project.title, project.total, project.modrinth, project.curseforge, project.previous
+                project.title,
+                project.total,
+                project.modrinth,
+                project.curseforge,
+                project.previous
             );
         }
-        println!("  somme des projets : {sum} · total annonce : {}", report.downloads.total);
+        println!(
+            "  somme des projets : {sum} · total annonce : {}",
+            report.downloads.total
+        );
         assert_eq!(
             sum, report.downloads.total,
             "la somme des projets doit valoir le total du jour"

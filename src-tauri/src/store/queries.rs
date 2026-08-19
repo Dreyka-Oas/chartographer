@@ -842,7 +842,9 @@ fn downloads_by_project(conn: &Connection, day: &str) -> Result<HashMap<i64, i64
         "SELECT project_id, COALESCE(SUM(downloads), 0) FROM metrics_daily
          WHERE day = ?1 GROUP BY project_id",
     )?;
-    for row in stmt.query_map(params![day], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?)))? {
+    for row in stmt.query_map(params![day], |r| {
+        Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?))
+    })? {
         let (project_id, downloads) = row?;
         out.insert(project_id, downloads);
     }
@@ -890,9 +892,13 @@ pub fn day_report(
     };
 
     let revenue_of = |from: &str, to: &str| -> Result<(Decimal, Decimal)> {
-        Ok(crate::store::rankings::revenue_by_day(conn, from, to, filter)?
-            .values()
-            .fold((Decimal::ZERO, Decimal::ZERO), |acc, (m, c)| (acc.0 + m, acc.1 + c)))
+        Ok(
+            crate::store::rankings::revenue_by_day(conn, from, to, filter)?
+                .values()
+                .fold((Decimal::ZERO, Decimal::ZERO), |acc, (m, c)| {
+                    (acc.0 + m, acc.1 + c)
+                }),
+        )
     };
 
     let (revenue_modrinth, revenue_curseforge) = revenue_of(day, &next)?;
@@ -1399,7 +1405,14 @@ mod tests {
         )
         .unwrap();
 
-        let k = kpis(&conn, "2026-08-11", "2026-07-12", "2026-08-11",PlatformFilter::default()).unwrap();
+        let k = kpis(
+            &conn,
+            "2026-08-11",
+            "2026-07-12",
+            "2026-08-11",
+            PlatformFilter::default(),
+        )
+        .unwrap();
         // 70,42 déjà retirés + 12,63 retirables + 4,84 en maturation.
         assert_eq!(k.revenue_total, "87.89");
         assert_eq!(k.revenue_available, "12.63");
@@ -1411,7 +1424,14 @@ mod tests {
     fn revenue_total_falls_back_on_the_window_without_a_balance() {
         let (conn, m, _) = seed();
         upsert_daily(&conn, m, "2026-08-10", Some(10), None, Some("2.5")).unwrap();
-        let k = kpis(&conn, "2026-08-11", "2026-07-12", "2026-08-11",PlatformFilter::default()).unwrap();
+        let k = kpis(
+            &conn,
+            "2026-08-11",
+            "2026-07-12",
+            "2026-08-11",
+            PlatformFilter::default(),
+        )
+        .unwrap();
         assert_eq!(k.revenue_total, "2.5");
     }
 
@@ -1429,7 +1449,14 @@ mod tests {
         // 423 points × 0,05 $ = 21,15 $
         crate::store::metrics::record_cf_points(&conn, "2026-08-11", 423, "x").unwrap();
 
-        let k = kpis(&conn, "2026-08-11", "2026-07-12", "2026-08-11",PlatformFilter::default()).unwrap();
+        let k = kpis(
+            &conn,
+            "2026-08-11",
+            "2026-07-12",
+            "2026-08-11",
+            PlatformFilter::default(),
+        )
+        .unwrap();
         assert_eq!(k.revenue_modrinth, "87.89");
         assert_eq!(k.revenue_curseforge, "21.15");
         assert_eq!(k.revenue_total, "109.04");
@@ -1445,7 +1472,14 @@ mod tests {
             modrinth: true,
             curseforge: false,
         };
-        let k = kpis(&conn, "2026-08-11", "2026-07-12", "2026-08-11",only_modrinth).unwrap();
+        let k = kpis(
+            &conn,
+            "2026-08-11",
+            "2026-07-12",
+            "2026-08-11",
+            only_modrinth,
+        )
+        .unwrap();
         assert_eq!(k.revenue_curseforge, "0");
         assert_eq!(k.revenue_total, "0");
     }
@@ -1456,7 +1490,14 @@ mod tests {
         upsert_daily(&conn, m, "2026-08-10", Some(100), None, None).unwrap();
         upsert_daily(&conn, c, "2026-08-10", Some(30), None, None).unwrap();
 
-        let both = kpis(&conn, "2026-08-11", "2026-07-12", "2026-08-11",PlatformFilter::default()).unwrap();
+        let both = kpis(
+            &conn,
+            "2026-08-11",
+            "2026-07-12",
+            "2026-08-11",
+            PlatformFilter::default(),
+        )
+        .unwrap();
         assert_eq!(both.downloads_30d, 130);
 
         let only_modrinth = PlatformFilter {
@@ -1464,9 +1505,15 @@ mod tests {
             curseforge: false,
         };
         assert_eq!(
-            kpis(&conn, "2026-08-11", "2026-07-12", "2026-08-11",only_modrinth)
-                .unwrap()
-                .downloads_30d,
+            kpis(
+                &conn,
+                "2026-08-11",
+                "2026-07-12",
+                "2026-08-11",
+                only_modrinth
+            )
+            .unwrap()
+            .downloads_30d,
             100
         );
     }
@@ -1481,7 +1528,14 @@ mod tests {
         crate::store::metrics::record_cf_points(&conn, "2026-08-10", 400, "2026-08-10T00:00:00Z")
             .unwrap();
 
-        let k = kpis(&conn, "2026-08-11", "2026-07-12", "2026-08-11",PlatformFilter::default()).unwrap();
+        let k = kpis(
+            &conn,
+            "2026-08-11",
+            "2026-07-12",
+            "2026-08-11",
+            PlatformFilter::default(),
+        )
+        .unwrap();
         assert_eq!(k.downloads_30d_modrinth, 100);
         assert_eq!(k.downloads_30d_curseforge, 30);
         assert_eq!(
@@ -1603,7 +1657,11 @@ mod tests {
         upsert_daily(&conn, c, "2026-08-11", Some(30), None, None).unwrap();
 
         let day = day_report(&conn, "2026-08-11", "2026-08-13", PlatformFilter::default()).unwrap();
-        assert_eq!(day.projects.len(), 1, "les deux plateformes tiennent une ligne");
+        assert_eq!(
+            day.projects.len(),
+            1,
+            "les deux plateformes tiennent une ligne"
+        );
         let row = &day.projects[0];
         assert_eq!(row.modrinth, 90);
         assert_eq!(row.curseforge, 30);
@@ -1627,7 +1685,14 @@ mod tests {
         let (conn, m, _) = seed();
         upsert_daily(&conn, m, "2026-08-10", Some(100), None, Some("1.5")).unwrap();
         upsert_daily(&conn, m, "2026-06-20", Some(40), None, Some("0.5")).unwrap();
-        let k = kpis(&conn, "2026-08-11", "2026-07-12", "2026-08-11",PlatformFilter::default()).unwrap();
+        let k = kpis(
+            &conn,
+            "2026-08-11",
+            "2026-07-12",
+            "2026-08-11",
+            PlatformFilter::default(),
+        )
+        .unwrap();
         assert_eq!(k.downloads_30d, 100);
         assert_eq!(k.downloads_prev_30d, 40);
         assert_eq!(k.revenue_total, "2");

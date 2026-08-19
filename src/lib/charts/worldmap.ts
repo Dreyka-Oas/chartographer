@@ -63,13 +63,31 @@ export function worldMapOption(countries: CountryTotal[], p: Palette = DARK, zoo
       formatter: (params: { name?: string; value?: number }) =>
         countryTooltipHtml(String(params.name ?? ""), Number(params.value), total),
     },
+    /*
+     * L'échelle est couchée au pied de la carte, et non dressée sur son flanc.
+     * Verticale, elle occupait toute la hauteur du panneau à gauche, là où se
+     * trouvent les Amériques : le curseur barrait les États-Unis, qui sont le
+     * premier pays de la liste dans la plupart des relevés. Couchée en bas, elle
+     * ne recouvre plus que l'océan Austral, dont la carte ne montre rien.
+     *
+     * Les bornes sont écrites comme le reste des chiffres de la page : le
+     * `84210` brut d'ECharts ne ressemblait à rien de ce qui l'entoure. C'est
+     * le `formatter` qui s'en charge, et non l'option `text` : les poignées
+     * mobiles d'une échelle `calculable` portent leur propre étiquette, si bien
+     * qu'un `text` posé en plus donnait deux graduations superposées, l'une
+     * formatée et l'autre non.
+     */
     visualMap: {
       min: 0,
       max: Math.max(max, 1),
+      orient: "horizontal",
       left: 12,
-      bottom: 12,
+      bottom: 8,
+      itemWidth: 12,
+      itemHeight: 90,
       calculable: true,
       textStyle: { color: p.textDim },
+      formatter: (value: number) => compactNumber(Math.round(value)),
       inRange: { color: [p.empty, p.accent, p.curseforge] },
     },
     series: [

@@ -4,7 +4,7 @@
   import { rankingOption } from "../../charts/multiseries";
   import { palette } from "../../charts/theme";
   import StatRow from "../../components/StatRow.svelte";
-  import { compactNumber } from "../../format";
+  import { compactNumber, formatPercent } from "../../format";
   import { theme } from "../../theme.svelte";
   import type { LoaderCell } from "../../types";
   import DetailShell from "./DetailShell.svelte";
@@ -104,7 +104,7 @@
             <tr>
               <td class="left">{row.name}</td>
               <td>{compactNumber(row.downloads)}</td>
-              <td>{total ? ((row.downloads / total) * 100).toFixed(1) : "0"} %</td>
+              <td>{formatPercent(row.downloads, total)} %</td>
             </tr>
           {/each}
         </tbody>

@@ -1,9 +1,8 @@
 import type { TimelinePoint } from "../types";
-import { drawOrder, stackValues } from "./multiseries";
-import { axisStyle, BASE_GRID, DARK, dayAxis, dayTooltip, type Palette } from "./theme";
+import { drawZ, stackValues } from "./multiseries";
+import { BASE_GRID, DARK, dayAxis, dayTooltip, type Palette, valueAxis } from "./theme";
 
 export function timelineOption(points: TimelinePoint[], stacked: boolean, p: Palette = DARK) {
-  const axis = axisStyle(p);
   const modrinth = points.map((x) => x.modrinth);
   const curseforge = points.map((x) => x.curseforge);
   // Voir `stackValues` : l'empilement est calculé ici pour que le basculement
@@ -20,7 +19,7 @@ export function timelineOption(points: TimelinePoint[], stacked: boolean, p: Pal
       points.map((x) => x.day),
       p,
     ),
-    yAxis: { type: "value", ...axis },
+    yAxis: valueAxis(p),
     dataZoom: [
       { type: "inside", start: 0, end: 100 },
       {
@@ -31,34 +30,34 @@ export function timelineOption(points: TimelinePoint[], stacked: boolean, p: Pal
         textStyle: { color: p.textDim },
       },
     ],
-    series: drawOrder(
-      [
-        {
-          id: "platform:modrinth",
-          name: "Modrinth",
-          type: "line",
-          smooth: true,
-          showSymbol: false,
-          // Opaque une fois empilée, sans quoi les deux couches se mélangeraient
-          // et la bande du bas ne serait plus à la couleur de sa plateforme.
-          areaStyle: { opacity: stacked ? 1 : 0.25 },
-          itemStyle: { color: p.modrinth },
-          data: modrinth.map((own, day) => ({ value: lower[day], own })),
-        },
-        {
-          id: "platform:curseforge",
-          name: "CurseForge",
-          type: "line",
-          smooth: true,
-          showSymbol: false,
-          // Opaque une fois empilée, sans quoi les deux couches se mélangeraient
-          // et la bande du bas ne serait plus à la couleur de sa plateforme.
-          areaStyle: { opacity: stacked ? 1 : 0.25 },
-          itemStyle: { color: p.curseforge },
-          data: curseforge.map((own, day) => ({ value: upper[day], own })),
-        },
-      ],
-      stacked,
-    ),
+    series: [
+      {
+        id: "platform:modrinth",
+        name: "Modrinth",
+        type: "line",
+        smooth: true,
+        showSymbol: false,
+        // Opaque une fois empilée, sans quoi les deux couches se mélangeraient
+        // et la bande du bas ne serait plus à la couleur de sa plateforme.
+        areaStyle: { opacity: stacked ? 1 : 0.25 },
+        // Voir `drawZ` : peinte par-dessus, elle rend sa bande au bas de la pile.
+        z: drawZ(0, 2, stacked),
+        itemStyle: { color: p.modrinth },
+        data: modrinth.map((own, day) => ({ value: lower[day], own })),
+      },
+      {
+        id: "platform:curseforge",
+        name: "CurseForge",
+        type: "line",
+        smooth: true,
+        showSymbol: false,
+        // Opaque une fois empilée, sans quoi les deux couches se mélangeraient
+        // et la bande du bas ne serait plus à la couleur de sa plateforme.
+        areaStyle: { opacity: stacked ? 1 : 0.25 },
+        z: drawZ(1, 2, stacked),
+        itemStyle: { color: p.curseforge },
+        data: curseforge.map((own, day) => ({ value: upper[day], own })),
+      },
+    ],
   };
 }

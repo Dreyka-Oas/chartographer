@@ -6,14 +6,22 @@
   import SettingRow from "./SettingRow.svelte";
 
   const freshness = $derived(dashboard.overview?.freshness ?? []);
+
+  /**
+   * La cadence est dite ici telle qu'elle est réglée, et non figée dans le
+   * texte : elle se change deux sections plus bas, et la phrase annonçait
+   * « toutes les six heures » quelle que soit la valeur retenue.
+   */
+  const rhythm = $derived(
+    `Au démarrage, puis toutes les ${dashboard.autoSyncMinutes} minutes. ` +
+      "C'est ce rythme qui entretient les snapshots quotidiens CurseForge, " +
+      "seule source d'historique de cette plateforme.",
+  );
 </script>
 
 <section id="synchronisation" class="stg-panel">
   <h2>Synchronisation</h2>
-  <SettingRow
-    name="Relevé automatique"
-    desc="Au démarrage puis toutes les six heures. C'est ce rythme qui entretient les snapshots quotidiens CurseForge, seule source d'historique de cette plateforme."
-  >
+  <SettingRow name="Relevé automatique" desc={rhythm}>
     {#snippet control()}
       <span class="stg-value">{formatAge(dashboard.dataAgeMs)}</span>
       <button class="stg-btn" onclick={() => dashboard.sync()} disabled={dashboard.syncing}>

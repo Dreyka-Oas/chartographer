@@ -6,7 +6,7 @@
   import RankedTable from "../../components/RankedTable.svelte";
   import StatRow from "../../components/StatRow.svelte";
   import WorldMap from "../../components/WorldMap.svelte";
-  import { compactNumber, countryLabel } from "../../format";
+  import { compactNumber, countryLabel, formatPercent } from "../../format";
   import { theme } from "../../theme.svelte";
   import type { CountryTotal } from "../../types";
 
@@ -28,6 +28,15 @@
   );
 
   const leader = $derived(known[0]);
+
+  /**
+   * Le titre compte ce que le graphique montre vraiment. « Top 15 » écrit
+   * au-dessus de quatre barres promet onze lignes qui ne viendront pas, et
+   * laisse croire à un chargement inabouti.
+   */
+  const topTitle = $derived(
+    top.length >= 15 ? "Les quinze premiers" : "Du plus gros au plus petit",
+  );
 </script>
 
 <DetailShell
@@ -62,7 +71,7 @@
     </div>
 
     <div class="panel">
-      <h2>Top 15</h2>
+      <h2>{topTitle}</h2>
       <Chart {option} height={430} />
     </div>
   </div>
@@ -93,7 +102,7 @@
           <div class="bar">
             <span style="width: {totalKnown ? (row.downloads / totalKnown) * 100 : 0}%"></span>
           </div>
-          {totalKnown ? ((row.downloads / totalKnown) * 100).toFixed(1) : "0"} %
+          {formatPercent(row.downloads, totalKnown)} %
         </td>
       {/snippet}
     </RankedTable>

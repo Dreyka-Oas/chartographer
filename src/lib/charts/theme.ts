@@ -1,4 +1,4 @@
-import { compactNumber, formatDay, formatDayLong, formatMonth } from "../format";
+import { axisNumber, compactNumber, formatDay, formatDayLong, formatMonth } from "../format";
 
 export interface Palette {
   modrinth: string;
@@ -181,6 +181,26 @@ export function axisStyle(p: Palette) {
     axisLine: { lineStyle: { color: p.grid } },
     axisLabel: { color: p.textDim },
     splitLine: { lineStyle: { color: p.grid, opacity: 0.4 } },
+  };
+}
+
+/**
+ * Axe de valeurs, gradué comme le reste de l'application.
+ *
+ * Sans formateur, ECharts écrit `50,000` : la virgule y sépare les milliers,
+ * alors qu'elle marque la décimale partout ailleurs sur la page — et le dernier
+ * libellé, trop long pour la marge, se faisait couper en `200,00`, qui se lit
+ * comme deux cents. `axisNumber` groupe les milliers d'une espace fine.
+ *
+ * L'abrégé de `compactNumber` a été essayé et retiré : sur un axe resserré, il
+ * donnait la même graduation à trois traits voisins.
+ */
+export function valueAxis(p: Palette, extra: Record<string, unknown> = {}) {
+  return {
+    type: "value",
+    ...axisStyle(p),
+    axisLabel: { color: p.textDim, formatter: (value: number) => axisNumber(value) },
+    ...extra,
   };
 }
 

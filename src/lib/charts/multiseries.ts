@@ -1,4 +1,13 @@
-import { axisStyle, BASE_GRID, DARK, dayAxis, dayTooltip, tooltip, type Palette } from "./theme";
+import {
+  axisStyle,
+  BASE_GRID,
+  DARK,
+  dayAxis,
+  dayTooltip,
+  tooltip,
+  type Palette,
+  valueAxis,
+} from "./theme";
 
 export interface NamedSeries {
   name: string;
@@ -71,16 +80,28 @@ export function stackValues(rows: number[][]): number[][] {
 }
 
 /**
- * Ordre de tracé des séries empilées : la plus haute en premier.
+ * Rang de peinture d'une série empilée : la plus petite au fond, la plus grande
+ * par-dessus.
  *
  * Chaque aire est remplie depuis la ligne du bas jusqu'à son cumul, et non
  * entre deux cumuls comme le ferait un empilement d'ECharts. Peintes dans
  * l'ordre, les grandes recouvriraient les petites ; peintes de la plus haute à
  * la plus basse, chaque bande laisse voir la couleur de la série à laquelle
  * elle revient — le même dessin qu'un empilement.
+ *
+ * Ce rang est dit en `z` plutôt qu'en réordonnant le tableau des séries, et
+ * c'est ce qui le rend fiable. Les séries portent un `id` pour qu'ECharts
+ * anime les transitions ; retrouvant ce même `id` d'un rendu à l'autre, il
+ * réutilise la série existante et lui garde son ordre de peinture d'origine.
+ * Renverser le tableau restait alors sans effet dès le deuxième rendu : au
+ * changement de période, quand le classement des mods bougeait, celui passé en
+ * tête était peint sous son voisin, et sa bande disparaissait entièrement sous
+ * une aire opaque. Le `z`, lui, est relu à chaque fois.
  */
-export function drawOrder<T>(items: T[], stacked: boolean): T[] {
-  return stacked ? [...items].reverse() : items;
+export function drawZ(index: number, count: number, stacked: boolean): number {
+  // 2 est le `z` par défaut d'une série ECharts : on reste au-dessus de la
+  // grille et des axes, dont le `z` vaut 0.
+  return stacked ? 2 + (count - 1 - index) : 2;
 }
 
 /** Aire empilée par projet, sur un axe de jours déjà dense. */
@@ -90,7 +111,6 @@ export function stackedProjectsOption(
   p: Palette = DARK,
   stacked = true,
 ) {
-  const axis = axisStyle(p);
   const drawn = stacked ? stackValues(series.map((s) => s.values)) : series.map((s) => s.values);
   // Le tooltip ne reçoit que des noms de séries : le logo se retrouve par là.
   const icons = new Map(series.map((s) => [s.name, s.icon ?? null]));
@@ -117,7 +137,7 @@ export function stackedProjectsOption(
       top: 0,
     },
     xAxis: dayAxis(days, p),
-    yAxis: { type: "value", ...axis },
+    yAxis: valueAxis(p),
     dataZoom: [
       { type: "inside", start: 0, end: 100 },
       {
@@ -128,28 +148,26 @@ export function stackedProjectsOption(
         textStyle: { color: p.textDim },
       },
     ],
-    series: drawOrder(
-      series.map((s, i) => ({
-        id: `mod:${s.name}`,
-        name: s.name,
-        type: "line",
-        smooth: true,
-        showSymbol: false,
-        lineStyle: { width: 1.5 },
-        /*
-         * Empilées, les aires sont opaques : c'est la seule façon pour qu'une
-         * bande montre la couleur du mod auquel elle revient, puisqu'elles
-         * sont peintes depuis la ligne du bas et se recouvrent. Superposées,
-         * elles s'effacent presque : garder des remplissages pleins noierait
-         * les petits mods sous le plus gros, et ôterait tout intérêt à
-         * désempiler.
-         */
-        areaStyle: { opacity: stacked ? 1 : 0.06 },
-        itemStyle: { color: seriesColor(i) },
-        data: s.values.map((own, day) => ({ value: drawn[i][day], own })),
-      })),
-      stacked,
-    ),
+    series: series.map((s, i) => ({
+      id: `mod:${s.name}`,
+      name: s.name,
+      type: "line",
+      smooth: true,
+      showSymbol: false,
+      lineStyle: { width: 1.5 },
+      /*
+       * Empilées, les aires sont opaques : c'est la seule façon pour qu'une
+       * bande montre la couleur du mod auquel elle revient, puisqu'elles
+       * sont peintes depuis la ligne du bas et se recouvrent. Superposées,
+       * elles s'effacent presque : garder des remplissages pleins noierait
+       * les petits mods sous le plus gros, et ôterait tout intérêt à
+       * désempiler.
+       */
+      areaStyle: { opacity: stacked ? 1 : 0.06 },
+      z: drawZ(i, series.length, stacked),
+      itemStyle: { color: seriesColor(i) },
+      data: s.values.map((own, day) => ({ value: drawn[i][day], own })),
+    })),
   };
 }
 
@@ -160,12 +178,11 @@ export function rankingOption(
   p: Palette = DARK,
   color = p.accent,
 ) {
-  const axis = axisStyle(p);
   return {
     grid: { left: 8, right: 24, top: 8, bottom: 8, containLabel: true },
     tooltip: { trigger: "axis", axisPointer: { type: "shadow" }, ...tooltip(p) },
-    xAxis: { type: "value", ...axis },
-    yAxis: { type: "category", data: labels, ...axis },
+    xAxis: valueAxis(p),
+    yAxis: { type: "category", data: labels, ...axisStyle(p) },
     series: [
       {
         type: "bar",

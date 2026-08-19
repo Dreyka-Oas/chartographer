@@ -115,8 +115,13 @@
     <span class="word">{verdict.word}</span>
     <span class="date">{formatDayLong(report.day)}</span>
     {#if report.rank !== null}
+      <!-- Le rang et son exposant tiennent dans un même span : enfants directs
+           d'une boîte flex, ils étaient séparés par son `gap`, et « 4ᵉ » se
+           lisait « 4 ᵉ ». -->
       <button class="rank" onclick={() => dashboard.openDetail("days")}>
-        {report.rank}<sup>{report.rank === 1 ? "re" : "e"}</sup> journée sur {report.ranked_days}
+        <span>
+          {report.rank}<sup>{report.rank === 1 ? "re" : "e"}</sup> journée sur {report.ranked_days}
+        </span>
         <span class="more">voir le classement</span>
       </button>
       <Hint text={RANK} />
@@ -325,14 +330,13 @@
     margin-left: auto;
     font-size: 0.8rem;
     color: var(--text-dim);
-  }
-  .rank sup {
-    font-size: 0.62rem;
-  }
-  .rank {
     border: 0;
     background: none;
     padding: 0;
+    cursor: pointer;
+  }
+  .rank sup {
+    font-size: 0.62rem;
   }
   .rank:hover .more {
     color: var(--accent);

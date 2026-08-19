@@ -97,6 +97,24 @@
       (onModrinth || onCurseforge),
   );
 
+  /**
+   * Ce qui manque encore, dit en clair. Un bouton grisé sans explication laisse
+   * chercher : l'envoi demande quatre choses, et rien à l'écran ne disait
+   * laquelle faisait défaut.
+   */
+  const missing = $derived.by(() => {
+    const manque: string[] = [];
+    if (project === null) manque.push("un mod");
+    if (filePath === "") manque.push("le fichier à envoyer");
+    if (versionNumber.trim() === "") manque.push("un numéro de version");
+    if (!onModrinth && !onCurseforge) manque.push("au moins une plateforme");
+    if (manque.length === 0) return "";
+    const dernier = manque.pop();
+    return manque.length === 0
+      ? `Il manque ${dernier}.`
+      : `Il manque ${manque.join(", ")} et ${dernier}.`;
+  });
+
   async function publish() {
     if (!project || !ready) return;
     running = true;
@@ -335,8 +353,12 @@
           {running ? "Envoi en cours…" : "Publier"}
         </button>
         <span class="hint">
-          Une version Modrinth se supprime d'ici. Côté CurseForge, le retrait passe par un geste
-          appris — voir la carte ci-dessous.
+          {#if missing}
+            {missing}
+          {:else}
+            Une version Modrinth se supprime d'ici. Côté CurseForge, le retrait passe par un geste
+            appris — voir la carte ci-dessous.
+          {/if}
         </span>
       </div>
 
@@ -501,17 +523,26 @@
   textarea {
     resize: vertical;
   }
-  .drop {
+  /*
+   * La zone de dépôt occupe toute la hauteur de sa rangée, comme les champs qui
+   * l'entourent. Laissée à sa hauteur propre, son texte sur deux lignes la
+   * faisait descendre plus bas que ses voisins : la rangée s'alignait par le
+   * haut, et elle seule dépassait.
+   */
+  .field .drop {
+    flex: 1;
+    min-height: 34px;
     border: 1px dashed var(--border);
     border-radius: var(--radius-sm);
-    padding: 14px;
+    padding: 7px 10px;
     color: var(--text-dim);
-    font-size: 0.84rem;
+    font-size: 0.8rem;
+    line-height: 1.35;
     display: flex;
     align-items: center;
     gap: 10px;
   }
-  .drop.filled {
+  .field .drop.filled {
     border-style: solid;
     color: var(--text);
   }

@@ -8,7 +8,43 @@ export function compactNumber(value: number): string {
   if (abs >= 1_000) {
     return `${(value / 1_000).toFixed(1).replace(".", ",")}${THIN_SPACE}k`;
   }
-  return String(value);
+  // Sous le millier, la valeur est écrite telle quelle — mais un montant a des
+  // décimales, et `String` les sépare d'un point. La virgule est la seule
+  // marque décimale employée ailleurs sur la page.
+  return String(value).replace(".", ",");
+}
+
+/**
+ * Nombre gradué sur un axe : `1 000`, `50 000`, `2 620`.
+ *
+ * Les axes n'abrègent pas. `compactNumber` arrondit à la décimale, ce qui suffit
+ * pour un total isolé mais écrase les graduations d'un axe resserré : une courbe
+ * d'abonnés allant de 2 620 à 2 760 affichait « 2,7 k » sur trois graduations de
+ * suite, trois traits distincts portant le même nombre. Les milliers sont
+ * séparés d'une espace fine insécable, jamais d'une virgule — elle marque la
+ * décimale partout ailleurs sur la page.
+ */
+export function axisNumber(value: number): string {
+  if (!Number.isFinite(value)) return "";
+  const [entier, decimales] = Math.abs(value).toFixed(Number.isInteger(value) ? 0 : 2).split(".");
+  const groupe = entier.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+  const signe = value < 0 ? "-" : "";
+  // Les décimales ne paraissent que si elles disent quelque chose : un axe de
+  // montants gradué au dixième d'euro n'a pas à écrire `1,50` en `1,5`.
+  const reste = decimales ? `,${decimales.replace(/0+$/, "")}` : "";
+  return `${signe}${groupe}${reste === "," ? "" : reste}`;
+}
+
+/**
+ * Part en pourcentage, à la décimale : `33,3 %`.
+ *
+ * Le signe est collé par l'appelant, qui choisit son espace. Ce qui compte ici
+ * est la virgule : `toFixed` rend un point, qui se lit comme un séparateur de
+ * milliers dans une page où tout le reste est en français.
+ */
+export function formatPercent(part: number, whole: number, digits = 1): string {
+  if (!(whole > 0) || !Number.isFinite(part)) return "0";
+  return ((part / whole) * 100).toFixed(digits).replace(".", ",");
 }
 
 export function deltaPercent(current: number, previous: number): number | null {

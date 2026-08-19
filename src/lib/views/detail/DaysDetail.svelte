@@ -222,7 +222,10 @@
   <div class="chart">
     <h2>
       {mode === "jours" ? "Téléchargements par journée" : "Rang au fil du temps"}
-      <Hint text={WINDOW_HINT} />
+      <!-- Une seule aide par titre. Deux points d'interrogation collés l'un à
+           l'autre ne se distinguaient pas, et rien ne disait lequel ouvrait
+           quoi : la portée du classement s'explique sur le tableau, qui la
+           montre, et ce graphique n'a besoin que de ses dates de couverture. -->
       <Hint text={coverage} />
     </h2>
     <Chart {option} height={420} />
@@ -231,8 +234,7 @@
   <div class="panel">
     <h2>
       Les journées classées {rankedOn}
-      <Hint text={BY_HINT} />
-      <Hint text={WINDOW_HINT} />
+      <Hint text={`${BY_HINT}\n\n${WINDOW_HINT}`} />
       <span class="spacer"></span>
       <span class="switch small">
         <button class:active={order === "rang"} onclick={() => (order = "rang")}>Par rang</button>
@@ -284,12 +286,27 @@
 </DetailShell>
 
 <style>
+  /*
+   * Les deux listes restent côte à côte. Autorisées à se replier, elles
+   * prenaient chacune une ligne entière — le bouton de `<Select>` est en
+   * `width: 100%`, et un flex qui replie lui donne toute la largeur — ce qui
+   * ajoutait une rangée à l'en-tête.
+   */
   .filters {
     display: flex;
     gap: 8px;
   }
+  /*
+   * Assez large pour le plus long des intitulés — « toutes celles qui la
+   * précèdent », mesuré à 166 pixels, marges et chevron en plus. À 168px, le
+   * bouton coupait le sien en « toutes les journées rele… », qui ne dit plus à
+   * quoi les journées se comparent : c'est pourtant là toute la question que ce
+   * réglage tranche. Pas davantage non plus : les deux boutons et leur écart
+   * doivent tenir côte à côte dans la barre, faute de quoi le second passe à la
+   * ligne et l'en-tête gagne une rangée.
+   */
   .filters :global(.trigger) {
-    min-width: 168px;
+    min-width: 204px;
   }
   .switch {
     display: flex;

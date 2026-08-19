@@ -13,6 +13,16 @@
   import { dashboard } from "../state.svelte";
 
   const overview = $derived(dashboard.overview);
+
+  /**
+   * Pays réellement situés sur la carte. Le relevé porte une ligne `??` pour les
+   * téléchargements dont Modrinth ne connaît pas l'origine : la compter parmi
+   * les pays annonçait un de plus que ce que la carte montre, et la note du bas
+   * dit déjà ce qu'il en est.
+   */
+  const mappedCountries = $derived(
+    (overview?.countries ?? []).filter((entry) => entry.country !== "??"),
+  );
 </script>
 
 {#if overview}
@@ -78,7 +88,7 @@
     {#if dashboard.platforms.modrinth}
       <Card
         title="Origine des téléchargements"
-        subtitle="{overview.countries.length} pays relevés"
+        subtitle="{mappedCountries.length} pays relevés"
         onexpand={() => dashboard.openDetail("countries")}
       >
         <WorldMap countries={overview.countries} />

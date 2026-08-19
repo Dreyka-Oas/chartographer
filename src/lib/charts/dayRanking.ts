@@ -1,6 +1,6 @@
 import { podiumColor } from "../components/rank";
 import type { DayRankRow } from "../types";
-import { axisStyle, BASE_GRID, DARK, dayAxis, dayTooltip, type Palette } from "./theme";
+import { axisStyle, BASE_GRID, DARK, dayAxis, dayTooltip, type Palette, valueAxis } from "./theme";
 
 /** Zoom commun aux deux vues : un an de journées ne tient pas à l'écran. */
 const ZOOM = [
@@ -16,7 +16,6 @@ const ZOOM = [
  * en gagner une autre.
  */
 export function dailyBarsOption(rows: DayRankRow[], p: Palette = DARK) {
-  const axis = axisStyle(p);
   const crown = (row: DayRankRow, top: boolean) => {
     const color = row.rank !== null ? podiumColor(row.rank - 1) : null;
     return top && color ? { itemStyle: { borderColor: color, borderWidth: 2 } } : {};
@@ -26,7 +25,7 @@ export function dailyBarsOption(rows: DayRankRow[], p: Palette = DARK) {
     tooltip: dayTooltip(p, { sorted: true }),
     legend: { data: ["Modrinth", "CurseForge"], textStyle: { color: p.textDim }, top: 0 },
     xAxis: dayAxis(rows.map((r) => r.day), p),
-    yAxis: { type: "value", ...axis },
+    yAxis: valueAxis(p),
     dataZoom: ZOOM.map((z) => ({ ...z, borderColor: p.grid, textStyle: { color: p.textDim } })),
     series: [
       {

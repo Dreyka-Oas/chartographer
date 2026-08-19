@@ -8,7 +8,7 @@
   import CurseforgeSummary from "../components/CurseforgeSummary.svelte";
   import RangePicker from "../components/RangePicker.svelte";
   import StatRow from "../components/StatRow.svelte";
-  import { formatMoney } from "../format";
+  import { formatMoney, formatPercent } from "../format";
   import { dashboard } from "../state.svelte";
   import { theme } from "../theme.svelte";
 
@@ -139,7 +139,7 @@
               <tr>
                 <td class="left">{row.title}</td>
                 <td>{money(row.amount)}</td>
-                <td>{projectTotal ? ((num(row.amount) / projectTotal) * 100).toFixed(1) : "0"} %</td>
+                <td>{formatPercent(num(row.amount), projectTotal)} %</td>
               </tr>
             {/each}
           </tbody>

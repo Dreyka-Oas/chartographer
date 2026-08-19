@@ -46,6 +46,11 @@ export function heatmapOption(cells: LoaderCell[], p: Palette = DARK) {
       axisLabel: { color: p.textDim, rotate: 45 },
     },
     yAxis: { type: "category", data: loaders, ...axis },
+    /*
+     * Les deux bornes sont écrites de part et d'autre du dégradé. Sans elles,
+     * ECharts n'affiche rien : la bande de couleur restait muette, et une
+     * cellule foncée ne se rapportait à aucun ordre de grandeur.
+     */
     visualMap: {
       min: 0,
       max,
@@ -54,6 +59,7 @@ export function heatmapOption(cells: LoaderCell[], p: Palette = DARK) {
       left: "center",
       bottom: 0,
       textStyle: { color: p.textDim },
+      text: [compactNumber(max), "0"],
       inRange: { color: [p.empty, p.accent] },
     },
     series: [

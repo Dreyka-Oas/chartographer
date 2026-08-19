@@ -193,6 +193,10 @@
     font-size: 0.78rem;
     line-height: 1.4;
     text-align: left;
+    /* Les sauts de ligne du texte sont respectés, les longues lignes se
+     * replient toujours : une explication en deux temps se sépare ainsi d'un
+     * blanc, au lieu de couler en un seul pavé. */
+    white-space: pre-line;
     /* Elle ne doit jamais intercepter la souris : passer dessus reviendrait à
      * quitter l'élément, et la bulle se refermerait aussitôt. */
     pointer-events: none;

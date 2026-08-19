@@ -1,12 +1,12 @@
+import { formatMoney } from "../format";
 import type { PayoutPoint } from "../types";
-import { axisStyle, BASE_GRID, DARK, monthAxis, tooltip, type Palette } from "./theme";
+import { BASE_GRID, DARK, monthAxis, tooltip, type Palette, valueAxis } from "./theme";
 
 /**
  * Échéancier de reversement. Les échéances déjà mûres et celles à venir
  * portent deux couleurs distinctes, et une ligne de repère marque aujourd'hui.
  */
 export function scheduleOption(points: PayoutPoint[], p: Palette = DARK) {
-  const axis = axisStyle(p);
   const firstFuture = points.findIndex((x) => x.future);
 
   return {
@@ -15,13 +15,16 @@ export function scheduleOption(points: PayoutPoint[], p: Palette = DARK) {
       trigger: "axis",
       axisPointer: { type: "shadow" },
       ...tooltip(p),
-      valueFormatter: (v: number) => `${v.toFixed(2)} $`,
+      // Les montants arrivent en dollars ; `formatMoney` les convertit dans la
+      // devise choisie. L'écrire ici en dollars affichait une somme que ne
+      // reconnaissait aucune des cartes de la même page.
+      valueFormatter: (v: number) => formatMoney(String(v)),
     },
     xAxis: monthAxis(
       points.map((x) => x.date.slice(0, 7)),
       p,
     ),
-    yAxis: { type: "value", ...axis },
+    yAxis: valueAxis(p),
     series: [
       {
         type: "bar",

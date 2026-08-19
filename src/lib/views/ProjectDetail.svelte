@@ -3,7 +3,7 @@
   import { rankingOption, stackedProjectsOption } from "../charts/multiseries";
   import { palette } from "../charts/theme";
   import StatRow from "../components/StatRow.svelte";
-  import { compactNumber, countryLabel, formatMoney } from "../format";
+  import { compactNumber, countryLabel, formatDayLong, formatMoney } from "../format";
   import { dashboard } from "../state.svelte";
   import { theme } from "../theme.svelte";
   import DetailShell from "./detail/DetailShell.svelte";
@@ -167,7 +167,9 @@
                   </span>
                 </td>
                 <td>{compactNumber(version.downloads)}</td>
-                <td class="left dim">{version.date_published?.slice(0, 10) ?? "—"}</td>
+                <td class="left dim">
+                  {version.date_published ? formatDayLong(version.date_published.slice(0, 10)) : "—"}
+                </td>
               </tr>
             {/each}
           </tbody>

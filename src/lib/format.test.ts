@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  axisNumber,
   compactNumber,
   countryLabel,
   deltaPercent,
@@ -9,6 +10,7 @@ import {
   formatDayLong,
   formatMonth,
   formatMoney,
+  formatPercent,
   formatRange,
   lastDayOfMonth,
 } from "./format";
@@ -21,6 +23,39 @@ describe("compactNumber", () => {
     expect(plain(compactNumber(1776))).toBe("1,8 k");
     expect(plain(compactNumber(176968))).toBe("177,0 k");
     expect(plain(compactNumber(2_400_000))).toBe("2,4 M");
+  });
+});
+
+describe("axisNumber", () => {
+  it("groupe les milliers sans jamais abréger", () => {
+    expect(plain(axisNumber(1000))).toBe("1 000");
+    expect(plain(axisNumber(200000))).toBe("200 000");
+    expect(plain(axisNumber(-1500))).toBe("-1 500");
+  });
+
+  /*
+   * La raison d'être de cette fonction : sur une courbe d'abonnés allant de
+   * 2 585 à 2 760, l'abrégé donnait « 2,7 k » à trois graduations voisines.
+   */
+  it("distingue des graduations que l'abrégé confondrait", () => {
+    const gradations = [2670, 2700, 2730].map(axisNumber);
+    expect(new Set(gradations).size).toBe(3);
+    expect(new Set([2670, 2700, 2730].map(compactNumber)).size).toBe(1);
+  });
+
+  it("écrit la décimale à la virgule, sans zéro inutile", () => {
+    expect(axisNumber(0.5)).toBe("0,5");
+    expect(axisNumber(3)).toBe("3");
+  });
+});
+
+describe("formatPercent", () => {
+  it("sépare la décimale d'une virgule", () => {
+    expect(formatPercent(1, 3)).toBe("33,3");
+  });
+
+  it("rend zéro plutôt qu'une division par un tout vide", () => {
+    expect(formatPercent(5, 0)).toBe("0");
   });
 });
 

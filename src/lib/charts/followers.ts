@@ -1,6 +1,6 @@
 import { formatDayLong } from "../format";
 import type { FollowerDay } from "../types";
-import { axisStyle, BASE_GRID, DARK, dayAxis, type Palette, tooltip } from "./theme";
+import { BASE_GRID, DARK, dayAxis, type Palette, tooltip, valueAxis } from "./theme";
 
 /** Écart d'un jour sur l'autre, signé, pour une série de comptes. */
 function deltas(values: number[]): (number | null)[] {
@@ -25,7 +25,6 @@ const signed = (value: number) => (value > 0 ? `+${value}` : String(value));
  * d'un départ.
  */
 export function followersOption(days: FollowerDay[], p: Palette = DARK) {
-  const axis = axisStyle(p);
   const totals = days.map((d) => d.modrinth + d.curseforge);
   const low = totals.length > 0 ? Math.min(...totals) : 0;
   const high = totals.length > 0 ? Math.max(...totals) : 0;
@@ -43,7 +42,10 @@ export function followersOption(days: FollowerDay[], p: Palette = DARK) {
   );
 
   return {
-    grid: BASE_GRID,
+    // Deux axes nommés, et une légende au-dessus : la marge haute par défaut ne
+    // laissait pas la place aux deux, et « abonnés » se faisait couper à
+    // mi-hauteur, accent compris.
+    grid: { ...BASE_GRID, top: 48 },
     tooltip: {
       trigger: "axis",
       confine: true,
@@ -75,25 +77,21 @@ export function followersOption(days: FollowerDay[], p: Palette = DARK) {
       p,
     ),
     yAxis: [
-      {
-        type: "value",
+      valueAxis(p, {
         name: "abonnés",
         nameTextStyle: { color: p.textDim },
         min: Math.max(0, low - room),
         max: high + room,
-        ...axis,
-      },
-      {
-        type: "value",
+      }),
+      valueAxis(p, {
         name: "écart",
         nameTextStyle: { color: p.textDim },
         min: -swing,
         max: swing,
-        ...axis,
         // Une seule grille suffit : deux jeux de lignes se croiseraient sans
         // rien apporter.
         splitLine: { show: false },
-      },
+      }),
     ],
     series: [
       {

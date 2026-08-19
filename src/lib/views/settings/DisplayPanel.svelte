@@ -53,7 +53,7 @@
   </SettingRow>
 
   <SettingRow
-    name="Relevé automatique"
+    name="Cadence des relevés"
     desc="Délai entre deux relevés. L'attente réelle varie d'un quart autour de cette valeur : des relevés parfaitement réguliers se remarqueraient, et CurseForge ne se lit qu'à travers une session de navigateur. Dix minutes au plus court."
   >
     {#snippet control()}

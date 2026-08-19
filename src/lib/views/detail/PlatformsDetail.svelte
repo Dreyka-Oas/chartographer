@@ -60,8 +60,10 @@
   />
 
   <div class="panel">
+    <!-- Le titre ne promet quinze lignes que lorsqu'il y en a quinze : au-dessus
+         de quatre barres, il laissait croire à un rendu inabouti. -->
     <h2>
-      Quinze premiers par volume
+      {rows.length > 15 ? "Quinze premiers par volume" : "Par volume, du plus gros au plus petit"}
       {#if rows.length > 15}<span class="note">{rows.length - 15} autres dans le tableau</span>{/if}
     </h2>
     <Chart {option} height={Math.max(320, Math.min(rows.length, 15) * 30 + 100)} />

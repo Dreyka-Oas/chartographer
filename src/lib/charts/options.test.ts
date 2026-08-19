@@ -5,7 +5,7 @@ import { foldSeriesTail, stackedProjectsOption, stackValues } from "./multiserie
 import { revenueOption } from "./revenue";
 import { sparklinePath } from "./sparkline";
 import { splitOption } from "./split";
-import { DARK, dayAxis, dayTooltipHtml, escapeHtml, monthAxis } from "./theme";
+import { DARK, dayAxis, dayTooltipHtml, escapeHtml, monthAxis, valueAxis } from "./theme";
 import { timelineOption } from "./timeline";
 import { countryTooltipHtml, fillZoom, MAP_ASPECT, worldMapOption } from "./worldmap";
 
@@ -33,7 +33,10 @@ function project(partial: Partial<ProjectSummary>): ProjectSummary {
 }
 
 /** Une série d'option, telle que les fabriques la rendent. */
-function line(option: { series: { id: string; data: { value: number; own: number }[] }[] }, id: string) {
+function line(
+  option: { series: { id: string; z: number; data: { value: number; own: number }[] }[] },
+  id: string,
+) {
   const found = option.series.find((s) => s.id === id);
   if (!found) throw new Error(`série absente : ${id}`);
   return found;
@@ -56,10 +59,18 @@ describe("timelineOption", () => {
     ]);
   });
 
-  it("peint la plus haute en premier pour ne pas couvrir l'autre", () => {
+  it("peint la bande du bas par-dessus l'autre, sans quoi elle disparaîtrait", () => {
     const option = timelineOption(points, true);
-    expect(option.series[0].id).toBe("platform:curseforge");
-    expect(option.series[1].id).toBe("platform:modrinth");
+    // Chaque aire est peinte depuis la ligne du bas : celle de CurseForge monte
+    // jusqu'au total et couvrirait Modrinth si elle passait au-dessus.
+    expect(line(option, "platform:modrinth").z).toBeGreaterThan(
+      line(option, "platform:curseforge").z,
+    );
+  });
+
+  it("laisse les deux plateformes au même rang une fois désempilées", () => {
+    const option = timelineOption(points, false);
+    expect(line(option, "platform:modrinth").z).toBe(line(option, "platform:curseforge").z);
   });
 
   it("rend les valeurs brutes quand le mode comparaison est actif", () => {
@@ -95,8 +106,19 @@ describe("stackedProjectsOption", () => {
       { value: 105, own: 5 },
       { value: 128, own: 8 },
     ]);
-    // Le plus haut cumul d'abord, sinon son aire recouvrirait les autres.
-    expect(option.series[0].id).toBe("mod:Petit");
+  });
+
+  /*
+   * Le rang de peinture tient au `z` et non à la place dans le tableau : les
+   * séries portent un `id`, et ECharts, le retrouvant d'un rendu à l'autre,
+   * garde à chacune son ordre de peinture d'origine. Renverser le tableau
+   * n'avait donc plus d'effet dès le deuxième rendu, et le mod passé en tête au
+   * changement de période voyait sa bande disparaître sous une aire opaque.
+   */
+  it("peint les petits mods sous les gros, par leur rang et non par leur place", () => {
+    const option = stackedProjectsOption(days, series, DARK, true);
+    expect(option.series.map((s) => s.id)).toEqual(["mod:Gros", "mod:Petit"]);
+    expect(line(option, "mod:Gros").z).toBeGreaterThan(line(option, "mod:Petit").z);
   });
 
   it("laisse les courbes à leur hauteur propre une fois désempilées", () => {
@@ -160,6 +182,19 @@ describe("dayAxis", () => {
     const axis = dayAxis(["2026-08-09", "2026-08-10"], DARK);
     expect(axis.data).toEqual(["2026-08-09", "2026-08-10"]);
     expect(axis.axisLabel.formatter("2026-08-09")).toBe("9 août");
+  });
+});
+
+describe("valueAxis", () => {
+  /*
+   * Garde-fou : l'abrégé a été posé sur ces axes, puis retiré. Sur une courbe
+   * d'abonnés resserrée, il donnait la même graduation à trois traits voisins.
+   */
+  it("grade sans abréger, pour que deux traits voisins ne portent pas le même nombre", () => {
+    const axis = valueAxis(DARK);
+    const rendu = [2670, 2700, 2730].map((v) => axis.axisLabel.formatter(v));
+    expect(new Set(rendu).size).toBe(3);
+    expect(rendu[1].replace(/\s/g, " ")).toBe("2 700");
   });
 });
 

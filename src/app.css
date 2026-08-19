@@ -176,6 +176,17 @@ option {
   color: var(--text);
 }
 
+/*
+ * Cases à cocher et boutons radio : le bleu de Windows n'appartient à aucune
+ * des deux teintes de la page, et il tranchait d'autant plus sur le papier de
+ * carte. `accent-color` laisse le contrôle au système — sa forme, sa coche, son
+ * animation — en n'imposant que la couleur.
+ */
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--accent);
+}
+
 ::selection {
   background: var(--accent);
   color: var(--on-accent);

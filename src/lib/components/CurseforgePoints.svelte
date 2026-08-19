@@ -1,6 +1,6 @@
 <script lang="ts">
   import { api } from "../api";
-  import { formatDayLong, formatMoney } from "../format";
+  import { formatDayLong, formatMoney, formatRange } from "../format";
   import { dashboard } from "../state.svelte";
   import type { AppErrorPayload, CfPointEntry } from "../types";
 
@@ -93,7 +93,7 @@
               <tr>
                 <td class="left">{row.title}</td>
                 <td>{row.days}</td>
-                <td>{row.from} → {row.to}</td>
+                <td>{formatRange(row.from, row.to)}</td>
               </tr>
             {/each}
           </tbody>

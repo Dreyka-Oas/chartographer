@@ -1,5 +1,5 @@
 import type { ProjectSummary } from "../types";
-import { axisStyle, BASE_GRID, DARK, tooltip, type Palette } from "./theme";
+import { axisStyle, BASE_GRID, DARK, tooltip, type Palette, valueAxis } from "./theme";
 
 export function splitOption(projects: ProjectSummary[], p: Palette = DARK) {
   const rows = [...projects]
@@ -11,14 +11,18 @@ export function splitOption(projects: ProjectSummary[], p: Palette = DARK) {
     )
     .slice(0, 15)
     .reverse();
-  const axis = axisStyle(p);
 
   return {
-    grid: { ...BASE_GRID, left: 140 },
+    /*
+     * La marge de droite tient le dernier libellé de l'axe, qui est centré sous
+     * sa graduation et déborde donc de sa moitié. À 16 pixels, `200,0 k` se
+     * faisait couper sa dernière lettre.
+     */
+    grid: { ...BASE_GRID, left: 140, right: 34 },
     tooltip: { trigger: "axis", axisPointer: { type: "shadow" }, ...tooltip(p) },
     legend: { data: ["Modrinth", "CurseForge"], textStyle: { color: p.textDim }, top: 0 },
-    xAxis: { type: "value", ...axis },
-    yAxis: { type: "category", data: rows.map((r) => r.title), ...axis },
+    xAxis: valueAxis(p),
+    yAxis: { type: "category", data: rows.map((r) => r.title), ...axisStyle(p) },
     series: [
       {
         name: "Modrinth",

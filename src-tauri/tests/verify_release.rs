@@ -105,12 +105,30 @@ async fn the_published_release_is_installable() {
         archive.len()
     );
 
-    let signature = Signature::decode(platform["signature"].as_str().expect("signature"))
-        .expect("signature minisign valide");
+    // La signature voyage en base64 dans `latest.json`, comme la clé publique
+    // dans la configuration : c'est le texte minisign qui est encodé, pas les
+    // octets bruts de la signature.
+    let signature_text = String::from_utf8(
+        base64_decode(platform["signature"].as_str().expect("signature"))
+            .expect("la signature doit etre du base64 valide"),
+    )
+    .expect("signature lisible");
+    let signature = Signature::decode(&signature_text).expect("signature minisign valide");
     pubkey
         .verify(&archive, &signature, false)
         .expect("l'archive publiee doit etre signee par la cle du projet");
     println!("signature verifiee avec la cle publique de tauri.conf.json");
+
+    // Contre-epreuve : un test de signature qui accepte tout passerait aussi.
+    // On abime un octet et on exige que la verification le voie — sans quoi
+    // rien de ce qui precede ne prouve quoi que ce soit.
+    let mut altered = archive.to_vec();
+    altered[archive.len() / 2] ^= 0xff;
+    assert!(
+        pubkey.verify(&altered, &signature, false).is_err(),
+        "une archive modifiee d'un seul octet doit etre refusee"
+    );
+    println!("archive modifiee : refusee, comme attendu");
 }
 
 /// Décodage base64 sans dépendance : la configuration n'en contient qu'une

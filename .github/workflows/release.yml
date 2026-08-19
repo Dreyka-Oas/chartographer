@@ -49,8 +49,14 @@ jobs:
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
-          sudo apt-get update -o Acquire::Retries=3
-          sudo apt-get install -y -o Acquire::Retries=3 \
+          # Le miroir Azure des runners tombe muet par moments : il accepte la
+          # connexion et ne repond plus, et apt l'attend sans se plaindre. On
+          # lui prefere l'archive officielle, et on borne chaque requete pour
+          # qu'un serveur silencieux coute des secondes, pas des minutes.
+          sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' \
+            /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list 2>/dev/null || true
+          sudo apt-get update -o Acquire::Retries=3 -o Acquire::http::Timeout=15
+          sudo apt-get install -y -o Acquire::Retries=3 -o Acquire::http::Timeout=15 \
             libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf rpm libfuse2t64
       - run: npm ci
       - uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # action-v1.0.0

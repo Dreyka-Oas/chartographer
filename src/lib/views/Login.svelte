@@ -1,5 +1,6 @@
 <script lang="ts">
   import { api } from "../api";
+  import { CURSEFORGE, MODRINTH } from "../components/brands";
   import ThemeToggle from "../components/ThemeToggle.svelte";
   import Tooltip from "../components/Tooltip.svelte";
   import { dashboard } from "../state.svelte";
@@ -51,11 +52,15 @@
   -->
   <div class="state">
     <span class="badge" class:on={modrinthOn}>
-      <span class="dot modrinth"></span>
+      <svg class="logo logo-modrinth" viewBox="0 0 24 24" aria-hidden="true">
+        <path d={MODRINTH.path} />
+      </svg>
       Modrinth {modrinthOn ? "relié" : "à relier"}
     </span>
     <span class="badge" class:on={curseforgeOn}>
-      <span class="dot curseforge"></span>
+      <svg class="logo logo-curseforge" viewBox="0 0 24 24" aria-hidden="true">
+        <path d={CURSEFORGE.path} />
+      </svg>
       CurseForge {curseforgeOn ? "relié" : "à relier"}
     </span>
   </div>
@@ -199,21 +204,31 @@
     color: var(--text);
     border-color: var(--accent);
   }
-  /* La pastille garde la couleur de sa plateforme, et pâlit tant qu'elle manque. */
-  .dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
+  /*
+   * Le logo de la plateforme, comme dans la barre du haut : un point coloré ne
+   * disait pas de quel site il s'agissait, alors que ces deux tracés se
+   * reconnaissent d'un coup d'œil. Il pâlit tant que le compte manque.
+   *
+   * Les noms sont préfixés parce que `.curseforge` est déjà pris, plus bas,
+   * par la section qui présente ce compte. À spécificité égale, c'est la
+   * dernière déclarée qui gagne : le logo héritait de son `padding-top`, ce
+   * qui poussait le tracé hors du cadre, où `overflow: hidden` le coupait. Le
+   * logo était bien là, simplement invisible.
+   */
+  .logo {
+    width: 13px;
+    height: 13px;
+    flex: none;
     opacity: 0.3;
   }
-  .badge.on .dot {
+  .badge.on .logo {
     opacity: 1;
   }
-  .dot.modrinth {
-    background: var(--modrinth);
+  .logo-modrinth {
+    fill: var(--modrinth);
   }
-  .dot.curseforge {
-    background: var(--curseforge);
+  .logo-curseforge {
+    fill: var(--curseforge);
   }
   .missing {
     margin: 0 0 4px;

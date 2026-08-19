@@ -30,9 +30,16 @@ jobs:
         with:
           workspaces: src-tauri
       - name: Dependances systeme Tauri
+        # Un miroir muet peut retenir apt une demi-heure sans rien dire. Les
+        # reessais bornent l'attente, et l'etape rend la main au bout de dix
+        # minutes plutot que de tenir le job jusqu'a la limite des six heures.
+        timeout-minutes: 10
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          sudo apt-get update -o Acquire::Retries=3
+          sudo apt-get install -y -o Acquire::Retries=3 \
+            libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
       - run: npm ci
       # Les trois fichiers de version doivent dire la meme chose : l'updater
       # compare la version installee a celle de la release, et un ecart les

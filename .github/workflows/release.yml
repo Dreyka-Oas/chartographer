@@ -49,13 +49,16 @@ jobs:
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
+          set -x
           # Le miroir Azure des runners tombe muet par moments : il accepte la
           # connexion et ne repond plus, et apt l'attend sans se plaindre. On
-          # lui prefere l'archive officielle, et on borne chaque requete pour
-          # qu'un serveur silencieux coute des secondes, pas des minutes.
-          sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' \
-            /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list 2>/dev/null || true
-          sudo apt-get update -o Acquire::Retries=3 -o Acquire::http::Timeout=15
+          # lui prefere l'archive officielle. Le remplacement porte sur tous
+          # les fichiers de sources, quel que soit leur nom ou leur format :
+          # viser un chemin precis, c'est rater le jour ou l'image en change.
+          grep -rl 'azure.archive.ubuntu.com' /etc/apt/ 2>/dev/null \
+            | sudo xargs -r sed -i 's|azure.archive.ubuntu.com|archive.ubuntu.com|g'
+          cat /etc/apt/sources.list.d/*.sources /etc/apt/sources.list 2>/dev/null | grep -i 'ubuntu.com' || true
+          sudo apt-get update -o Acquire::Retries=3 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15
           sudo apt-get install -y -o Acquire::Retries=3 -o Acquire::http::Timeout=15 \
             libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf rpm libfuse2t64
       - run: npm ci

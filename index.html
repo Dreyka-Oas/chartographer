@@ -5,21 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Chartographer</title>
     <!--
-      Le thème est posé avant la première peinture. Appliqué au montage de
-      l'application, il laisserait paraître un éclair de l'autre couleur : la
-      fenêtre s'ouvre avant que le module ne soit évalué.
+      Le thème est posé avant la première peinture, par un fichier servi à part :
+      la politique de sécurité de contenu refuse les scripts en ligne. Voir
+      `public/theme-boot.js`.
 
-      Les deux fonds sont recopiés ici pour la même raison — ce sont les
-      `--bg` de `app.css`, qui n'est chargé qu'avec le module.
+      Les deux fonds ci-dessous sont recopiés ici pour la même raison qu'il
+      existe — ce sont les `--bg` de `app.css`, qui n'est chargé qu'avec le
+      module.
     -->
-    <script>
-      try {
-        const mode = localStorage.getItem("chartographer:theme");
-        if (mode === "light" || mode === "dark") document.documentElement.dataset.theme = mode;
-      } catch {
-        // Stockage indisponible : le thème automatique fera l'affaire.
-      }
-    </script>
+    <script src="/theme-boot.js"></script>
     <style>
       :root {
         background-color: #efece4;

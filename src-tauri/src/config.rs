@@ -33,6 +33,12 @@ pub struct Settings {
     /// jamais vers l'interface : les commandes ne disent que sa présence.
     #[serde(default)]
     pub curseforge_upload_token: Option<String>,
+    /// Recherche d'une nouvelle version au démarrage. Vrai par défaut, y
+    /// compris pour les fichiers écrits avant que ce réglage existe : une
+    /// application qui ne se met jamais à jour d'elle-même reste sur un défaut
+    /// corrigé ailleurs sans que personne ne le sache.
+    #[serde(default = "default_auto_update")]
+    pub auto_update: bool,
 }
 
 fn default_range_days() -> i64 {
@@ -45,6 +51,10 @@ fn default_currency() -> String {
 
 fn default_auto_sync_minutes() -> i64 {
     10
+}
+
+fn default_auto_update() -> bool {
+    true
 }
 
 /// Cadence retenue pour les relevés automatiques.
@@ -64,6 +74,7 @@ impl Default for Settings {
             currency: default_currency(),
             auto_sync_minutes: default_auto_sync_minutes(),
             curseforge_upload_token: None,
+            auto_update: default_auto_update(),
         }
     }
 }
@@ -159,6 +170,7 @@ mod tests {
 
         assert_eq!(defaults.currency, "USD");
         assert_eq!(defaults.auto_sync_minutes, 10);
+        assert!(defaults.auto_update);
 
         let updated = Settings {
             curseforge_username: Some("DreykaOas_official".into()),
@@ -166,6 +178,7 @@ mod tests {
             currency: "EUR".into(),
             auto_sync_minutes: 30,
             curseforge_upload_token: Some("jeton".into()),
+            auto_update: false,
         };
         save_settings(&dir, &updated).unwrap();
         assert_eq!(load_settings(&dir), updated);
@@ -195,6 +208,8 @@ mod tests {
         assert_eq!(loaded.currency, "USD");
         assert_eq!(loaded.auto_sync_minutes, 10);
         assert!(loaded.curseforge_upload_token.is_none());
+        // Le réglage n'existait pas : l'application se met quand même à jour.
+        assert!(loaded.auto_update);
     }
 
     #[test]

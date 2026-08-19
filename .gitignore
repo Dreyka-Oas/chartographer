@@ -11,6 +11,12 @@ src-tauri/gen/
 session.json
 oauth.json
 
+# Clés de signature des mises à jour. La privée ne doit jamais entrer ici :
+# elle vit hors du dépôt, et dans l'environnement GitHub `release`.
+*.key
+*.key.pub
+passphrase.txt
+
 *.db
 *.db-journal
 *.sqlite

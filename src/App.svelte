@@ -1,5 +1,6 @@
 <script lang="ts">
   import { cubicOut } from "svelte/easing";
+  import { api } from "./lib/api";
   import { boot } from "./lib/boot.svelte";
   import PlatformBadge from "./lib/components/PlatformBadge.svelte";
   import ThemeToggle from "./lib/components/ThemeToggle.svelte";
@@ -20,6 +21,7 @@
   import Revenue from "./lib/views/Revenue.svelte";
   import Settings from "./lib/views/Settings.svelte";
   import Vision from "./lib/views/Vision.svelte";
+  import { updater } from "./lib/update.svelte";
 
   let view = $state<"vision" | "day" | "revenue" | "publish" | "settings">("vision");
   let ready = $state(false);
@@ -28,7 +30,25 @@
     if (ready) return;
     ready = true;
     dashboard.start();
+    // La recherche d'une nouvelle version se fait à côté du démarrage, sans
+    // rien retenir : elle n'a aucun rapport avec les chiffres qu'on attend, et
+    // un serveur muet ne doit pas retarder l'ouverture.
+    void api
+      .getSettings()
+      .then((settings) => updater.boot(settings.auto_update))
+      .catch(() => {});
   });
+
+  /** Ouvre les réglages sur la section des mises à jour. */
+  function showUpdate() {
+    view = "settings";
+    dashboard.closeDetail();
+    // Le panneau n'existe qu'une fois la vue rendue : on laisse passer une
+    // image avant d'aller le chercher.
+    requestAnimationFrame(() => {
+      document.getElementById("mises-a-jour")?.scrollIntoView({ block: "start" });
+    });
+  }
 
   const overview = $derived(dashboard.overview);
 
@@ -107,6 +127,16 @@
       Publication
     </button>
     <button class:active={view === "settings"} onclick={() => (view = "settings")}>Réglages</button>
+    <!--
+      Une version attend d'être installée. La pastille se contente de le dire et
+      d'ouvrir la section qui en parle : rien ne s'installe depuis la barre, où
+      un clic de trop remplacerait l'application sans qu'on l'ait demandé.
+    -->
+    {#if updater.stage === "available"}
+      <button class="update" transition:retract onclick={showUpdate}>
+        Version {updater.version} disponible
+      </button>
+    {/if}
     <span class="user">{dashboard.auth.username}</span>
     <!--
       Les deux filtres de plateforme n'agissent que sur les chiffres affichés :
@@ -212,6 +242,19 @@
     display: inline-flex;
     align-items: center;
     gap: 10px;
+  }
+  /* Discrète mais pas muette : cerclée de la couleur d'accent, sans la remplir,
+   * elle se voit dans la barre sans y prendre le premier rôle. */
+  nav button.update {
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    font-size: 0.78rem;
+    padding: 3px 10px;
+    border-radius: 999px;
+  }
+  nav button.update:hover {
+    background: var(--surface-2);
+    color: var(--accent);
   }
   .user {
     margin-left: auto;

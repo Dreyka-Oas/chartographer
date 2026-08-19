@@ -5,7 +5,7 @@ import { foldSeriesTail, stackedProjectsOption, stackValues } from "./multiserie
 import { revenueOption } from "./revenue";
 import { sparklinePath } from "./sparkline";
 import { splitOption } from "./split";
-import { DARK, dayAxis, dayTooltipHtml, monthAxis } from "./theme";
+import { DARK, dayAxis, dayTooltipHtml, escapeHtml, monthAxis } from "./theme";
 import { timelineOption } from "./timeline";
 import { countryTooltipHtml, fillZoom, MAP_ASPECT, worldMapOption } from "./worldmap";
 
@@ -324,6 +324,49 @@ describe("cellTooltipHtml", () => {
     const html = cellTooltipHtml("fabric", "1.21", 1200);
     expect(html).toContain("fabric · 1.21");
     expect(html).not.toContain("série");
+  });
+});
+
+/**
+ * Les infobulles sont du HTML monté à la main, et tout ce qu'elles nomment vient
+ * du réseau : titre de mod, nom de chargeur, code pays. Un seul chevron qui
+ * passe, et le fragment devient une balise.
+ */
+describe("échappement des textes relevés", () => {
+  it("neutralise les caractères qui ouvriraient une balise", () => {
+    expect(escapeHtml(`<img src=x onerror="alert(1)">`)).toBe(
+      "&lt;img src=x onerror=&quot;alert(1)&quot;&gt;",
+    );
+    expect(escapeHtml("a & b")).toBe("a &amp; b");
+    expect(escapeHtml("l'un")).toBe("l&#39;un");
+    expect(escapeHtml("rien à signaler")).toBe("rien à signaler");
+  });
+
+  it("échappe le nom d'un mod dans l'infobulle d'un axe de jours", () => {
+    const html = dayTooltipHtml([
+      { axisValue: "2026-08-10", seriesName: "<script>alert(1)</script>", value: 12 },
+    ]);
+    expect(html).not.toContain("<script>");
+    expect(html).toContain("&lt;script&gt;");
+  });
+
+  it("échappe le chargeur et la version de jeu", () => {
+    const html = cellTooltipHtml("<b>fabric", "1.21\"><script>", 10);
+    expect(html).toContain("&lt;b&gt;fabric");
+    expect(html).not.toContain("<script>");
+  });
+
+  it("échappe un code pays que la liste ne reconnaît pas", () => {
+    const html = countryTooltipHtml("<img onerror=1>", 5, 10);
+    expect(html).not.toContain("<img");
+    expect(html).toContain("&lt;img");
+  });
+
+  it("laisse passer le marqueur, qui vient d'ECharts et non du réseau", () => {
+    const html = dayTooltipHtml([
+      { axisValue: "2026-08-10", seriesName: "Mod", value: 3, marker: "<span></span>" },
+    ]);
+    expect(html).toContain("<span></span>");
   });
 });
 

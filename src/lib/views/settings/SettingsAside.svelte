@@ -10,6 +10,7 @@
     { id: "synchronisation", label: "Synchronisation" },
     { id: "curseforge", label: "CurseForge" },
     { id: "affichage", label: "Affichage" },
+    { id: "mises-a-jour", label: "Mises à jour" },
   ];
 
   /**

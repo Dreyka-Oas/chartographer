@@ -24,6 +24,11 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        // Les deux vont ensemble : l'un relève et installe la mise à jour,
+        // l'autre relance l'application une fois l'installateur passé. Sans le
+        // second, il faudrait fermer et rouvrir à la main.
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let data_dir = commands::data_dir(app.handle());
             std::fs::create_dir_all(&data_dir).ok();

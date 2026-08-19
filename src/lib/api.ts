@@ -40,7 +40,15 @@ export const api = {
     rangeDays: number,
     currency?: string,
     autoSyncMinutes?: number,
-  ) => invoke<void>("save_settings", { curseforgeUsername, rangeDays, currency, autoSyncMinutes }),
+    autoUpdate?: boolean,
+  ) =>
+    invoke<void>("save_settings", {
+      curseforgeUsername,
+      rangeDays,
+      currency,
+      autoSyncMinutes,
+      autoUpdate,
+    }),
   refreshExchangeRate: () => invoke<CurrencyView>("refresh_exchange_rate"),
   syncNow: () => invoke<SyncReport[]>("sync_now"),
   /** Jalons posés par le cycle en cours, étape après étape. */

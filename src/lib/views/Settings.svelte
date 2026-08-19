@@ -18,9 +18,13 @@
   import SettingsAside from "./settings/SettingsAside.svelte";
   import StatusHint from "./settings/StatusHint.svelte";
   import SyncPanel from "./settings/SyncPanel.svelte";
+  import UpdatePanel from "./settings/UpdatePanel.svelte";
 
-  /** Les trois valeurs que cette page modifie. Le reste ne fait que s'afficher. */
-  type Editable = Pick<Settings, "range_days" | "currency" | "auto_sync_minutes">;
+  /** Les valeurs que cette page modifie. Le reste ne fait que s'afficher. */
+  type Editable = Pick<
+    Settings,
+    "range_days" | "currency" | "auto_sync_minutes" | "auto_update"
+  >;
 
   const BLANK: Settings = {
     curseforge_username: null,
@@ -28,6 +32,7 @@
     currency: "USD",
     auto_sync_minutes: 10,
     curseforge_token_ready: false,
+    auto_update: true,
   };
   let saved = $state<Settings>({ ...BLANK });
   let draft = $state<Settings>({ ...BLANK });
@@ -74,6 +79,7 @@
       range_days: value.range_days,
       currency: value.currency,
       auto_sync_minutes: value.auto_sync_minutes,
+      auto_update: value.auto_update,
     };
   }
 
@@ -93,14 +99,16 @@
       minutes >= 10 &&
       minutes <= 1440 &&
       typeof value.currency === "string" &&
-      value.currency.length === 3
+      value.currency.length === 3 &&
+      typeof value.auto_update === "boolean"
     );
   }
 
   const same = (a: Editable, b: Editable) =>
     a.range_days === b.range_days &&
     a.currency === b.currency &&
-    a.auto_sync_minutes === b.auto_sync_minutes;
+    a.auto_sync_minutes === b.auto_sync_minutes &&
+    a.auto_update === b.auto_update;
 
   /** Écrit le brouillon dès qu'il s'écarte de ce qui est sur le disque. */
   $effect(() => {
@@ -125,6 +133,7 @@
         next.range_days,
         next.currency,
         next.auto_sync_minutes,
+        next.auto_update,
       );
       written = next;
       saved = { ...saved, ...next };
@@ -162,6 +171,7 @@
     <SyncPanel />
     <CursePanel ready={saved.curseforge_token_ready} onready={tokenReady} />
     <DisplayPanel {draft} />
+    <UpdatePanel {draft} />
   </div>
 </div>
 

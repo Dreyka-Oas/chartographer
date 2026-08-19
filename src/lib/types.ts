@@ -190,6 +190,8 @@ export interface Settings {
   /** Vrai quand le jeton d'envoi CurseForge a été relevé. Le jeton lui-même
    * ne quitte jamais l'application. */
   curseforge_token_ready: boolean;
+  /** Recherche d'une nouvelle version au démarrage. */
+  auto_update: boolean;
 }
 
 /** Devise d'affichage et taux appliqué aux montants, tous reçus en dollars. */

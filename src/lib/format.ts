@@ -114,6 +114,26 @@ export function formatAge(ms: number | null): string {
   return `il y a ${Math.floor(hours / 24)} j`;
 }
 
+/**
+ * Taille d'un fichier en clair : `4,2 Mo`.
+ *
+ * Les paliers sont ceux du système décimal, comme les affiche Windows pour un
+ * téléchargement : mille octets par unité, pas mille vingt-quatre. Un chiffre
+ * après la virgule suffit — la taille sert à jauger l'attente, pas à compter.
+ */
+export function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes < 0) return "—";
+  const units = ["o", "ko", "Mo", "Go"];
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1000 && unit < units.length - 1) {
+    value /= 1000;
+    unit += 1;
+  }
+  const digits = unit === 0 ? 0 : 1;
+  return `${value.toFixed(digits).replace(".", ",")} ${units[unit]}`;
+}
+
 export function countryLabel(code: string): string {
   if (code === "??") return "Inconnu";
   try {

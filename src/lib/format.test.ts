@@ -4,6 +4,7 @@ import {
   countryLabel,
   deltaPercent,
   formatAge,
+  formatBytes,
   formatDay,
   formatDayLong,
   formatMonth,
@@ -73,6 +74,21 @@ describe("lastDayOfMonth", () => {
 describe("formatRange", () => {
   it("décrit une fenêtre bornes incluses", () => {
     expect(formatRange("2026-08-01", "2026-08-31")).toBe("1 août → 31 août 2026");
+  });
+});
+
+describe("formatBytes", () => {
+  it("monte d'unité par milliers", () => {
+    expect(formatBytes(0)).toBe("0 o");
+    expect(formatBytes(999)).toBe("999 o");
+    expect(formatBytes(1000)).toBe("1,0 ko");
+    expect(formatBytes(4_200_000)).toBe("4,2 Mo");
+    expect(formatBytes(2_500_000_000)).toBe("2,5 Go");
+  });
+
+  it("refuse ce qui n'est pas une taille", () => {
+    expect(formatBytes(-1)).toBe("—");
+    expect(formatBytes(Number.NaN)).toBe("—");
   });
 });
 

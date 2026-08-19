@@ -160,6 +160,7 @@ pub struct SettingsView {
     pub currency: String,
     pub auto_sync_minutes: i64,
     pub curseforge_token_ready: bool,
+    pub auto_update: bool,
 }
 
 #[tauri::command]
@@ -171,6 +172,7 @@ pub fn get_settings(state: State<'_, AppState>) -> SettingsView {
         currency: settings.currency,
         auto_sync_minutes: config::clamp_auto_sync(settings.auto_sync_minutes),
         curseforge_token_ready: settings.curseforge_upload_token.is_some(),
+        auto_update: settings.auto_update,
     }
 }
 
@@ -181,6 +183,7 @@ pub fn save_settings(
     range_days: i64,
     currency: Option<String>,
     auto_sync_minutes: Option<i64>,
+    auto_update: Option<bool>,
 ) -> Result<()> {
     // Le jeton d'envoi est relevé par l'application, jamais saisi : on garde
     // celui qui existe déjà plutôt que de l'écraser au premier enregistrement.
@@ -198,6 +201,7 @@ pub fn save_settings(
             auto_sync_minutes.unwrap_or(previous.auto_sync_minutes),
         ),
         curseforge_upload_token: previous.curseforge_upload_token,
+        auto_update: auto_update.unwrap_or(previous.auto_update),
     };
     config::save_settings(&state.data_dir, &settings)
 }
@@ -229,6 +233,11 @@ pub fn day_report(
 /// dans ce cas, il retombe sur les quatre-vingt-dix jours d'avant ce réglage,
 /// sans ambiguïté possible avec « toute l'histoire antérieure » puisque
 /// celle-ci passe désormais par `scope: "all"`.
+// Une commande Tauri reçoit ses paramètres à plat : les nommer un par un est
+// ce qui rend l'appel lisible depuis la webview. Les regrouper dans une
+// structure ne ferait que déplacer la liste, et il faudrait la tenir des deux
+// côtés.
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub fn day_rankings(
     state: State<'_, AppState>,
@@ -1519,7 +1528,7 @@ pub async fn collect_curseforge(
     // premier relevé de la liste elle-même.
     let known = state
         .store
-        .with(|conn| crate::store::followers::first_survey(conn))?
+        .with(crate::store::followers::first_survey)?
         .is_some();
     let followers_fresh = known
         && state

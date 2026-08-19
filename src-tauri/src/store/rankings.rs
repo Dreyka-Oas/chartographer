@@ -223,6 +223,10 @@ fn rank_against_pool(
 ///   une fois acquis ne bouge plus jamais. `Sliding` regarde les
 ///   `window_days` journées qui précèdent ; `Retrospective`, sans borne
 ///   basse — c'est la même fenêtre, simplement non bornée.
+// Les cinq derniers paramètres sont les cinq axes du classement, indépendants
+// les uns des autres. Une structure qui les rassemblerait n'aurait pas d'autre
+// raison d'être que de raccourcir cette signature.
+#[allow(clippy::too_many_arguments)]
 pub fn day_rankings(
     conn: &Connection,
     from: &str,

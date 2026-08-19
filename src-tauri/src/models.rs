@@ -172,17 +172,12 @@ pub struct DayRankings {
 ///
 /// La métrique et la plateforme qui l'alimente sont deux questions
 /// indépendantes : voir `RankSource`, qui porte la seconde.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum RankBy {
+    #[default]
     Downloads,
     Revenue,
-}
-
-impl Default for RankBy {
-    fn default() -> Self {
-        Self::Downloads
-    }
 }
 
 /// Quelle plateforme alimente la métrique choisie par `RankBy`.
@@ -193,19 +188,14 @@ impl Default for RankBy {
 /// masquée ne rend rien plutôt qu'un rang bâti sur des zéros — ce réglage
 /// choisit sur quoi classer *parmi ce qui est visible*, il ne remplace pas
 /// ce filtre.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum RankSource {
     /// Les deux plateformes additionnées.
+    #[default]
     Both,
     Modrinth,
     CurseForge,
-}
-
-impl Default for RankSource {
-    fn default() -> Self {
-        Self::Both
-    }
 }
 
 /// À quoi une journée se compare pour obtenir son rang.
@@ -218,10 +208,11 @@ impl Default for RankSource {
 /// journée n'y est jugée que sur celles qui la précèdent, si bien qu'un rang
 /// une fois acquis ne bouge plus jamais — `Sliding` sur les `window_days`
 /// journées qui précèdent, `Retrospective` sans borne basse.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum RankScope {
     /// Aux `window_days` journées qui précèdent, elle comprise.
+    #[default]
     Sliding,
     /// À tout ce qui précède, elle comprise, sans borne basse.
     Retrospective,
@@ -230,12 +221,6 @@ pub enum RankScope {
     All,
     /// Aux autres journées de la période affichée, toutes comparées entre elles.
     Period,
-}
-
-impl Default for RankScope {
-    fn default() -> Self {
-        Self::Sliding
-    }
 }
 
 #[derive(Debug, Clone, Serialize)]

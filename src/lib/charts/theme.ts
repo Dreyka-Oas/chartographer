@@ -83,6 +83,23 @@ export interface DayTooltipOptions {
  * viennent des plateformes, mais elles finissent dans un attribut HTML monté à
  * la main, et rien ne garantit leur forme.
  */
+/**
+ * Texte rendu inoffensif dans du HTML monté à la main.
+ *
+ * Les noms de séries sont des titres de mods, relevés sur les deux
+ * plateformes. Ils finissent dans le corps d'un tooltip ECharts, qui rend du
+ * HTML : un titre contenant `<img onerror=…>` s'exécuterait. Rien de tel n'a
+ * été vu, mais le texte vient du réseau, et c'est la seule raison qui compte.
+ */
+export function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function iconTag(url: string | null | undefined): string {
   const size = "width:14px;height:14px;vertical-align:-3px;margin-right:4px";
   if (typeof url !== "string" || !/^https?:\/\/[^"'<>\s]+$/.test(url)) {
@@ -133,8 +150,11 @@ export function dayTooltipHtml(params: AxisParam[], options: DayTooltipOptions =
     const value = ownValue(entry);
     if (Number.isFinite(value)) sum += value;
     const amount = Number.isFinite(value) ? format(value) : "—";
-    const logo = icon ? iconTag(icon(String(entry.seriesName ?? ""))) : "";
-    return `${entry.marker ?? ""} ${logo}${entry.seriesName ?? ""} <b>${amount}</b>`;
+    const name = String(entry.seriesName ?? "");
+    const logo = icon ? iconTag(icon(name)) : "";
+    // `marker` est un fragment forgé par ECharts, pas une valeur relevée : il
+    // reste tel quel. Le nom du mod, lui, vient des plateformes.
+    return `${entry.marker ?? ""} ${logo}${escapeHtml(name)} <b>${amount}</b>`;
   });
   // Plusieurs séries : la question qui vient d'abord est « combien ce jour-là,
   // en tout ». On la met au pied, séparée du détail par un filet.

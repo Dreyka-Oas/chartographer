@@ -1,6 +1,6 @@
 import { compactNumber, countryLabel } from "../format";
 import type { CountryTotal } from "../types";
-import { DARK, tooltip, type Palette } from "./theme";
+import { DARK, escapeHtml, tooltip, type Palette } from "./theme";
 
 /**
  * Infobulle d'un pays. Le format par défaut d'ECharts nomme la série, qui n'en a
@@ -8,7 +8,9 @@ import { DARK, tooltip, type Palette } from "./theme";
  * lettres et son compte, et on l'annonce même pour un pays sans relevé.
  */
 export function countryTooltipHtml(name: string, value: number, total: number): string {
-  const label = countryLabel(name);
+  // Le code pays vient du relevé, et `countryLabel` le rend tel quel quand il
+  // ne le reconnaît pas : il finit donc dans le HTML sans être passé nulle part.
+  const label = escapeHtml(countryLabel(name));
   if (!Number.isFinite(value) || value <= 0) {
     return `<b>${label}</b><br>aucun téléchargement relevé`;
   }

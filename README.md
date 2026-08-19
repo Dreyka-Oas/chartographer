@@ -22,7 +22,24 @@ Les projets sont découverts automatiquement. Aucun identifiant à saisir à la 
 
 ## Installation
 
-Des installeurs `.deb`, `.rpm` et `.exe` sont publiés dans les [Releases](../../releases).
+Des installeurs `.deb`, `.rpm`, `.AppImage` et `.exe` sont publiés dans les [Releases](../../releases).
+
+## Mises à jour
+
+Une fois installée, l'application se tient à jour toute seule. Au démarrage, elle demande à GitHub s'il existe une version plus récente ; si oui, une pastille paraît dans la barre du haut et la section **Réglages → Mises à jour** propose de l'installer. Rien ne se télécharge ni ne s'installe sans ce clic, et la recherche au démarrage se coupe depuis la même section.
+
+Chaque archive est signée avec la clé du projet au moment de la publication, et vérifiée par l'application avant d'être installée : un fichier qui n'a pas été signé avec cette clé est refusé, quelle que soit sa provenance. La clé publique est inscrite dans `src-tauri/tauri.conf.json` ; la clé privée ne vit que dans l'environnement GitHub `release`, dont la règle de déploiement n'accepte que les tags `v*`.
+
+Le `.deb` et le `.rpm` ne se mettent pas à jour : leurs formats passent par le gestionnaire de paquets du système. Sur Linux, c'est l'AppImage qui se remplace en place.
+
+### Publier une version
+
+```bash
+node scripts/check-version.mjs 0.2.0   # écrit la version dans les trois fichiers
+git commit -am "v0.2.0" && git tag v0.2.0 && git push --follow-tags
+```
+
+Le workflow `release` construit les installeurs sur Linux et Windows, les signe, publie `latest.json` à côté d'eux, et ne sort la release du brouillon qu'une fois les deux plateformes abouties.
 
 ## Configuration
 
@@ -48,6 +65,7 @@ Prérequis : Node 24, Rust 1.95, et les dépendances système Tauri v2 pour ta p
 ```bash
 npm run check          # svelte-check
 npm test               # vitest
+npm run version:check  # les trois fichiers de version doivent concorder
 cargo test --manifest-path src-tauri/Cargo.toml
 cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
 ```
@@ -68,6 +86,8 @@ src/            interface Svelte 5 + ECharts
 ```
 
 L'interface suit le thème clair ou sombre du système, avec un bouton pour forcer l'un ou l'autre.
+
+La webview tourne sous une politique de sécurité de contenu déclarée dans `tauri.conf.json` : aucun script distant, et les seules images extérieures admises sont les logos de mods servis par `cdn.modrinth.com` et `media.forgecdn.net`. Les styles en ligne restent autorisés — Svelte en pose sur les éléments qu'il anime.
 
 Le design complet est dans [docs/superpowers/specs/2026-08-11-chartographer-design.md](docs/superpowers/specs/2026-08-11-chartographer-design.md).
 

@@ -106,6 +106,12 @@ pub async fn connect(state: State<'_, AppState>, token: String) -> Result<AuthSt
 #[tauri::command]
 pub fn logout(state: State<'_, AppState>) -> Result<AuthStatus> {
     config::clear_session(&state.data_dir)?;
+    // Le jeton d'envoi CurseForge part avec le reste. Le laisser derriere
+    // signifierait qu'apres s'etre deconnecte, l'application garde de quoi
+    // publier des fichiers sur le compte — ce n'est pas ce que « se
+    // deconnecter » veut dire. Il se releve tout seul a la prochaine visite
+    // du tableau de bord.
+    crate::secrets::clear(crate::secrets::CURSEFORGE_UPLOAD_TOKEN)?;
     Ok(status_of(&state))
 }
 

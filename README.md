@@ -49,7 +49,11 @@ L'écran d'accueil ouvre directement [modrinth.com/settings/pats](https://modrin
 
 `Read user data` · `Read notifications` · `Read payouts` · `Access analytics` · `Read projects` · `Read versions`
 
-Colle-le, c'est terminé. Le token est validé auprès de Modrinth avant d'être enregistré dans `session.json`, dans le dossier de données applicatif. Il ne quitte jamais le processus Rust et n'est jamais transmis à l'interface. Se déconnecter supprime le fichier.
+Colle-le, c'est terminé. Le token est validé auprès de Modrinth avant d'être confié au **trousseau du système** — le gestionnaire d'identifiants sous Windows, le service de secrets sous Linux — qui le chiffre avec les identifiants de ta session. Il ne quitte jamais le processus Rust et n'est jamais transmis à l'interface.
+
+Aucun jeton n'est écrit dans le dossier de données : `session.json` ne garde que le pseudo et la date. Une installation antérieure qui les y avait laissés les voit passer au trousseau au premier démarrage, et le fichier est réécrit sans eux. Si le trousseau ne répond pas, rien n'est écrit en clair en repli — l'application le dit et redemande le jeton, plutôt que de reposer le secret sur le disque.
+
+Se déconnecter efface les deux jetons, celui de Modrinth comme celui d'envoi CurseForge.
 
 **CurseForge ne demande rien.** Le pseudo auteur est retrouvé automatiquement en interrogeant CFWidget avec tes slugs Modrinth. Un champ de réglage permet de le corriger dans le cas improbable où la détection échoue.
 

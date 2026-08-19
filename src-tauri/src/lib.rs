@@ -9,6 +9,7 @@ pub mod providers;
 pub mod publish;
 pub mod publish_api;
 pub mod scrape;
+pub mod secrets;
 pub mod store;
 pub mod sync;
 

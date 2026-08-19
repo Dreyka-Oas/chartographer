@@ -71,10 +71,39 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ github.ref_name }}
     steps:
+      # Sur un brouillon, tauri-action ne connait pas encore l'adresse publique
+      # des fichiers : il inscrit dans `latest.json` l'URL de l'API GitHub, qui
+      # ne rend le binaire qu'a qui demande `Accept: application/octet-stream`.
+      # L'updater ne le demande pas — il recevrait du JSON, et la verification
+      # de signature echouerait. On recrit donc les adresses en liens de
+      # telechargement avant de publier, tant que rien n'est encore visible.
+      - name: Recrire les adresses de latest.json
+        run: |
+          set -euo pipefail
+          gh release download "$TAG" --pattern latest.json --output latest.json
+          # `releases/tags/{tag}` ignore les brouillons : on parcourt la liste,
+          # qui les contient, et on retient celui qui porte ce tag.
+          gh api "repos/$GH_REPO/releases" --paginate \
+            --jq ".[] | select(.tag_name == \"$TAG\") | .assets[] | \"\(.id)\t\(.name)\"" > assets.tsv
+          test -s assets.tsv
+          while IFS=$'\t' read -r id name; do
+            encoded=$(jq -rn --arg n "$name" '$n|@uri')
+            sed -i \
+              "s#https://api.github.com/repos/$GH_REPO/releases/assets/$id#https://github.com/$GH_REPO/releases/download/$TAG/$encoded#g" \
+              latest.json
+          done < assets.tsv
+          if grep -q 'api.github.com' latest.json; then
+            echo "Des adresses d'API subsistent dans latest.json :" >&2
+            cat latest.json >&2
+            exit 1
+          fi
+          cat latest.json
+          gh release upload "$TAG" latest.json --clobber
+
       - name: Publier la release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
-          TAG: ${{ github.ref_name }}
         run: gh release edit "$TAG" --draft=false --latest

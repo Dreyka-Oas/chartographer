@@ -350,11 +350,13 @@
     background: var(--surface-2);
     color: var(--text);
   }
+  /* Le mois s'écrit sans majuscule, comme dans le sélecteur posé juste à côté :
+   * « Juil. 2026 » d'un côté et « juil. 2026 » de l'autre, pour la même donnée,
+   * se voyait. Le français ne capitalise pas les noms de mois. */
   .title {
     font-size: 0.84rem;
     font-weight: 600;
     color: var(--text);
-    text-transform: capitalize;
   }
   .weekdays {
     display: grid;

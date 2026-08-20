@@ -288,6 +288,28 @@ describe("splitOption", () => {
     ]);
     expect(option.yAxis.data[option.yAxis.data.length - 1]).toBe("Gros");
   });
+
+  /*
+   * Deux garde-fous éprouvés sur une liste longue aux titres longs : sans le
+   * premier, ECharts n'écrivait qu'un nom sur deux et la moitié des barres ne
+   * se rattachait à aucun mod ; sans le second, `containLabel` élargissait la
+   * marge jusqu'au plus long titre, ne laissant que des traits à la place des
+   * barres.
+   */
+  it("nomme chaque barre et borne la largeur du nom", () => {
+    const option = splitOption(
+      Array.from({ length: 15 }, (_, i) =>
+        project({
+          key: `k${i}`,
+          title: i === 0 ? "Un titre démesurément long pour un mod de Minecraft" : `Mod ${i}`,
+          modrinth_downloads: 1000 - i * 10,
+        }),
+      ),
+    );
+    expect(option.yAxis.axisLabel.interval).toBe(0);
+    expect(option.yAxis.axisLabel.overflow).toBe("truncate");
+    expect(option.yAxis.axisLabel.width).toBeLessThanOrEqual(160);
+  });
 });
 
 describe("heatmapOption", () => {

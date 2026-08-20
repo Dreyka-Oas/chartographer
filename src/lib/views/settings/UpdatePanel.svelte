@@ -33,6 +33,7 @@
     name="Version installée"
     desc="Les nouvelles versions sont publiées sur GitHub, signées, et vérifiées par l'application avant d'être installées : un fichier qui n'a pas été signé avec la bonne clé est refusé."
     {note}
+    noteTone={updater.stage === "error" ? "error" : "plain"}
   >
     {#snippet control()}
       <span class="stg-value">{updater.current ?? "…"}</span>

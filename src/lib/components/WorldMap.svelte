@@ -57,11 +57,19 @@
     worldMapOption(countries, palette(theme.dark), fillZoom(width, height)),
   );
   const top = $derived(countries.filter((c) => c.country !== "??").slice(0, 6));
+  /** Aucun pays situé : la carte n'aurait qu'une échelle graduée de zéro à un. */
+  const empty = $derived(top.length === 0);
 </script>
 
-<div class="canvas" bind:clientWidth={width} bind:clientHeight={height}>
-  <Chart {option} height="fill" />
-</div>
+<!-- Une carte sans un seul pays coloré ne dit rien, et son échelle graduée
+     « 0 — 1 » laisse croire à un relevé plutôt qu'à son absence. -->
+{#if empty}
+  <p class="empty">Aucune origine relevée. Modrinth les publie une fois les téléchargements comptés.</p>
+{:else}
+  <div class="canvas" bind:clientWidth={width} bind:clientHeight={height}>
+    <Chart {option} height="fill" />
+  </div>
+{/if}
 
 <div class="side">
   <ul>
@@ -83,6 +91,13 @@
     min-height: 220px;
     display: flex;
     flex-direction: column;
+  }
+  .empty {
+    flex: 1;
+    color: var(--text-dim);
+    font-size: 0.86rem;
+    margin: 0;
+    padding: 8px 0;
   }
   .side {
     /* La liste garde sa taille : c'est la carte au-dessus qui absorbe le reste. */

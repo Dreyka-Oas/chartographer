@@ -22,7 +22,29 @@ export function splitOption(projects: ProjectSummary[], p: Palette = DARK) {
     tooltip: { trigger: "axis", axisPointer: { type: "shadow" }, ...tooltip(p) },
     legend: { data: ["Modrinth", "CurseForge"], textStyle: { color: p.textDim }, top: 0 },
     xAxis: valueAxis(p),
-    yAxis: { type: "category", data: rows.map((r) => r.title), ...axisStyle(p) },
+    /*
+     * Le nom du mod est borné. `containLabel` élargit la marge jusqu'à contenir
+     * le plus long : un titre de soixante caractères prenait alors les trois
+     * quarts du panneau, et les barres se réduisaient à des traits.
+     */
+    yAxis: {
+      type: "category",
+      data: rows.map((r) => r.title),
+      ...axisStyle(p),
+      /*
+       * Chaque barre porte son nom. Serré, ECharts n'en écrivait qu'un sur
+       * deux : la moitié des barres n'était rattachée à aucun mod, ce qui les
+       * rendait illisibles plutôt que compactes.
+       */
+      axisLabel: {
+        color: p.textDim,
+        interval: 0,
+        fontSize: 11,
+        width: 130,
+        overflow: "truncate",
+        ellipsis: "…",
+      },
+    },
     series: [
       {
         name: "Modrinth",

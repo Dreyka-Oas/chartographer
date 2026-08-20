@@ -15,6 +15,7 @@
     name,
     desc = "",
     note = null,
+    noteTone = "plain",
     control,
   }: {
     name: string;
@@ -25,6 +26,12 @@
      * son arrivée ne pousse rien.
      */
     note?: string | null;
+    /**
+     * Un échec se voit. Écrite du même gris que l'explication au-dessus, une
+     * signature refusée se lisait comme une note ordinaire — c'est pourtant le
+     * seul message de ce panneau qui demande une réaction.
+     */
+    noteTone?: "plain" | "error";
     control?: Snippet;
   } = $props();
 </script>
@@ -33,9 +40,16 @@
   <div class="stg-text">
     <span class="stg-name">{name}</span>
     {#if desc}<span class="stg-desc">{desc}</span>{/if}
-    {#if note !== null}<span class="stg-note">{note}</span>{/if}
+    {#if note !== null}<span class="stg-note" class:error={noteTone === "error"}>{note}</span>{/if}
   </div>
   {#if control}
     <div class="stg-control">{@render control()}</div>
   {/if}
 </div>
+
+<style>
+  /* `.stg-note` vient de `app.css` ; seule la teinte change ici. */
+  .stg-note.error {
+    color: var(--error);
+  }
+</style>

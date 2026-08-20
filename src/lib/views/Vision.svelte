@@ -65,7 +65,9 @@
   -->
   {#if dashboard.platforms.curseforge && overview.curseforge_history_days < 2}
     <p class="notice">
-      L'historique CurseForge ne compte que {overview.curseforge_history_days} jour pour l'instant.
+      {overview.curseforge_history_days === 0
+        ? "L'historique CurseForge est encore vide : la courbe se construira au fil des relevés."
+        : "L'historique CurseForge ne compte qu'une seule journée pour l'instant."}
       <Hint
         text="CurseForge n'expose aucun historique public : Chartographer va le chercher sur ton tableau de bord auteur, à chaque synchronisation, et reconstruit les journées en comparant deux relevés. Si ce chiffre ne monte pas, ta session CurseForge a sans doute expiré : les réglages proposent de te reconnecter."
       />
@@ -204,7 +206,10 @@
      * trois : au-delà les courbes deviennent illisibles et la dernière rangée
      * laisse d'autant plus de trous.
      */
-    grid-template-columns: 1fr;
+    /* `minmax(0, …)` et non `1fr` seul : le minimum implicite d'une piste est
+     * la largeur de son contenu, et un graphique la poussait au-delà de la
+     * fenêtre — la carte débordait sur une fenêtre étroite. */
+    grid-template-columns: minmax(0, 1fr);
     /*
      * Hauteur commune et bornée : le contenu s'étire pour la remplir, et une
      * liste plus longue défile chez elle au lieu d'étirer toute la rangée.

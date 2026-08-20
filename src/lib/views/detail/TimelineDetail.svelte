@@ -57,8 +57,8 @@
 
 <DetailShell
   title="Téléchargements par jour"
-  subtitle="{overview.days.length} jours · {active.length} projets actifs{folded > 0
-    ? ` · les ${folded} plus petits regroupés en une courbe`
+  subtitle="{overview.days.length} jours · {active.length} mods{folded > 0
+    ? ` · ${folded} regroupés en une courbe`
     : ''}"
 >
   {#snippet actions()}
@@ -88,7 +88,14 @@
         value: compactNumber(best.total),
         hint: best.day ? formatDay(best.day) : "—",
       },
-      { label: "Mods actifs", value: String(series.length), hint: "au moins un téléchargement" },
+      {
+        // `series` compte les courbes tracées, la queue repliée comptant pour
+        // une : la carte annonçait treize mods actifs sous un sous-titre qui en
+        // disait vingt. C'est le nombre de mods qui est demandé ici.
+        label: "Mods actifs",
+        value: String(active.length),
+        hint: "au moins un téléchargement",
+      },
     ]}
   />
 

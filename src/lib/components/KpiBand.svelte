@@ -31,6 +31,18 @@
   }
 
   /**
+   * La répartition dite en toutes lettres. La barre se partage en deux moitiés
+   * quand rien n'a été relevé, mais l'écrire — « 50 % Modrinth · 50 %
+   * CurseForge » sous un total de zéro — affirmerait un partage qui n'existe
+   * pas : sur une base neuve, la phrase annonçait une répartition inventée.
+   */
+  function splitHint(modrinth: number, curseforge: number) {
+    if (modrinth + curseforge <= 0) return "aucun téléchargement relevé";
+    const part = Math.round(shareOf(modrinth, curseforge));
+    return `${part} % Modrinth · ${100 - part} % CurseForge`;
+  }
+
+  /**
    * Chaque carte porte la même lecture : le total, puis d'où il vient. La barre
    * donne la proportion d'un coup d'œil, les deux mentions donnent le compte
    * exact. Une carte sans partage possible le dit plutôt que de laisser croire
@@ -107,9 +119,7 @@
       },
       // La carte n'a pas d'écart à commenter : elle dit la proportion, ce que
       // les deux montants seuls ne donnent pas d'un coup d'œil.
-      hint: `${Math.round(shareOf(kpis.downloads_modrinth, kpis.downloads_curseforge))} % Modrinth · ${
-        100 - Math.round(shareOf(kpis.downloads_modrinth, kpis.downloads_curseforge))
-      } % CurseForge`,
+      hint: splitHint(kpis.downloads_modrinth, kpis.downloads_curseforge),
     },
     {
       label: "30 derniers jours",

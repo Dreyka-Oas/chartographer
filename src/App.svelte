@@ -206,14 +206,29 @@
 {/if}
 
 <style>
+  /*
+   * La barre se replie plutôt que de déborder. Sur une fenêtre étroite, les
+   * pastilles de plateforme sortaient de l'écran et le bouton de thème avec
+   * elles : la page entière prenait alors une barre de défilement horizontale,
+   * et rien ne disait que quelque chose manquait à droite. Repliés, les
+   * éléments passent sur une seconde ligne, où ils restent atteignables.
+   */
   nav {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: 10px;
     padding: 11px 18px;
     border-bottom: 1px solid var(--border);
     background: var(--surface);
     flex-shrink: 0;
+  }
+  /* Un onglet garde son libellé entier : comprimé, « Publication » se serait
+   * réduit à quelques lettres avant que la barre ne se replie. */
+  nav > button,
+  nav > strong,
+  nav .badges {
+    flex: none;
   }
   nav strong {
     margin-right: 14px;

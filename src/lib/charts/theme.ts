@@ -199,7 +199,14 @@ export function valueAxis(p: Palette, extra: Record<string, unknown> = {}) {
   return {
     type: "value",
     ...axisStyle(p),
-    axisLabel: { color: p.textDim, formatter: (value: number) => axisNumber(value) },
+    axisLabel: {
+      color: p.textDim,
+      // Un axe comprimé par un panneau étroit empilait ses graduations les unes
+      // sur les autres : `0 50 0000 000 0000 000`. ECharts en efface alors
+      // assez pour que celles qui restent se lisent.
+      hideOverlap: true,
+      formatter: (value: number) => axisNumber(value),
+    },
     ...extra,
   };
 }

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { getCurrentWebview } from "@tauri-apps/api/webview";
   import { api } from "../api";
+  import { BRANDS, type PlatformName } from "../components/brands";
   import Card from "../components/Card.svelte";
   import Select from "../components/Select.svelte";
   import { dashboard } from "../state.svelte";
@@ -366,7 +367,11 @@
         <div class="results">
           {#each outcomes as outcome (outcome.platform + (outcome.id ?? ""))}
             <div class="result" class:ko={!outcome.ok}>
-              <b>{outcome.platform}</b>
+              <!-- Le nom de la plateforme est écrit comme elle l'écrit
+                   elle-même : `outcome.platform` porte la clé interne, et
+                   « modrinth » en gras minuscules détonnait au milieu d'une
+                   page qui dit « Modrinth » partout ailleurs. -->
+              <b>{BRANDS[outcome.platform as PlatformName]?.label ?? outcome.platform}</b>
               <span>{outcome.detail}</span>
               {#if outcome.ok && outcome.id && outcome.platform === "modrinth"}
                 <button class="link" onclick={() => undo(outcome)} disabled={removing === outcome.id}>

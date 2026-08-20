@@ -239,7 +239,11 @@
           tile.parts.curseforge,
         )} CurseForge"
       >
-        <div class="bar">
+        <!-- Rien de relevé : la barre s'éteint. Peinte à pleines couleurs sur
+             deux moitiés, elle affirmait un partage que le libellé venait de
+             démentir — et sur fond sombre, ces deux moitiés vives se lisaient
+             de loin comme des chiffres. -->
+        <div class="bar" class:blank={tile.parts.modrinth + tile.parts.curseforge <= 0}>
           <span class="modrinth" style="width:{share(tile.parts)}%"></span>
           <span class="curseforge"></span>
           <!-- Trait de partage : il dépasse en haut et en bas pour marquer la
@@ -388,6 +392,15 @@
   .bar .curseforge {
     background: var(--curseforge);
     flex: 1;
+  }
+  /* La piste reste, les couleurs et le trait de partage s'en vont : il n'y a
+   * pas de partage à montrer. */
+  .bar.blank .modrinth,
+  .bar.blank .curseforge {
+    background: transparent;
+  }
+  .bar.blank .cut {
+    display: none;
   }
   .split {
     display: flex;

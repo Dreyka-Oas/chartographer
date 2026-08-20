@@ -71,6 +71,11 @@
 
   <div class="panel wide">
     <h2>Répartition mod par mod</h2>
+    <!-- Sans un mod, la carte le dit plutôt que de poser cinq en-têtes de
+         colonnes au-dessus du vide. -->
+    {#if rows.length === 0}
+      <p class="empty">Aucun mod relevé. Lance une synchronisation.</p>
+    {:else}
     <table>
       <thead>
         <tr>
@@ -109,10 +114,17 @@
         {/each}
       </tbody>
     </table>
+    {/if}
   </div>
 </DetailShell>
 
 <style>
+  .empty {
+    color: var(--text-dim);
+    font-size: 0.86rem;
+    margin: 0;
+    padding: 8px 0;
+  }
   .panel {
     background: var(--surface);
     border: 1px solid var(--border);

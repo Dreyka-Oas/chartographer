@@ -72,7 +72,12 @@
 
     <div class="panel">
       <h2>{topTitle}</h2>
-      <Chart {option} height={430} />
+      <!-- Sans pays, le graphique ne montrait qu'un axe vertical suspendu. -->
+      {#if top.length === 0}
+        <p class="empty">Aucune origine relevée pour l'instant.</p>
+      {:else}
+        <Chart {option} height={430} />
+      {/if}
     </div>
   </div>
 
@@ -91,6 +96,7 @@
         { label: "Part" },
       ]}
       rows={known}
+      empty="Aucune origine relevée. Modrinth les publie une fois les téléchargements comptés."
       key={(row) => row.country}
       maxHeight={420}
     >
@@ -175,6 +181,12 @@
     margin: 10px 0 0;
     font-size: 0.8rem;
     color: var(--warn);
+  }
+  .empty {
+    color: var(--text-dim);
+    font-size: 0.86rem;
+    margin: 0;
+    padding: 8px 0;
   }
   @media (max-width: 1100px) {
     .grid {

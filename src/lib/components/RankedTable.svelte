@@ -40,6 +40,7 @@
     maxHeight = 0,
     /** Rend les lignes cliquables ; le curseur le dit. */
     onselect,
+    empty = "Rien à classer pour l'instant.",
   }: {
     columns: Column[];
     rows: Row[];
@@ -48,9 +49,17 @@
     ranked?: boolean;
     maxHeight?: number;
     onselect?: (row: Row, index: number) => void;
+    /**
+     * Ce que le tableau dit quand il n'a aucune ligne. Sans cela, il posait ses
+     * en-têtes de colonnes au-dessus du vide.
+     */
+    empty?: string;
   } = $props();
 </script>
 
+{#if rows.length === 0}
+  <p class="empty">{empty}</p>
+{:else}
 <div
   class="scroller"
   class:capped={maxHeight > 0}
@@ -97,8 +106,15 @@
     </tbody>
   </table>
 </div>
+{/if}
 
 <style>
+  .empty {
+    color: var(--text-dim);
+    font-size: 0.86rem;
+    margin: 0;
+    padding: 8px 0;
+  }
   .scroller {
     /* La gouttière est réservée en permanence : sans elle, l'apparition de la
      * barre décalerait les colonnes d'une dizaine de pixels. */

@@ -9,11 +9,18 @@
     projects,
     onselect,
     maxHeight = 0,
+    empty = "Aucun mod relevé. Lance une synchronisation.",
   }: {
     projects: ProjectSummary[];
     onselect: (key: string) => void;
     /** Hauteur maximale avant défilement interne. `0` laisse la table s'étendre. */
     maxHeight?: number;
+    /**
+     * Ce que la table dit quand elle n'a rien à montrer. Sans cela, elle posait
+     * sa rangée d'en-têtes au-dessus du vide — six intitulés de colonnes et pas
+     * une ligne — là où les cartes voisines disent ce qui manque.
+     */
+    empty?: string;
   } = $props();
 
   type Column = "title" | "total" | "modrinth" | "curseforge" | "followers";
@@ -50,6 +57,9 @@
   }
 </script>
 
+{#if rows.length === 0}
+  <p class="empty">{empty}</p>
+{:else}
 <div class="scroller" style={maxHeight > 0 ? `max-height: ${maxHeight}px` : ""}>
   <table>
     <thead>
@@ -110,8 +120,15 @@
     </tbody>
   </table>
 </div>
+{/if}
 
 <style>
+  .empty {
+    color: var(--text-dim);
+    font-size: 0.86rem;
+    margin: 0;
+    padding: 8px 0;
+  }
   /*
    * La table défile chez elle quand on lui donne une hauteur : avec plusieurs
    * centaines de projets, la page entière ferait sinon des milliers de pixels.

@@ -130,20 +130,27 @@
 
     <div class="wide">
       <Card title="Détail par mod" subtitle="Part de chaque mod sur la fenêtre">
-        <table>
-          <thead>
-            <tr><th class="left">Mod</th><th>Revenus</th><th>Part</th></tr>
-          </thead>
-          <tbody>
-            {#each overview.revenue_by_project as row (row.key)}
-              <tr>
-                <td class="left">{row.title}</td>
-                <td>{money(row.amount)}</td>
-                <td>{formatPercent(num(row.amount), projectTotal)} %</td>
-              </tr>
-            {/each}
-          </tbody>
-        </table>
+        <!-- Sans revenu attribué, la carte le dit plutôt que de poser un
+             en-tête de tableau au-dessus de rien : sa voisine, nourrie de la
+             même donnée, l'annonçait déjà. -->
+        {#if overview.revenue_by_project.length === 0}
+          <p class="empty">Aucun revenu attribué à un mod sur cette période.</p>
+        {:else}
+          <table>
+            <thead>
+              <tr><th class="left">Mod</th><th>Revenus</th><th>Part</th></tr>
+            </thead>
+            <tbody>
+              {#each overview.revenue_by_project as row (row.key)}
+                <tr>
+                  <td class="left">{row.title}</td>
+                  <td>{money(row.amount)}</td>
+                  <td>{formatPercent(num(row.amount), projectTotal)} %</td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        {/if}
       </Card>
     </div>
   </div>

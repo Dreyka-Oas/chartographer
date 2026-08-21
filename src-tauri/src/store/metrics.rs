@@ -77,7 +77,7 @@ pub fn cf_revenue(conn: &Connection) -> Result<Vec<CfRevenueEntry>> {
 ///
 /// CurseForge ne publie aucun revenu par jour : il n'annonce qu'un solde de
 /// points, relevé à chaque passage. Deux relevés successifs suffisent pourtant
-/// à retrouver ce qui a été gagné entre eux — c'est le même procédé que pour
+/// à retrouver ce qui a été gagné entre eux, c'est le même procédé que pour
 /// les téléchargements, dont la plateforme ne donne que des cumuls.
 ///
 /// Le relevé qui précède la fenêtre est repris comme point de départ, faute de

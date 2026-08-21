@@ -30,7 +30,7 @@
         (entry) =>
           `${entry.provider} : ${
             entry.finished_at ? entry.finished_at.slice(0, 16).replace("T", " ") : "jamais"
-          }${entry.status === "ok" ? "" : ` — ${entry.detail || entry.status}`}`,
+          }${entry.status === "ok" ? "" : `, ${entry.detail || entry.status}`}`,
       )
       .join("\n"),
   );

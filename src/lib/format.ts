@@ -8,7 +8,7 @@ export function compactNumber(value: number): string {
   if (abs >= 1_000) {
     return `${(value / 1_000).toFixed(1).replace(".", ",")}${THIN_SPACE}k`;
   }
-  // Sous le millier, la valeur est écrite telle quelle — mais un montant a des
+  // Sous le millier, la valeur est écrite telle quelle, mais un montant a des
   // décimales, et `String` les sépare d'un point. La virgule est la seule
   // marque décimale employée ailleurs sur la page.
   return String(value).replace(".", ",");
@@ -19,9 +19,9 @@ export function compactNumber(value: number): string {
  *
  * Les axes n'abrègent pas. `compactNumber` arrondit à la décimale, ce qui suffit
  * pour un total isolé mais écrase les graduations d'un axe resserré : une courbe
- * d'abonnés allant de 2 620 à 2 760 affichait « 2,7 k » sur trois graduations de
+ * d'abonnés allant de 2 620 à 2 760 affichait "2,7 k" sur trois graduations de
  * suite, trois traits distincts portant le même nombre. Les milliers sont
- * séparés d'une espace fine insécable, jamais d'une virgule — elle marque la
+ * séparés d'une espace fine insécable, jamais d'une virgule, elle marque la
  * décimale partout ailleurs sur la page.
  */
 export function axisNumber(value: number): string {
@@ -155,7 +155,7 @@ export function formatAge(ms: number | null): string {
  *
  * Les paliers sont ceux du système décimal, comme les affiche Windows pour un
  * téléchargement : mille octets par unité, pas mille vingt-quatre. Un chiffre
- * après la virgule suffit — la taille sert à jauger l'attente, pas à compter.
+ * après la virgule suffit, la taille sert à jauger l'attente, pas à compter.
  */
 export function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes < 0) return "—";

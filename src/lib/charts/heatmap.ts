@@ -2,7 +2,7 @@ import { compactNumber } from "../format";
 import type { LoaderCell } from "../types";
 import { axisStyle, DARK, escapeHtml, tooltip, type Palette } from "./theme";
 
-/** Même raison que sur la carte : sans nom de série, ECharts affichait « série () »
+/** Même raison que sur la carte : sans nom de série, ECharts affichait "série ()"
  * suivi des index bruts de la case. On nomme la case et son compte. */
 export function cellTooltipHtml(loader: string, gameVersion: string, value: number): string {
   const amount = Number.isFinite(value) ? compactNumber(value) : "0";

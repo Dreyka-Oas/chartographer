@@ -13,15 +13,15 @@ const signed = (value: number) => (value > 0 ? `+${value}` : String(value));
 /**
  * Évolution du nombre d'abonnés, plateforme par plateforme.
  *
- * Deux lectures dans un seul dessin : les aires empilées portent l'effectif —
- * ce que les plateformes annoncent —, les barres portent ce que l'application
+ * Deux lectures dans un seul dessin : les aires empilées portent l'effectif,
+ * ce que les plateformes annoncent, les barres portent ce que l'application
  * a calculé elle-même, l'écart d'un jour sur l'autre. Sans elles, un compte qui
  * monte de deux sur cent cinquante ne se verrait pas ; sans les aires, on
  * perdrait de vue combien ils sont.
  *
  * L'axe des effectifs ne part pas de zéro : un compte d'abonnés bouge de
  * quelques unités sur des centaines, ramené à zéro le trait serait plat. Celui
- * des écarts, lui, est centré sur zéro — c'est la ligne qui sépare une arrivée
+ * des écarts, lui, est centré sur zéro, c'est la ligne qui sépare une arrivée
  * d'un départ.
  */
 export function followersOption(days: FollowerDay[], p: Palette = DARK) {
@@ -43,7 +43,7 @@ export function followersOption(days: FollowerDay[], p: Palette = DARK) {
 
   return {
     // Deux axes nommés, et une légende au-dessus : la marge haute par défaut ne
-    // laissait pas la place aux deux, et « abonnés » se faisait couper à
+    // laissait pas la place aux deux, et "abonnés" se faisait couper à
     // mi-hauteur, accent compris.
     grid: { ...BASE_GRID, top: 48 },
     tooltip: {

@@ -1,5 +1,5 @@
 <script lang="ts">
-  /** Section « CurseForge » : jeton d'envoi et points de collecte. */
+  /** Section "CurseForge" : jeton d'envoi et points de collecte. */
   import { api } from "../../api";
   import CurseforgePoints from "../../components/CurseforgePoints.svelte";
   import { dashboard } from "../../state.svelte";
@@ -30,7 +30,7 @@
   <h2>CurseForge</h2>
   <SettingRow
     name="Jeton d'envoi"
-    desc="Nécessaire pour publier un fichier. L'application en demande un à ton compte lors de sa première collecte, sous le nom « Chartographer », et ne l'affiche jamais. Tu peux le révoquer depuis CurseForge à tout moment."
+    desc="Nécessaire pour publier un fichier. L'application en demande un à ton compte lors de sa première collecte, sous le nom Chartographer, et ne l'affiche jamais. Tu peux le révoquer depuis CurseForge à tout moment."
   >
     {#snippet control()}
       <span class="stg-value">{ready ? "en place" : "absent"}</span>

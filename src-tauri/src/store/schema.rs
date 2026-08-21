@@ -132,7 +132,7 @@ CREATE TABLE cf_revenue (
 ///
 /// La plateforme ne dit pas depuis quand chacun suit : elle les classe du plus
 /// récent au plus ancien, sans date. On garde donc le jour où chacun est apparu
-/// et celui où on l'a vu pour la dernière fois — ce que le site ne dira jamais,
+/// et celui où on l'a vu pour la dernière fois, ce que le site ne dira jamais,
 /// mais que l'application peut constater d'un relevé à l'autre. Un abonné parti
 /// garde sa ligne : `lost_on` note le jour où il a cessé de figurer.
 const V5: &str = r#"

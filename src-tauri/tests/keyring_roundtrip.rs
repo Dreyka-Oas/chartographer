@@ -3,14 +3,14 @@
 //! Ignoré par défaut : il écrit dans le trousseau de la machine.
 //! `cargo test --test keyring_roundtrip -- --ignored --nocapture`.
 //!
-//! Les tests unitaires de `secrets` passent par un trousseau de papier — ils
+//! Les tests unitaires de `secrets` passent par un trousseau de papier, ils
 //! éprouvent les règles, pas le système. Celui-ci fait l'inverse : il ne dit
 //! rien des règles, et répond à la seule question que le papier ne peut pas
 //! trancher, à savoir si la machine garde et rend vraiment ce qu'on lui confie.
 //!
 //! Il n'emploie jamais les noms de l'application. Un test qui écrirait sous
 //! `modrinth-token` effacerait le jeton de l'installation présente sur le
-//! poste — ce n'est pas une hypothèse, c'est arrivé.
+//! poste, ce n'est pas une hypothèse, c'est arrivé.
 
 use keyring::Entry;
 

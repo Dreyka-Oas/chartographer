@@ -1,14 +1,12 @@
-# Classement des journées — plan d'implémentation
+# Classement des journées, plan d'implémentation
 
-> **Pour les agents :** SOUS-COMPÉTENCE REQUISE — utiliser `superpowers:subagent-driven-development` (recommandé) ou `superpowers:executing-plans` pour dérouler ce plan tâche par tâche. Les étapes sont cochables (`- [ ]`).
+**But :** ajouter une page "Classement des journées" qui montre, sur la période choisie, un graphique et la liste des journées avec leur date, leurs téléchargements par plateforme, leurs revenus et leur rang, rang dans la période et rang rétrospectif à quatre-vingt-dix jours, celui déjà affiché sur la page Journée.
 
-**But :** ajouter une page « Classement des journées » qui montre, sur la période choisie, un graphique et la liste des journées avec leur date, leurs téléchargements par plateforme, leurs revenus et leur rang — rang dans la période et rang rétrospectif à quatre-vingt-dix jours, celui déjà affiché sur la page Journée.
-
-**Architecture :** un nouveau module Rust `store/rankings.rs` calcule les rangs à partir de `queries::timeline`, la seule source qui sait mêler mesures quotidiennes et écarts de snapshots CurseForge. Le calcul du rang rétrospectif, aujourd'hui écrit à même `day_report`, y est extrait pour servir aux deux (aucune duplication). Côté interface, la page est une vue plein écran bâtie sur `DetailShell`, `RankedTable`, `StatRow`, `Chart` et le composant `Hint` existants — aucun de ces composants n'est recopié.
+**Architecture :** un nouveau module Rust `store/rankings.rs` calcule les rangs à partir de `queries::timeline`, la seule source qui sait mêler mesures quotidiennes et écarts de snapshots CurseForge. Le calcul du rang rétrospectif, aujourd'hui écrit à même `day_report`, y est extrait pour servir aux deux (aucune duplication). Côté interface, la page est une vue plein écran bâtie sur `DetailShell`, `RankedTable`, `StatRow`, `Chart` et le composant `Hint` existants, aucun de ces composants n'est recopié.
 
 **Pile :** Rust + Tauri 2 + rusqlite + rust_decimal côté données ; Svelte 5 (runes) + TypeScript + ECharts 6 côté interface. Tests : `cargo test` (Rust) et `vitest` (front).
 
-**Spec :** la demande, telle que formulée — « une page qui affiche un graphique / la liste des journées avec le classement et les bonnes dates », avec le même « ? » que partout ailleurs (composant partagé, pas de code dupliqué), et une vérification réelle de ce que Modrinth et CurseForge fournissent avant de déclarer quoi que ce soit impossible.
+**Spec :** la demande, telle que formulée, "une page qui affiche un graphique / la liste des journées avec le classement et les bonnes dates", avec le même "?" que partout ailleurs (composant partagé, pas de code dupliqué), et une vérification réelle de ce que Modrinth et CurseForge fournissent avant de déclarer quoi que ce soit impossible.
 
 ## Ce que les deux plateformes fournissent réellement (vérifié le 2026-08-14)
 
@@ -38,31 +36,27 @@ Conséquences, à porter dans l'interface plutôt qu'à taire :
 - Aucun `Date.now()` ni horodatage figé dans les tests.
 - Les commandes se lancent depuis `C:\Users\ipmss\chartographer` en PowerShell (le Bash de ce poste est cassé).
 
----
-
 ## Structure des fichiers
 
 **Créés**
 
-- `src-tauri/src/store/rankings.rs` — rang d'une journée parmi ses voisines, revenus par jour, et la liste classée complète. Environ 130 lignes plus ses tests.
-- `src/lib/charts/dayRanking.ts` — les deux options ECharts de la page : barres par jour et courbe du rang.
-- `src/lib/charts/dayRanking.test.ts` — tests des deux fabriques.
-- `src/lib/views/detail/DaysDetail.svelte` — la page.
+- `src-tauri/src/store/rankings.rs`, rang d'une journée parmi ses voisines, revenus par jour, et la liste classée complète. Environ 130 lignes plus ses tests.
+- `src/lib/charts/dayRanking.ts`, les deux options ECharts de la page : barres par jour et courbe du rang.
+- `src/lib/charts/dayRanking.test.ts`, tests des deux fabriques.
+- `src/lib/views/detail/DaysDetail.svelte`, la page.
 
 **Modifiés**
 
-- `src-tauri/src/store/mod.rs:1-5` — déclarer le module.
-- `src-tauri/src/models.rs` — `DayRankRow` et `DayRankings`.
-- `src-tauri/src/store/queries.rs:892-940` — `day_report` consomme `rankings::rank_within` et `rankings::revenue_by_day` au lieu de refaire les deux calculs.
-- `src-tauri/src/commands.rs` — commande `day_rankings`.
-- `src-tauri/src/lib.rs:81` — enregistrer la commande.
-- `src/lib/types.ts` — les deux interfaces miroir.
-- `src/lib/api.ts:60` — `dayRankings`.
-- `src/lib/state.svelte.ts:18-25` — `DetailView` gagne `"days"`.
-- `src/App.svelte:143-162` — brancher la vue.
-- `src/lib/views/Day.svelte:82-121` — bouton d'accès depuis le rang.
-
----
+- `src-tauri/src/store/mod.rs:1-5`, déclarer le module.
+- `src-tauri/src/models.rs`, `DayRankRow` et `DayRankings`.
+- `src-tauri/src/store/queries.rs:892-940`, `day_report` consomme `rankings::rank_within` et `rankings::revenue_by_day` au lieu de refaire les deux calculs.
+- `src-tauri/src/commands.rs`, commande `day_rankings`.
+- `src-tauri/src/lib.rs:81`, enregistrer la commande.
+- `src/lib/types.ts`, les deux interfaces miroir.
+- `src/lib/api.ts:60`, `dayRankings`.
+- `src/lib/state.svelte.ts:18-25`, `DetailView` gagne `"days"`.
+- `src/App.svelte:143-162`, brancher la vue.
+- `src/lib/views/Day.svelte:82-121`, bouton d'accès depuis le rang.
 
 ## Tâche 1 : extraire le rang et les revenus par jour dans un module dédié
 
@@ -76,7 +70,7 @@ Conséquences, à porter dans l'interface plutôt qu'à taire :
 - Produit :
   - `pub const RANK_WINDOW_DAYS: i64 = 90;`
   - `pub fn rank_within(window: &[i64], total: i64) -> Option<i64>`
-  - `pub fn revenue_by_day(conn: &Connection, from: &str, to: &str, filter: PlatformFilter) -> Result<BTreeMap<String, (Decimal, Decimal)>>` — clé : le jour ; valeur : (Modrinth, CurseForge), en dollars.
+  - `pub fn revenue_by_day(conn: &Connection, from: &str, to: &str, filter: PlatformFilter) -> Result<BTreeMap<String, (Decimal, Decimal)>>`, clé : le jour ; valeur : (Modrinth, CurseForge), en dollars.
 
 - [ ] **Étape 1 : écrire les tests qui échouent**
 
@@ -86,8 +80,8 @@ Créer `src-tauri/src/store/rankings.rs` avec ce seul contenu pour l'instant :
 //! Rang d'une journée parmi celles qui l'ont précédée.
 //!
 //! Le classement vit à part des autres requêtes parce qu'il répond à une autre
-//! question : non pas « combien », mais « était-ce un bon jour quand il s'est
-//! produit ». Il ne regarde donc jamais en avant.
+//! question : non pas "combien", mais "était-ce un bon jour quand il s'est
+//! produit". Il ne regarde donc jamais en avant.
 
 use crate::error::Result;
 use crate::models::Platform;
@@ -333,8 +327,6 @@ git add src-tauri/src/store/rankings.rs src-tauri/src/store/mod.rs src-tauri/src
 git commit -m "Rang d une journee et revenus quotidiens dans un module a part"
 ```
 
----
-
 ## Tâche 2 : la liste classée complète, côté base
 
 **Fichiers :**
@@ -477,9 +469,9 @@ fn first_day(conn: &Connection, platform: Platform) -> Result<Option<String>> {
 /// Classement des journées d'une période, `to` exclu.
 ///
 /// Chaque journée porte deux rangs, parce que deux questions différentes se
-/// posent à son sujet. Le rang sur la période répond à « où se situe-t-elle
-/// dans ce que je regarde » et change avec les dates choisies. Le rang du jour
-/// répond à « était-ce un bon jour quand il s'est produit » : il ne compare
+/// posent à son sujet. Le rang sur la période répond à "où se situe-t-elle
+/// dans ce que je regarde" et change avec les dates choisies. Le rang du jour
+/// répond à "était-ce un bon jour quand il s'est produit" : il ne compare
 /// qu'aux quatre-vingt-dix journées qui la précèdent, et rien de ce qui est
 /// arrivé ensuite ne peut plus le modifier.
 ///
@@ -555,8 +547,6 @@ Attendu : SUCCÈS, 9 tests.
 git add src-tauri/src/store/rankings.rs src-tauri/src/models.rs
 git commit -m "Classement des journees d une periode"
 ```
-
----
 
 ## Tâche 3 : exposer la commande au front
 
@@ -660,8 +650,6 @@ git add src-tauri/src/commands.rs src-tauri/src/lib.rs src/lib/types.ts src/lib/
 git commit -m "Commande day_rankings et son appel cote interface"
 ```
 
----
-
 ## Tâche 4 : les deux graphiques
 
 **Fichiers :**
@@ -671,8 +659,8 @@ git commit -m "Commande day_rankings et son appel cote interface"
 **Interfaces :**
 - Consomme : `DayRankRow` (tâche 3), `charts/theme` (`axisStyle`, `BASE_GRID`, `DARK`, `dayAxis`, `dayTooltip`, `Palette`), `components/rank` (`PODIUM`).
 - Produit :
-  - `export function dailyBarsOption(rows: DayRankRow[], p?: Palette)` — barres empilées par plateforme, les trois meilleures journées de la période marquées aux couleurs du podium.
-  - `export function rankCurveOption(rows: DayRankRow[], p?: Palette)` — la courbe du rang du jour, axe inversé pour que le premier rang soit en haut.
+  - `export function dailyBarsOption(rows: DayRankRow[], p?: Palette)`, barres empilées par plateforme, les trois meilleures journées de la période marquées aux couleurs du podium.
+  - `export function rankCurveOption(rows: DayRankRow[], p?: Palette)`, la courbe du rang du jour, axe inversé pour que le premier rang soit en haut.
 
 - [ ] **Étape 1 : écrire les tests qui échouent**
 
@@ -841,8 +829,6 @@ git add src/lib/charts/dayRanking.ts src/lib/charts/dayRanking.test.ts
 git commit -m "Graphiques du classement des journees"
 ```
 
----
-
 ## Tâche 5 : la page
 
 **Fichiers :**
@@ -853,8 +839,8 @@ git commit -m "Graphiques du classement des journees"
 - Produit : le composant `DaysDetail`, monté par `App.svelte` (tâche 6).
 
 **Points à respecter :**
-- Le `?` vient de `Hint` — aucun bouton d'aide écrit à la main.
-- Le tableau vient de `RankedTable` — aucune balise `<table>` propre à cette page. `ranked={false}` : la colonne de rang de `RankedTable` numérote les lignes affichées, alors que cette page montre deux rangs qui lui sont propres.
+- Le `?` vient de `Hint`, aucun bouton d'aide écrit à la main.
+- Le tableau vient de `RankedTable`, aucune balise `<table>` propre à cette page. `ranked={false}` : la colonne de rang de `RankedTable` numérote les lignes affichées, alors que cette page montre deux rangs qui lui sont propres.
 - `DetailShell` apporte déjà le `RangePicker` : la page se recharge quand les bornes changent.
 
 - [ ] **Étape 1 : écrire la page**
@@ -933,7 +919,7 @@ Créer `src/lib/views/detail/DaysDetail.svelte` :
   const PERIOD =
     "Rang de la journée parmi celles de la période affichée, la meilleure en tête. Changer les dates change ce rang : il ne dit rien d'autre que la place tenue dans ce qui est montré à l'écran.";
   const AT_THE_TIME =
-    "Rang de la journée parmi les quatre-vingt-dix qui la précèdent, celle-ci comprise — le rang qu'elle avait le jour où elle s'est produite. Le classement ne regarde jamais en avant, et rien de ce qui est arrivé ensuite ne peut plus le changer. Les journées sans aucun relevé sont écartées, elles flatteraient le rang.";
+    "Rang de la journée parmi les quatre-vingt-dix qui la précèdent, celle-ci comprise, le rang qu'elle avait le jour où elle s'est produite. Le classement ne regarde jamais en avant, et rien de ce qui est arrivé ensuite ne peut plus le changer. Les journées sans aucun relevé sont écartées, elles flatteraient le rang.";
   const REVENUE =
     "Modrinth relève ses revenus jour par jour. CurseForge n'en publie aucun : ce qui apparaît ici vient de l'écart entre deux soldes de points, relevés au passage seulement, si bien que la plupart des journées n'en portent aucun.";
   const coverage = $derived(
@@ -1107,7 +1093,7 @@ Créer `src/lib/views/detail/DaysDetail.svelte` :
 </style>
 ```
 
-Deux vérifications à faire en écrivant : `RankedTable` attend `cells` comme `Snippet<[Row, number]>` — n'en déclarer qu'un paramètre est permis ; et `theme.svelte.ts` expose bien `theme.dark` (le relire au besoin).
+Deux vérifications à faire en écrivant : `RankedTable` attend `cells` comme `Snippet<[Row, number]>`, n'en déclarer qu'un paramètre est permis ; et `theme.svelte.ts` expose bien `theme.dark` (le relire au besoin).
 
 - [ ] **Étape 2 : vérifier les types**
 
@@ -1120,8 +1106,6 @@ Attendu : aucune erreur nouvelle. Une erreur sur `relevés` en nom de variable e
 git add src/lib/views/detail/DaysDetail.svelte
 git commit -m "Page du classement des journees"
 ```
-
----
 
 ## Tâche 6 : brancher la page et son accès
 
@@ -1158,7 +1142,7 @@ Dans `src/App.svelte`, importer le composant à côté des autres vues de détai
   import DaysDetail from "./lib/views/detail/DaysDetail.svelte";
 ```
 
-puis, dans le bloc des vues plein écran, à la suite de `FollowersDetail` (ligne 147) — le classement ne vient pas de l'aperçu, il se relève lui-même :
+puis, dans le bloc des vues plein écran, à la suite de `FollowersDetail` (ligne 147), le classement ne vient pas de l'aperçu, il se relève lui-même :
 
 ```svelte
   {:else if dashboard.detail === "days"}
@@ -1211,14 +1195,12 @@ git add src/lib/state.svelte.ts src/App.svelte src/lib/views/Day.svelte
 git commit -m "Acces au classement depuis la page Journee"
 ```
 
----
-
 ## Tâche 7 : vérifier sur les vraies données
 
 Un test qui passe sur une base de test ne prouve rien de ce que la page affichera. Cette tâche confronte le calcul à la base réelle du poste, puis à l'application lancée.
 
 **Fichiers :**
-- Créer (hors dépôt) : `%TEMP%\claude\...\scratchpad\verif_classement.py`
+- Créer dans un dossier temporaire hors dépôt : `verif_classement.py`
 
 - [ ] **Étape 1 : recalculer le classement en dehors de l'application**
 
@@ -1256,7 +1238,7 @@ Ouvrir l'onglet Journée, cliquer sur le rang, et vérifier point par point :
 2. La meilleure journée affichée est bien celle du script.
 3. Le rang du jour de la journée d'hier est identique à celui qu'affiche la page Journée pour cette même date.
 4. Le nombre de journées record correspond.
-5. Basculer sur « Rang au fil du temps » : la courbe touche 1 aux dates records du script, et laisse un trou aux dates sans relevé.
+5. Basculer sur "Rang au fil du temps" : la courbe touche 1 aux dates records du script, et laisse un trou aux dates sans relevé.
 6. Masquer CurseForge dans la barre du haut : les totaux et les rangs se recalculent, et les journées antérieures au premier relevé Modrinth disparaissent du classement.
 7. Survoler chaque `?` : les quatre bulles s'ouvrent, tiennent dans la fenêtre, et disent bien ce que la colonne signifie.
 8. Changer la période avec le sélecteur de dates : le rang période bouge, le rang du jour ne bouge pas. C'est le point qui prouve que les deux rangs sont bien deux choses différentes.
@@ -1279,15 +1261,13 @@ git push
 
 Le dépôt est `Dreyka-Oas/chartographer` : pousser avec ce compte-là (un mauvais compte rend 404, pas 403).
 
----
-
 ## Tâche 8 : un calendrier aux couleurs de l'application
 
-Demande venue en cours d'exécution : les champs de dates ouvrent le calendrier natif de Windows, qui ignore le thème. Le dépôt a déjà tranché ce cas une fois — `src/lib/components/Select.svelte` refait le `<select>` natif pour exactement cette raison, et son en-tête l'explique. Le calendrier suit le même chemin, dans un composant unique que les trois champs de dates de l'application partagent : aucun d'eux ne redessine sa propre grille.
+Demande venue en cours d'exécution : les champs de dates ouvrent le calendrier natif de Windows, qui ignore le thème. Le dépôt a déjà tranché ce cas une fois, `src/lib/components/Select.svelte` refait le `<select>` natif pour exactement cette raison, et son en-tête l'explique. Le calendrier suit le même chemin, dans un composant unique que les trois champs de dates de l'application partagent : aucun d'eux ne redessine sa propre grille.
 
 **Fichiers :**
 - Créer : `src/lib/components/DateField.svelte`
-- Créer : `src/lib/components/calendar.ts` — la grille d'un mois, en pur calcul, testable sans DOM.
+- Créer : `src/lib/components/calendar.ts`, la grille d'un mois, en pur calcul, testable sans DOM.
 - Créer : `src/lib/components/calendar.test.ts`
 - Modifier : `src/lib/components/RangePicker.svelte:82-87` (deux champs)
 - Modifier : `src/lib/views/Day.svelte:92` (un champ)
@@ -1295,7 +1275,7 @@ Demande venue en cours d'exécution : les champs de dates ouvrent le calendrier 
 **Interfaces :**
 - Consomme : `format` (`formatDayLong`), les jetons de thème (`--surface`, `--surface-2`, `--border`, `--accent`, `--text`, `--text-dim`, `--radius-sm`, `--lift`).
 - Produit :
-  - `calendar.ts` : `export function monthGrid(month: string, weekStartsOn?: number): string[][]` — six semaines de sept jours ISO, débordements des mois voisins compris ; `export function shiftMonth(month: string, by: number): string`.
+  - `calendar.ts` : `export function monthGrid(month: string, weekStartsOn?: number): string[][]`, six semaines de sept jours ISO, débordements des mois voisins compris ; `export function shiftMonth(month: string, by: number): string`.
   - `DateField.svelte` : props `value` (`$bindable`, `YYYY-MM-DD`), `min?`, `max?`, `label?`, `onchange?`.
 
 - [ ] **Étape 1 : écrire les tests de la grille**
@@ -1379,7 +1359,7 @@ function iso(date: Date): string {
  * Les six semaines qui couvrent `month` (`YYYY-MM`), lundi en tête.
  *
  * Les cases des mois voisins sont rendues avec les autres : le composant les
- * grise, mais elles restent cliquables — c'est ainsi qu'on passe au mois suivant
+ * grise, mais elles restent cliquables, c'est ainsi qu'on passe au mois suivant
  * sans viser la flèche.
  */
 export function monthGrid(month: string, weekStartsOn = 1): string[][] {
@@ -1415,7 +1395,7 @@ Attendu : SUCCÈS, 5 tests.
 Créer `src/lib/components/DateField.svelte`. Le composant reprend point pour point les partis pris de `Select.svelte`, qu'il faut relire avant d'écrire : panneau en `position: fixed` placé d'après le bouton, repli vers le haut quand la place manque en bas, fermeture au clic extérieur, au défilement qui emporte le bouton hors de l'écran et au redimensionnement, contour en ombre intérieure plutôt qu'en bordure, animation annulée sous `prefers-reduced-motion`.
 
 Ce que le composant doit tenir :
-- Un bouton qui affiche la date choisie en toutes lettres (`formatDayLong`), ou « — » quand elle est vide.
+- Un bouton qui affiche la date choisie en toutes lettres (`formatDayLong`), ou "," quand elle est vide.
 - Un panneau : l'en-tête porte le mois et l'année, une flèche vers le mois précédent, une flèche vers le mois suivant ; puis la ligne des initiales de jours (`lu ma me je ve sa di`) ; puis la grille de `monthGrid`.
 - Les jours des mois voisins sont grisés ; le jour choisi porte la couleur d'accent ; le jour d'aujourd'hui porte un liseré ; les jours hors de `min`/`max` sont désactivés et ne réagissent pas.
 - Au clavier : `Entrée`/`Espace`/`Flèche bas` ouvrent, `Échap` ferme et rend le focus au bouton, les quatre flèches déplacent le jour actif d'un jour ou d'une semaine, `Page haut`/`Page bas` changent de mois, `Entrée` valide.
@@ -1445,25 +1425,25 @@ git commit -m "Calendrier maison aux couleurs de l application"
 
 Demande venue en cours d'exécution, après avoir vu la page. Trois reproches, tous fondés :
 
-1. **Pourquoi quatre-vingt-dix jours et pas tout l'historique ?** La fenêtre venait de la page Journée, où elle était déjà écrite en dur. Elle a une raison — comparer une journée à sa saison plutôt qu'à toute l'histoire, sans quoi un pic ancien écrase trois cents jours de suite — mais cette raison est discutable et n'a rien à faire dans le code plutôt que dans les mains de celui qui regarde.
+1. **Pourquoi quatre-vingt-dix jours et pas tout l'historique ?** La fenêtre venait de la page Journée, où elle était déjà écrite en dur. Elle a une raison, comparer une journée à sa saison plutôt qu'à toute l'histoire, sans quoi un pic ancien écrase trois cents jours de suite, mais cette raison est discutable et n'a rien à faire dans le code plutôt que dans les mains de celui qui regarde.
 2. **Le classement porte sur quoi ?** Sur le total de téléchargements du jour, plateformes visibles comprises. Rien ne le disait à l'écran, et la colonne des revenus juste à côté entretenait le doute.
 3. **Pourquoi deux colonnes de rang ?** Parce que ce sont deux questions différentes. Mais deux colonnes figées imposent les deux réponses ; un filtre laisse choisir la question.
 
 La page passe donc de deux colonnes figées à **une colonne de rang et deux filtres** : sur quoi l'on classe, et à quoi l'on compare.
 
 **Fichiers :**
-- Modifier : `src-tauri/src/store/rankings.rs` — `day_rankings` prend le critère et la fenêtre.
-- Modifier : `src-tauri/src/models.rs` — `DayRankRow` porte un seul rang.
-- Modifier : `src-tauri/src/commands.rs` — la commande transmet les deux réglages.
-- Modifier : `src/lib/types.ts`, `src/lib/api.ts` — la signature suit.
-- Modifier : `src/lib/views/detail/DaysDetail.svelte` — les deux filtres, la colonne unique, les bulles réécrites.
-- Modifier : `src/lib/charts/dayRanking.ts` — la courbe de rang suit le rang choisi.
+- Modifier : `src-tauri/src/store/rankings.rs`, `day_rankings` prend le critère et la fenêtre.
+- Modifier : `src-tauri/src/models.rs`, `DayRankRow` porte un seul rang.
+- Modifier : `src-tauri/src/commands.rs`, la commande transmet les deux réglages.
+- Modifier : `src/lib/types.ts`, `src/lib/api.ts`, la signature suit.
+- Modifier : `src/lib/views/detail/DaysDetail.svelte`, les deux filtres, la colonne unique, les bulles réécrites.
+- Modifier : `src/lib/charts/dayRanking.ts`, la courbe de rang suit le rang choisi.
 
 **Interfaces :**
 - Produit côté Rust :
   - `pub enum RankBy { Downloads, Revenue }` (sérialisé `"downloads"` / `"revenue"`)
-  - `pub fn day_rankings(conn, from, to, filter, by: RankBy, window: Option<i64>) -> Result<DayRankings>` — `window: None` compare à tout ce qui précède, `Some(n)` aux `n` journées qui précèdent, journée comprise.
-  - `DayRankRow { day, modrinth, curseforge, total, revenue, rank, compared_days }` — un seul rang, celui que les réglages ont demandé.
+  - `pub fn day_rankings(conn, from, to, filter, by: RankBy, window: Option<i64>) -> Result<DayRankings>`, `window: None` compare à tout ce qui précède, `Some(n)` aux `n` journées qui précèdent, journée comprise.
+  - `DayRankRow { day, modrinth, curseforge, total, revenue, rank, compared_days }`, un seul rang, celui que les réglages ont demandé.
 - Produit côté front : `api.dayRankings(rangeDays, from, to, platforms, by, window)`.
 
 - [ ] **Étape 1 : écrire les tests qui échouent**
@@ -1556,7 +1536,7 @@ Dans `mod tests` de `src-tauri/src/store/rankings.rs`, remplacer les tests `the_
 - [ ] **Étape 2 : lancer les tests et vérifier qu'ils échouent**
 
 Lancer : `cd C:\Users\ipmss\chartographer\src-tauri; cargo test rankings`
-Attendu : ÉCHEC de compilation — `day_rankings` prend quatre paramètres, `RankBy` n'existe pas, `rank` n'existe pas sur `DayRankRow`.
+Attendu : ÉCHEC de compilation, `day_rankings` prend quatre paramètres, `RankBy` n'existe pas, `rank` n'existe pas sur `DayRankRow`.
 
 - [ ] **Étape 3 : le critère de classement**
 
@@ -1592,7 +1572,7 @@ impl Default for RankBy {
 }
 ```
 
-Vérifier que `serde::Deserialize` est bien importé dans `models.rs` — le fichier ne dérive jusqu'ici que `Serialize`.
+Vérifier que `serde::Deserialize` est bien importé dans `models.rs`, le fichier ne dérive jusqu'ici que `Serialize`.
 
 - [ ] **Étape 4 : le classement réglable**
 
@@ -1604,7 +1584,7 @@ La fenêtre devient `Option<i64>` :
 - `Some(n)` : la comparaison porte sur les journées dont la date tombe entre `jour - (n - 1)` et `jour`, comme aujourd'hui avec `n = 90` ;
 - `None` : elle porte sur toutes les journées relevées jusqu'à ce jour compris, ce qui suppose de charger l'historique depuis l'origine (`"0000-01-01"`) plutôt que depuis `from - 89`.
 
-Le rang « sur la période affichée » disparaît en tant que colonne : il devient le cas particulier où l'appelant demande une fenêtre égale à la longueur de la période. Le front le fait en passant le nombre de jours de la fenêtre courante.
+Le rang "sur la période affichée" disparaît en tant que colonne : il devient le cas particulier où l'appelant demande une fenêtre égale à la longueur de la période. Le front le fait en passant le nombre de jours de la fenêtre courante.
 
 `RANK_WINDOW_DAYS` reste la valeur par défaut, et reste ce que `day_report` utilise : la page Journée continue d'annoncer le même rang qu'avant.
 
@@ -1615,7 +1595,7 @@ Attendu : SUCCÈS, y compris les tests de `day_report` inchangés.
 
 - [ ] **Étape 6 : la commande et le front**
 
-`day_rankings` gagne `by: Option<RankBy>` et `window_days: Option<i64>`. Absents, ils valent téléchargements et quatre-vingt-dix jours — l'appel reste valide sans réglage.
+`day_rankings` gagne `by: Option<RankBy>` et `window_days: Option<i64>`. Absents, ils valent téléchargements et quatre-vingt-dix jours, l'appel reste valide sans réglage.
 
 Côté TypeScript : `DayRankRow` perd `rank_period` et `rank_at_the_time` au profit de `rank`, `api.dayRankings` prend `by: "downloads" | "revenue"` et `windowDays: number | null`.
 
@@ -1623,16 +1603,16 @@ Côté TypeScript : `DayRankRow` perd `rank_period` et `rank_at_the_time` au pro
 
 Dans `src/lib/views/detail/DaysDetail.svelte`, deux `Select` (le composant maison, jamais un `<select>` natif) prennent place dans les actions de la coque, à côté de la bascule des graphiques :
 
-- **Classer sur** : « Téléchargements » (défaut), « Revenus ».
-- **Comparer à** : « les 90 jours précédents » (défaut), « les 30 jours précédents », « toute l'histoire antérieure », « la période affichée ».
+- **Classer sur** : "Téléchargements" (défaut), "Revenus".
+- **Comparer à** : "les 90 jours précédents" (défaut), "les 30 jours précédents", "toute l'histoire antérieure", "la période affichée".
 
-Le tableau ne montre plus qu'une colonne « Rang », suivie de « comparé à N journées ». Le titre du panneau dit en clair ce qui est classé, et sa bulle d'aide explique la différence entre les quatre fenêtres — en gardant l'avertissement sur les revenus CurseForge, qui vaut plus que jamais quand on classe dessus.
+Le tableau ne montre plus qu'une colonne "Rang", suivie de "comparé à N journées". Le titre du panneau dit en clair ce qui est classé, et sa bulle d'aide explique la différence entre les quatre fenêtres, en gardant l'avertissement sur les revenus CurseForge, qui vaut plus que jamais quand on classe dessus.
 
 Les libellés à écrire, mot pour mot :
 
 ```
 const WINDOW_HINT =
-  "À quoi chaque journée est comparée pour obtenir son rang. Sur une fenêtre glissante, une journée n'est jugée que sur celles qui la précèdent : le rang qu'elle avait le jour même, et que rien de ce qui est arrivé ensuite ne peut plus changer. Sur toute l'histoire antérieure, un pic ancien pèse sur toutes les journées qui le suivent. Sur la période affichée, le rang répond seulement à « où se situe ce jour dans ce que je regarde », et change avec les dates choisies.";
+  "À quoi chaque journée est comparée pour obtenir son rang. Sur une fenêtre glissante, une journée n'est jugée que sur celles qui la précèdent : le rang qu'elle avait le jour même, et que rien de ce qui est arrivé ensuite ne peut plus changer. Sur toute l'histoire antérieure, un pic ancien pèse sur toutes les journées qui le suivent. Sur la période affichée, le rang répond seulement à la question de savoir où se situe ce jour dans ce que je regarde, et change avec les dates choisies.";
 const BY_HINT =
   "Ce qui décide du rang. Les téléchargements comptent les deux plateformes visibles. Les revenus, eux, sont pour ainsi dire ceux de Modrinth : CurseForge n'en publie aucun par jour, ils ne sont reconstruits que par l'écart entre deux soldes de points relevés au passage, si bien que la plupart des journées n'en portent aucun.";
 ```
@@ -1653,4 +1633,4 @@ git commit -m "Le classement se regle : critere et fenetre de comparaison"
 
 - **Pas de nouvel appel réseau.** Tout le classement se calcule sur ce qui est déjà en base. Aucune limite d'API n'est approchée.
 - **Pas de rattrapage d'historique CurseForge.** La plateforme n'expose pas de statistiques auteur par jour ; l'application les tient de son tableau de bord et de ses propres snapshots. Le seul moyen d'aller plus loin serait d'importer le CSV du tableau de bord auteur, ce qui est un autre sujet et mérite son propre plan.
-- **Pas de classement par mod.** La page classe des journées. Le classement des mods existe déjà sur la page « Téléchargements par jour ».
+- **Pas de classement par mod.** La page classe des journées. Le classement des mods existe déjà sur la page "Téléchargements par jour".

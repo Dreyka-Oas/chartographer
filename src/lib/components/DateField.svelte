@@ -4,8 +4,8 @@
    *
    * Le panneau qu'ouvre un `<input type="date">` est rendu par Windows, hors
    * de la page : fond blanc, coins carrés, aucune prise sur ses couleurs. On
-   * refait donc le calendrier, sur le même parti pris que `Select.svelte` — le
-   * champ le plus proche dans ce dépôt à avoir affronté le même problème —
+   * refait donc le calendrier, sur le même parti pris que `Select.svelte`, le
+   * champ le plus proche dans ce dépôt à avoir affronté le même problème,
    * pour que les trois champs de dates de l'application partagent un seul
    * calendrier, aux couleurs de la carte plutôt qu'à celles du système.
    *
@@ -158,7 +158,7 @@
   }
 
   /** Un clic ailleurs, un défilement de la page ou un redimensionnement
-   * referme — voir Select.svelte, qui pose la même écoute pour la même
+   * referme, voir Select.svelte, qui pose la même écoute pour la même
    * raison : le panneau suit le bouton tant qu'il reste à l'écran. */
   $effect(() => {
     if (!open) return;
@@ -281,7 +281,7 @@
     background-color: var(--surface);
     /* Le contour est une ombre intérieure, jamais une bordure : une bordure se
      * peint sur le bord de la boîte, qui peut tomber entre deux pixels
-     * physiques une fois la mise à l'échelle de Windows appliquée — le trait du
+     * physiques une fois la mise à l'échelle de Windows appliquée, le trait du
      * bas disparaissait alors. L'ombre est peinte à l'intérieur, donc toujours
      * sur un pixel plein. */
     border: 0;
@@ -351,7 +351,7 @@
     color: var(--text);
   }
   /* Le mois s'écrit sans majuscule, comme dans le sélecteur posé juste à côté :
-   * « Juil. 2026 » d'un côté et « juil. 2026 » de l'autre, pour la même donnée,
+   * "Juil. 2026" d'un côté et "juil. 2026" de l'autre, pour la même donnée,
    * se voyait. Le français ne capitalise pas les noms de mois. */
   .title {
     font-size: 0.84rem;
@@ -405,7 +405,7 @@
     font-weight: 600;
   }
   /* Liseré du jour courant : une ombre intérieure, pour la même raison que le
-   * contour du bouton — toujours peinte sur un pixel plein. */
+   * contour du bouton, toujours peinte sur un pixel plein. */
   .day.today {
     box-shadow: inset 0 0 0 1px var(--accent);
   }

@@ -1,5 +1,5 @@
 <script lang="ts">
-  /** Section « Synchronisation » : relevé manuel et dernier passage par source. */
+  /** Section "Synchronisation" : relevé manuel et dernier passage par source. */
   import { formatAge } from "../../format";
   import { dashboard } from "../../state.svelte";
   import Tooltip from "../../components/Tooltip.svelte";
@@ -10,7 +10,7 @@
   /**
    * La cadence est dite ici telle qu'elle est réglée, et non figée dans le
    * texte : elle se change deux sections plus bas, et la phrase annonçait
-   * « toutes les six heures » quelle que soit la valeur retenue.
+   * "toutes les six heures" quelle que soit la valeur retenue.
    */
   const rhythm = $derived(
     `Au démarrage, puis toutes les ${dashboard.autoSyncMinutes} minutes. ` +

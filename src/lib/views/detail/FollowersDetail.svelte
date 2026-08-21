@@ -5,13 +5,13 @@
    *
    * Seul CurseForge nomme qui suit un compte, sur sa fiche publique. Modrinth
    * n'en donne que le compte : ses adresses ont été sondées une à une, token en
-   * main — `project/{id}/followers`, `user/{id}/followers`,
+   * main, `project/{id}/followers`, `user/{id}/followers`,
    * `analytics/followers` et leurs variantes rendent toutes 404, c'est-à-dire
    * une route qui n'existe pas, et non une porte fermée. La seule qui réponde,
    * `user/{id}/follows`, rend les projets que l'on suit soi-même.
    *
    * Les noms relevés ne sont pas affichés : ce qui compte ici, c'est le nombre
-   * et son mouvement. Ils servent à autre chose — en comparant la liste d'un
+   * et son mouvement. Ils servent à autre chose, en comparant la liste d'un
    * jour à celle de la veille, l'application sait qui vient d'arriver et qui
    * est parti, quand aucune des deux plateformes ne date un abonnement.
    */

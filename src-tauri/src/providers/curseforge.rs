@@ -39,8 +39,8 @@ pub struct CfProject {
 /// leur date de mise en ligne, leurs versions de jeu, leur chargeur et un
 /// compteur de téléchargements. C'est le seul historique disponible côté
 /// CurseForge : une répartition par version, datée, et non un suivi jour par
-/// jour. Le compteur par fichier est partiel — la somme reste bien inférieure au
-/// total du projet — il sert donc à répartir, pas à totaliser.
+/// jour. Le compteur par fichier est partiel, la somme reste bien inférieure au
+/// total du projet, il sert donc à répartir, pas à totaliser.
 #[derive(Debug, Clone, PartialEq)]
 pub struct CfFile {
     pub id: i64,

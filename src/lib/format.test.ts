@@ -35,7 +35,7 @@ describe("axisNumber", () => {
 
   /*
    * La raison d'être de cette fonction : sur une courbe d'abonnés allant de
-   * 2 585 à 2 760, l'abrégé donnait « 2,7 k » à trois graduations voisines.
+   * 2 585 à 2 760, l'abrégé donnait "2,7 k" à trois graduations voisines.
    */
   it("distingue des graduations que l'abrégé confondrait", () => {
     const gradations = [2670, 2700, 2730].map(axisNumber);

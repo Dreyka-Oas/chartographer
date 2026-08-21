@@ -179,8 +179,8 @@ option {
 /*
  * Cases à cocher et boutons radio : le bleu de Windows n'appartient à aucune
  * des deux teintes de la page, et il tranchait d'autant plus sur le papier de
- * carte. `accent-color` laisse le contrôle au système — sa forme, sa coche, son
- * animation — en n'imposant que la couleur.
+ * carte. `accent-color` laisse le contrôle au système, sa forme, sa coche, son
+ * animation, en n'imposant que la couleur.
  */
 input[type="checkbox"],
 input[type="radio"] {
@@ -204,8 +204,8 @@ input[type="radio"] {
  * `scrollbar-color` : ces deux propriétés laissent la barre au style Fluent
  * d'Edge, qui se pose par-dessus le contenu et ne paraît qu'au survol. La
  * colonne se rétrécissait alors d'une dizaine de pixels dès que la souris
- * l'effleurait, et tout ce qui est calé à droite — les listes déroulantes des
- * réglages — sautait de place. Une barre dessinée occupe sa place en
+ * l'effleurait, et tout ce qui est calé à droite, les listes déroulantes des
+ * réglages, sautait de place. Une barre dessinée occupe sa place en
  * permanence, et le contenu ne bouge plus.
  */
 *::-webkit-scrollbar {
@@ -239,12 +239,12 @@ input[type="radio"] {
  * Deux règles tiennent tout le reste :
  *
  * 1. La rangée est une grille à deux colonnes, dont la seconde a une largeur
- *    fixe. Le contrôle n'est jamais « poussé à droite » par une marge
+ *    fixe. Le contrôle n'est jamais "poussé à droite" par une marge
  *    automatique : il occupe une colonne qui existe indépendamment de lui. Sa
  *    position ne dépend donc ni de la longueur du texte à sa gauche, ni de la
  *    largeur de la fenêtre, ni de l'apparition d'une barre de défilement.
  *
- * 2. Aucun état — survol, focus, sélection, ouverture — ne touche à la
+ * 2. Aucun état, survol, focus, sélection, ouverture, ne touche à la
  *    géométrie. Les contours sont des ombres intérieures, jamais des bordures
  *    qui s'ajoutent à la boîte ; les hauteurs sont fixes ; les mises en
  *    évidence ne changent que des couleurs. Rien ne peut donc sauter sous la

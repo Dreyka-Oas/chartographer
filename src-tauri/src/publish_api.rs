@@ -1,7 +1,7 @@
 //! Commandes de publication, appelées depuis l'onglet du même nom.
 //!
 //! Le travail se répartit en deux : Modrinth accepte tout par son interface
-//! publique — créer un projet, y poser une version, supprimer l'une ou l'autre.
+//! publique, créer un projet, y poser une version, supprimer l'une ou l'autre.
 //! CurseForge n'accepte que le dépôt de fichiers sur un projet existant, et
 //! demande un jeton d'auteur que l'application va chercher elle-même.
 
@@ -101,7 +101,7 @@ const TOKEN_PAGE: &str = "https://www.curseforge.com/account/api-tokens";
 ///
 /// Une fenêtre cachée ne dessine pas : son document reste à moitié vide, et le
 /// tableau des jetons n'y paraît jamais. La page est donc redemandée depuis
-/// elle-même — même origine, même session — et les jetons sont cherchés dans la
+/// elle-même, même origine, même session, et les jetons sont cherchés dans la
 /// réponse, qui, elle, est toujours complète.
 const READ_TOKENS: &str = r#"(function () {
   window.__cgTokens = null;
@@ -126,7 +126,7 @@ const READ_TOKENS: &str = r#"(function () {
 ///
 /// Un jeton existant n'est jamais réaffiché : le site ne le montre qu'une fois,
 /// à sa création. En obtenir un est donc le seul moyen d'en avoir un, et le nom
-/// permet de le reconnaître — et de le révoquer — depuis le compte.
+/// permet de le reconnaître, et de le révoquer, depuis le compte.
 const GENERATE_TOKEN: &str = r#"(function () {
   var champ = document.querySelector('input[name=name]');
   if (!champ) { return 'champ absent'; }
@@ -147,7 +147,7 @@ const GENERATE_TOKEN: &str = r#"(function () {
 /// Obtient le jeton d'envoi CurseForge sans rien demander à l'utilisateur.
 ///
 /// Un jeton déjà émis n'est jamais réaffiché : le compte ne le montre qu'à sa
-/// création. L'application en demande donc un, nommé « Chartographer », le lit
+/// création. L'application en demande donc un, nommé "Chartographer", le lit
 /// sur la page qui suit, puis l'essaie contre l'interface d'envoi avant de le
 /// garder. Il ne ressort jamais vers la fenêtre.
 #[tauri::command]
@@ -167,7 +167,7 @@ pub async fn capture_token(app: &tauri::AppHandle, state: &AppState) -> Result<b
         .unwrap_or_default();
 
     // Une fenêtre cachée ne dessine pas, et le tableau des jetons n'arrive
-    // qu'au rendu. On la sort donc de sa cachette — mais loin hors de l'écran,
+    // qu'au rendu. On la sort donc de sa cachette, mais loin hors de l'écran,
     // pour que personne ne la voie passer.
     let posted = window.outer_position().ok();
     let _ = window.set_position(tauri::PhysicalPosition::new(-8000, -8000));
@@ -176,7 +176,7 @@ pub async fn capture_token(app: &tauri::AppHandle, state: &AppState) -> Result<b
     crate::commands::navigate(app, &window, TOKEN_PAGE, "api-tokens").await?;
 
     // Le compte n'affiche jamais un jeton déjà émis : on en demande un, nommé,
-    // et on le lit sur la page qui suit — la seule où il paraît en clair.
+    // et on le lit sur la page qui suit, la seule où il paraît en clair.
     let asked = crate::commands::eval_in_window(app, GENERATE_TOKEN).await?;
     tracing::debug!(reponse = %asked, "jeton d'envoi demandé au compte");
     tokio::time::sleep(std::time::Duration::from_millis(3000)).await;
@@ -379,7 +379,7 @@ pub async fn create_curseforge_project(
         platform: "curseforge".into(),
         ok: true,
         id,
-        detail: format!("projet « {name} » créé"),
+        detail: format!("projet {name} créé"),
     })
 }
 

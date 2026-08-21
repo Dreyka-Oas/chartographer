@@ -95,7 +95,7 @@ jobs:
       # Sur un brouillon, tauri-action ne connait pas encore l'adresse publique
       # des fichiers : il inscrit dans `latest.json` l'URL de l'API GitHub, qui
       # ne rend le binaire qu'a qui demande `Accept: application/octet-stream`.
-      # L'updater ne le demande pas — il recevrait du JSON, et la verification
+      # L'updater ne le demande pas, il recevrait du JSON, et la verification
       # de signature echouerait. On recrit donc les adresses en liens de
       # telechargement avant de publier, tant que rien n'est encore visible.
       - name: Recrire les adresses de latest.json

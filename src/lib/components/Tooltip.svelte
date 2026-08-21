@@ -5,7 +5,7 @@
    * L'attribut `title` du navigateur ferait le même office, mais il se fait
    * attendre une bonne seconde, s'affiche aux couleurs de Windows et se place
    * sous le curseur plutôt que contre l'élément. Celle-ci paraît tout de suite,
-   * suit le thème, et se cale au-dessus — ou en dessous s'il n'y a pas la
+   * suit le thème, et se cale au-dessus, ou en dessous s'il n'y a pas la
    * place.
    *
    * La bulle est posée en `fixed`, d'après la position de l'élément : elle
@@ -46,7 +46,7 @@
 
   /**
    * Largeur supposée avant la première mesure. La bulle est en réalité plus
-   * large que ce maximum — s'y ajoutent son cadre et ses marges intérieures —
+   * large que ce maximum, s'y ajoutent son cadre et ses marges intérieures,
    * et c'est la valeur mesurée qui compte ensuite.
    */
   const WIDTH = 282;
@@ -97,7 +97,7 @@
 
   /**
    * Un élément arraché sous la souris émet un dernier `mouseleave`, en pleine
-   * destruction de son bloc — là où Svelte refuse toute écriture d'état
+   * destruction de son bloc, là où Svelte refuse toute écriture d'état
    * (`state_unsafe_mutation`). La fermeture attend donc la microtâche
    * suivante, hors de cette fenêtre ; à l'œil, rien ne change.
    */
@@ -111,7 +111,7 @@
 
   /**
    * Les écouteurs sont posés sur l'élément plutôt que déclarés en attributs.
-   * Ce conteneur n'est pas une commande — il n'a ni rôle ni action propre, il
+   * Ce conteneur n'est pas une commande, il n'a ni rôle ni action propre, il
    * ne fait qu'observer le passage de la souris au-dessus de ce qu'il enveloppe.
    * L'écrire ainsi évite de lui prêter une interactivité qu'il n'a pas.
    */

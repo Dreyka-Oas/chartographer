@@ -223,7 +223,7 @@
     background: var(--surface);
     flex-shrink: 0;
   }
-  /* Un onglet garde son libellé entier : comprimé, « Publication » se serait
+  /* Un onglet garde son libellé entier : comprimé, "Publication" se serait
    * réduit à quelques lettres avant que la barre ne se replie. */
   nav > button,
   nav > strong,

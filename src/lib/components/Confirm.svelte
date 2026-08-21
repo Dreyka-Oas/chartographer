@@ -4,8 +4,8 @@
    *
    * Le dialogue natif du navigateur ne conviendrait pas : il est dessiné par
    * Windows et ignore le thème. On reprend donc `<dialog>`, qui apporte tout de
-   * même l'essentiel — la page passe en arrière-plan inerte, la touche Échap
-   * ferme, et le focus reste enfermé dans le dialogue — et on l'habille.
+   * même l'essentiel, la page passe en arrière-plan inerte, la touche Échap
+   * ferme, et le focus reste enfermé dans le dialogue, et on l'habille.
    *
    * Le bouton par défaut est l'annulation : ouvrir ce dialogue puis appuyer sur
    * Entrée sans lire ne doit rien détruire.

@@ -1,9 +1,9 @@
 //! Rang d'une journée parmi celles qu'on lui choisit pour comparaison.
 //!
 //! Le classement vit à part des autres requêtes parce qu'il répond à une autre
-//! question : non pas « combien », mais « était-ce un bon jour ». Deux façons
-//! d'y répondre ne regardent jamais en avant — « était-ce un bon jour quand il
-//! s'est produit » — deux autres comparent un groupe de journées à lui-même,
+//! question : non pas "combien", mais "était-ce un bon jour". Deux façons
+//! d'y répondre ne regardent jamais en avant, "était-ce un bon jour quand il
+//! s'est produit", deux autres comparent un groupe de journées à lui-même,
 //! sans égard à leur ordre. `RankScope` documente les quatre.
 
 use crate::error::Result;
@@ -68,7 +68,7 @@ pub fn revenue_by_day(
         // seule requête : les relevés sont rares (quatre dans la base réelle),
         // les jours qui séparent deux relevés ne le sont pas. Boucler sur les
         // jours faisait dépendre le coût de la largeur de la plage plutôt que
-        // du nombre de relevés — un gel assuré dès que la plage remonte loin.
+        // du nombre de relevés, un gel assuré dès que la plage remonte loin.
         let mut stmt = conn.prepare(
             "SELECT day, points FROM cf_points
              WHERE day < ?2
@@ -116,7 +116,7 @@ fn cents(amount: Decimal) -> i64 {
 
 /// Valeur classée d'une journée, selon le critère et la source demandés.
 ///
-/// `by` choisit la métrique — téléchargements ou revenus — et `source` la
+/// `by` choisit la métrique, téléchargements ou revenus, et `source` la
 /// plateforme qui l'alimente. Les deux sont des axes indépendants : croiser
 /// leurs deux valeurs suffit à couvrir les six classements possibles, sans
 /// qu'il faille écrire une variante par combinaison.
@@ -154,7 +154,7 @@ fn empty_rankings(conn: &Connection) -> Result<DayRankings> {
 /// entre elles, sans égard à leur ordre, contre une seule et même référence.
 /// C'est le cœur commun à `Period`, dont la plage de comparaison est la
 /// période affichée, et à `All`, dont la plage de comparaison est tout
-/// l'historique — les deux ne diffèrent que par `pool_start`, jamais par la
+/// l'historique, les deux ne diffèrent que par `pool_start`, jamais par la
 /// règle de classement elle-même.
 ///
 /// Ce que la comparaison regarde (`pool_start..to`) et ce que la page liste
@@ -209,13 +209,13 @@ fn rank_against_pool(
 }
 
 /// Classement des journées d'une période, `to` exclu. Les lignes rendues
-/// sont toujours celles de `[from, to)` — la période affichée en haut de
-/// page — quelle que soit la portée demandée ; seule la comparaison qui
+/// sont toujours celles de `[from, to)`, la période affichée en haut de
+/// page, quelle que soit la portée demandée ; seule la comparaison qui
 /// détermine leur rang change d'étendue.
 ///
 /// Une seule question se pose à chaque journée : quel rang les réglages
-/// demandés lui donnent-ils. `by` choisit la métrique — téléchargements ou
-/// revenus — et `source` la plateforme qui l'alimente, indépendamment l'une
+/// demandés lui donnent-ils. `by` choisit la métrique, téléchargements ou
+/// revenus, et `source` la plateforme qui l'alimente, indépendamment l'une
 /// de l'autre. Classer sur une plateforme masquée par `filter` ne rend rien :
 /// la colonne serait vide, un rang là-dessus ne voudrait rien dire. `scope`
 /// choisit à quoi une journée se compare, et se répartit en deux familles :
@@ -223,13 +223,13 @@ fn rank_against_pool(
 /// - `Period` et `All` sont absolues : elles comparent un groupe de journées
 ///   à lui-même, sans égard à leur ordre, si bien qu'une journée peut y être
 ///   dépassée par une autre qui la suit. `Period` prend pour groupe la
-///   période affichée ; `All`, tout l'historique — la même règle, sans autre
+///   période affichée ; `All`, tout l'historique, la même règle, sans autre
 ///   différence que la plage.
 /// - `Sliding` et `Retrospective` sont rétrospectives : une journée n'y est
 ///   jugée que sur celles qui la précèdent, elle comprise, si bien qu'un rang
 ///   une fois acquis ne bouge plus jamais. `Sliding` regarde les
 ///   `window_days` journées qui précèdent ; `Retrospective`, sans borne
-///   basse — c'est la même fenêtre, simplement non bornée.
+///   basse, c'est la même fenêtre, simplement non bornée.
 // Les cinq derniers paramètres sont les cinq axes du classement, indépendants
 // les uns des autres. Une structure qui les rassemblerait n'aurait pas d'autre
 // raison d'être que de raccourcir cette signature.
@@ -246,7 +246,7 @@ pub fn day_rankings(
 ) -> Result<DayRankings> {
     // Classer sur une plateforme que le filtre du haut a masquée n'a pas de
     // sens : la colonne serait vide et le rang porterait sur des zéros.
-    // Plutôt que d'inventer un classement sur rien, on ne rend rien — le
+    // Plutôt que d'inventer un classement sur rien, on ne rend rien, le
     // réglage choisit sur quoi classer *parmi ce qui est visible*, il ne
     // remplace pas le filtre de plateformes.
     let source_hidden = match source {
@@ -262,7 +262,7 @@ pub fn day_rankings(
         return rank_against_pool(conn, from, from, to, filter, by, source);
     }
     if scope == RankScope::All {
-        // « Toutes les journées relevées » veut dire ce que la base contient
+        // "Toutes les journées relevées" veut dire ce que la base contient
         // réellement, pas l'origine du calendrier. Ce que la page liste reste
         // la période affichée (`from`) ; seule la comparaison porte sur tout
         // l'historique (`pool_start`).
@@ -422,8 +422,8 @@ mod tests {
         );
     }
 
-    /// Une plage large comme celle que produit `All` — de l'an zéro à
-    /// aujourd'hui — doit rendre le même résultat qu'une plage étroite qui
+    /// Une plage large comme celle que produit `All`, de l'an zéro à
+    /// aujourd'hui, doit rendre le même résultat qu'une plage étroite qui
     /// contient les mêmes relevés, et le rendre sans boucler sur les jours :
     /// c'est exactement le gel que la version précédente provoquait.
     #[test]
@@ -490,8 +490,8 @@ mod tests {
         assert_eq!(first.rank, Some(1), "elle était première le jour même");
     }
 
-    /// Sans borne basse, la comparaison porte sur tout l'historique antérieur —
-    /// mais jamais sur ce qui suit : la règle « jamais en avant » vaut aussi
+    /// Sans borne basse, la comparaison porte sur tout l'historique antérieur,
+    /// mais jamais sur ce qui suit : la règle "jamais en avant" vaut aussi
     /// pour cette fenêtre-là.
     #[test]
     fn scope_retrospective_compares_to_everything_before_never_after() {
@@ -522,9 +522,9 @@ mod tests {
     /// Portées absolues et rétrospectives ne répondent pas à la même
     /// question. Deux journées, la seconde dépassant la première : en absolu,
     /// elles se comparent l'une à l'autre sans égard à l'ordre, donc la
-    /// première recule quand la seconde arrive — rangs 2 puis 1. En
+    /// première recule quand la seconde arrive, rangs 2 puis 1. En
     /// rétrospectif, chacune ne juge que ce qui la précède : la première n'a
-    /// personne devant elle, la seconde dépasse tout ce qu'elle voit — rangs
+    /// personne devant elle, la seconde dépasse tout ce qu'elle voit, rangs
     /// 1 puis 1, et ni l'une ni l'autre ne bouge plus jamais après coup.
     #[test]
     fn absolute_scope_lets_a_later_day_demote_an_earlier_one() {
@@ -584,8 +584,8 @@ mod tests {
 
     /// Ce que la page liste et ce à quoi elle compare sont deux choses
     /// distinctes. Un historique large, une période étroite au milieu : la
-    /// portée `All` ne doit rendre que les journées de la période affichée —
-    /// pas tout l'historique — mais chacune de ces lignes doit porter son
+    /// portée `All` ne doit rendre que les journées de la période affichée,
+    /// pas tout l'historique, mais chacune de ces lignes doit porter son
     /// rang parmi la totalité des journées relevées, pas seulement celles de
     /// la période. C'est le défaut que les boutons de date muets aurait
     /// laissé passer : la liste devait bouger avec eux, le dénominateur non.
@@ -641,7 +641,7 @@ mod tests {
     }
 
     /// Classer sur les revenus classe sur les revenus, pas sur les
-    /// téléchargements — les deux appels partagent le même jeu de données,
+    /// téléchargements, les deux appels partagent le même jeu de données,
     /// seul `by` change.
     #[test]
     fn ranking_on_revenue_ignores_downloads() {
@@ -699,7 +699,7 @@ mod tests {
 
     /// La source décide vraiment, indépendamment de la métrique : une journée
     /// forte sur Modrinth et faible sur CurseForge doit changer de rang selon
-    /// la plateforme choisie — l'inverse d'une journée forte sur CurseForge.
+    /// la plateforme choisie, l'inverse d'une journée forte sur CurseForge.
     #[test]
     fn source_decides_which_platform_the_ranking_reads() {
         let (conn, m, c) = seed();
@@ -823,7 +823,7 @@ mod tests {
 
     /// Mesure ponctuelle sur la base réelle de l'utilisateur : la portée par
     /// défaut de la page, `All`, compare chaque journée listée à tout
-    /// l'historique — les lignes rendues restent celles de la période
+    /// l'historique, les lignes rendues restent celles de la période
     /// affichée, mais leur rang va chercher sa place dans les 383 journées de
     /// la base. Ça doit répondre en un temps raisonnable, pas geler
     /// l'interface. Ouverte en lecture seule, jamais modifiée. Ignoré par

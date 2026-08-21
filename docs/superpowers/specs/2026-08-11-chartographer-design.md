@@ -1,11 +1,11 @@
-# Chartographer — Design
+# Chartographer, Design
 
 Date : 2026-08-11
 Statut : validé
 
 ## Problème
 
-Les statistiques des mods Minecraft de l'auteur sont éclatées sur deux plateformes qui ne communiquent pas. Modrinth expose des séries temporelles riches (téléchargements, vues, revenus, pays) derrière une API authentifiée. CurseForge expose des totaux publics sans historique. Aucune vue ne permet de répondre à « où va réellement mon audience, et sur quelle plateforme ».
+Les statistiques des mods Minecraft de l'auteur sont éclatées sur deux plateformes qui ne communiquent pas. Modrinth expose des séries temporelles riches (téléchargements, vues, revenus, pays) derrière une API authentifiée. CurseForge expose des totaux publics sans historique. Aucune vue ne permet de répondre à "où va réellement mon audience, et sur quelle plateforme".
 
 Chartographer est une application de bureau qui agrège les deux sources, les croise projet par projet, et les rend sur une page de vision unique.
 
@@ -15,13 +15,13 @@ Cockpit auteur, découverte entièrement automatique. Aucun identifiant de proje
 
 Hors périmètre : publication de fichiers, édition de projets, exploration de mods tiers, comparaison avec des concurrents.
 
-## Sources de données — état vérifié
+## Sources de données, état vérifié
 
 ### Modrinth
 
 L'authentification se fait par **token personnel collé une fois**. En-tête `Authorization: <token>`, **sans** préfixe `Bearer`. Un `User-Agent` explicite est requis sur tous les appels.
 
-OAuth2 a été implémenté puis retiré. Le flux fonctionnait — `GET /_internal/oauth/authorize` et `POST /_internal/oauth/token` existent — mais il impose une condition rédhibitoire : l'application doit être déclarée au préalable sur `modrinth.com/settings/applications`, et cette déclaration n'est **pas** automatisable. `POST /_internal/oauth/app` accepte bien un corps JSON (`name`, `max_scopes`, `redirect_uris`) mais répond `401 Invalid Authentication Credentials` avec un token personnel valide, alors que ce même token passe sur `/v2/user` : les routes de gestion d'applications exigent une session de navigateur. Demander à chaque utilisateur de créer sa propre application OAuth est une friction bien pire que coller un token, d'où l'abandon.
+OAuth2 a été implémenté puis retiré. Le flux fonctionnait, `GET /_internal/oauth/authorize` et `POST /_internal/oauth/token` existent, mais il impose une condition rédhibitoire : l'application doit être déclarée au préalable sur `modrinth.com/settings/applications`, et cette déclaration n'est **pas** automatisable. `POST /_internal/oauth/app` accepte bien un corps JSON (`name`, `max_scopes`, `redirect_uris`) mais répond `401 Invalid Authentication Credentials` avec un token personnel valide, alors que ce même token passe sur `/v2/user` : les routes de gestion d'applications exigent une session de navigateur. Demander à chaque utilisateur de créer sa propre application OAuth est une friction bien pire que coller un token, d'où l'abandon.
 
 L'écran d'accueil ouvre `https://modrinth.com/settings/pats` pour l'utilisateur et liste les six portées à cocher, toutes en lecture seule : `Read user data`, `Read notifications`, `Read payouts`, `Access analytics`, `Read projects`, `Read versions`. Le token est validé par un appel à `/v2/user` avant d'être écrit sur le disque : une saisie erronée est rejetée immédiatement avec le message de l'API.
 
@@ -51,11 +51,11 @@ Les statistiques viennent donc entièrement de CFWidget, public et sans authenti
 | `GET api.cfwidget.com/author/search/{username}` | découverte automatique : `{ id, username, projects: [{ id, name }] }` |
 | `GET api.cfwidget.com/{projectId}` | titre, type, URLs, `downloads.total`, `downloads.monthly`, vignette, date de création |
 
-CFWidget renvoie `202` lorsqu'une ressource n'est pas encore en cache et qu'un rafraîchissement est mis en file d'attente. Le client doit traiter ce cas comme « réessayer plus tard », pas comme une erreur.
+CFWidget renvoie `202` lorsqu'une ressource n'est pas encore en cache et qu'un rafraîchissement est mis en file d'attente. Le client doit traiter ce cas comme "réessayer plus tard", pas comme une erreur.
 
-Le seul paramètre CurseForge est le **pseudo auteur**, et il est déduit automatiquement sans jamais rien demander. L'application interroge `api.cfwidget.com/minecraft/mc-mods/{slug}` avec les slugs Modrinth déjà découverts et lit le tableau `members` de la réponse, dont l'entrée portant le titre `Owner` donne le pseudo réel — quel qu'il soit, même sans rapport avec le pseudo Modrinth. À défaut, elle essaie le pseudo Modrinth puis sa variante suffixée `_official`. Un champ de réglage permet de le corriger si tout échoue.
+Le seul paramètre CurseForge est le **pseudo auteur**, et il est déduit automatiquement sans jamais rien demander. L'application interroge `api.cfwidget.com/minecraft/mc-mods/{slug}` avec les slugs Modrinth déjà découverts et lit le tableau `members` de la réponse, dont l'entrée portant le titre `Owner` donne le pseudo réel, quel qu'il soit, même sans rapport avec le pseudo Modrinth. À défaut, elle essaie le pseudo Modrinth puis sa variante suffixée `_official`. Un champ de réglage permet de le corriger si tout échoue.
 
-CFWidget ne fournit aucun historique. L'historique CurseForge est donc **construit localement** : chaque synchronisation écrit un snapshot horodaté du total, et les deltas entre snapshots produisent la courbe. Les premiers jours après installation, la courbe CurseForge est vide — c'est attendu et l'interface le signale explicitement plutôt que d'afficher un graphique trompeur.
+CFWidget ne fournit aucun historique. L'historique CurseForge est donc **construit localement** : chaque synchronisation écrit un snapshot horodaté du total, et les deltas entre snapshots produisent la courbe. Les premiers jours après installation, la courbe CurseForge est vide, c'est attendu et l'interface le signale explicitement plutôt que d'afficher un graphique trompeur.
 
 ## Architecture
 
@@ -83,7 +83,7 @@ src-tauri/src/
 
 Chaque module a une responsabilité unique et reste sous ~150 lignes. Les clients de provider ne connaissent pas la base ; le store ne connaît pas le réseau ; `sync.rs` est le seul point qui compose les deux.
 
-Frontend Svelte 5 (runes) + TypeScript + Vite. Rendu des graphiques par Apache ECharts, retenu pour la carte géographique intégrée, le `dataZoom` par brush, et les heatmaps — les trois sont nécessaires ici et éviteraient sinon trois bibliothèques.
+Frontend Svelte 5 (runes) + TypeScript + Vite. Rendu des graphiques par Apache ECharts, retenu pour la carte géographique intégrée, le `dataZoom` par brush, et les heatmaps, les trois sont nécessaires ici et éviteraient sinon trois bibliothèques.
 
 ## Modèle de données
 
@@ -173,13 +173,13 @@ Les projets qui disparaissent d'une source ne sont pas supprimés : `archived_at
 
 ## Appariement inter-plateformes
 
-Un mod publié sur les deux plateformes n'y porte pas forcément le même identifiant, ni le même slug. Cas réel constaté : Modrinth `mobsblocker` / « Mobs Blocker » face à CurseForge `mobblocker` / « Mobs Blocker ». Modrinth `colony` / « Colony » face à CurseForge « Colony Project ».
+Un mod publié sur les deux plateformes n'y porte pas forcément le même identifiant, ni le même slug. Cas réel constaté : Modrinth `mobsblocker` / "Mobs Blocker" face à CurseForge `mobblocker` / "Mobs Blocker". Modrinth `colony` / "Colony" face à CurseForge "Colony Project".
 
 Algorithme, dans l'ordre, premier succès retenu :
 
 1. Slug identique après normalisation (minuscules, suppression des séparateurs non alphanumériques).
 2. Titre identique après normalisation.
-3. Similarité de Jaro-Winkler sur les titres normalisés au-dessus de 0,88, avec un unique candidat au-dessus du seuil — l'ambiguïté ne produit jamais de lien automatique.
+3. Similarité de Jaro-Winkler sur les titres normalisés au-dessus de 0,88, avec un unique candidat au-dessus du seuil, l'ambiguïté ne produit jamais de lien automatique.
 4. Sinon : non apparié. Le projet apparaît en mono-plateforme et l'interface propose un appariement manuel.
 
 Un lien `manual = 1` n'est jamais écrasé par l'automatique. La confiance est stockée pour permettre à l'interface de signaler les liens fragiles.
@@ -188,28 +188,28 @@ Un lien `manual = 1` n'est jamais écrasé par l'automatique. La confiance est s
 
 Trois opérations distinctes, déclenchables séparément.
 
-**Découverte** — interroge `/v2/user` et `/v2/user/{id}/projects` côté Modrinth, `author/search/{username}` côté CurseForge, insère ou met à jour `projects`, puis relance l'appariement. Le pseudo CurseForge est un réglage ; à la première installation l'application tente le pseudo Modrinth puis la variante suffixée `_official`, et demande confirmation.
+**Découverte**, interroge `/v2/user` et `/v2/user/{id}/projects` côté Modrinth, `author/search/{username}` côté CurseForge, insère ou met à jour `projects`, puis relance l'appariement. Le pseudo CurseForge est un réglage ; à la première installation l'application tente le pseudo Modrinth puis la variante suffixée `_official`, et demande confirmation.
 
-**Rafraîchissement** — récupère les analyses Modrinth sur la fenêtre manquante (depuis le dernier jour connu, sinon depuis la création du premier projet), les versions, les notifications. Écrit dans `metrics_daily`, `countries_daily`, `versions`, `events`.
+**Rafraîchissement**, récupère les analyses Modrinth sur la fenêtre manquante (depuis le dernier jour connu, sinon depuis la création du premier projet), les versions, les notifications. Écrit dans `metrics_daily`, `countries_daily`, `versions`, `events`.
 
-**Snapshot** — lit chaque projet CurseForge via CFWidget et écrit une ligne dans `cf_snapshots`. Au plus une fois par jour, au lancement de l'application, et sur demande.
+**Snapshot**, lit chaque projet CurseForge via CFWidget et écrit une ligne dans `cf_snapshots`. Au plus une fois par jour, au lancement de l'application, et sur demande.
 
 Politique réseau : Modrinth limite à 300 requêtes par minute ; le client respecte les en-têtes `X-Ratelimit-Remaining` et `X-Ratelimit-Reset` et met en pause plutôt que d'encaisser un 429. Requêtes d'analyse groupées par lot de projets pour limiter le nombre d'appels. Retry exponentiel borné à trois tentatives sur erreurs réseau et 5xx ; pas de retry sur 4xx hors 429. CFWidget : `202` déclenche un unique nouvel essai différé, puis abandon silencieux du projet pour ce cycle.
 
 Chaque provider échoue indépendamment. Une panne CurseForge n'empêche pas l'affichage des données Modrinth. Le résultat de chaque cycle est écrit dans `sync_runs` et l'interface affiche un badge de fraîcheur par source.
 
-## Interface — la page de vision
+## Interface, la page de vision
 
 Un écran unique, thème sombre par défaut, densité assumée. De haut en bas :
 
-1. **Bandeau d'indicateurs** — téléchargements toutes plateformes, variation sur 30 jours, revenus cumulés et solde en attente, followers, nombre de projets actifs. Chaque indicateur porte sa micro-tendance.
-2. **Aire empilée temporelle** — téléchargements par jour et par mod, bascule Modrinth / CurseForge / cumul, brush de zoom sur l'axe temporel qui pilote l'ensemble des autres graphiques de la page.
-3. **Carte choroplèthe mondiale** — téléchargements par pays. `XX` et la chaîne vide sont agrégés dans une catégorie « inconnu » affichée hors carte, jamais fondus dans un pays réel.
-4. **Barres comparatives par mod** — part Modrinth contre part CurseForge, triées par écart. C'est la vue qui répond à « où est vraiment mon public ».
-5. **Heatmap versions de jeu × loaders** — concentration des téléchargements.
-6. **Courbe de revenus** — journalière et cumulée.
-7. **Table de tous les projets** — triable, avec sparkline par ligne, badge de plateforme, indicateur de lien fragile. Clic sur une ligne : vue détaillée du mod.
-8. **Fil d'évènements** — changements de statut, publications, notifications Modrinth.
+1. **Bandeau d'indicateurs**, téléchargements toutes plateformes, variation sur 30 jours, revenus cumulés et solde en attente, followers, nombre de projets actifs. Chaque indicateur porte sa micro-tendance.
+2. **Aire empilée temporelle**, téléchargements par jour et par mod, bascule Modrinth / CurseForge / cumul, brush de zoom sur l'axe temporel qui pilote l'ensemble des autres graphiques de la page.
+3. **Carte choroplèthe mondiale**, téléchargements par pays. `XX` et la chaîne vide sont agrégés dans une catégorie "inconnu" affichée hors carte, jamais fondus dans un pays réel.
+4. **Barres comparatives par mod**, part Modrinth contre part CurseForge, triées par écart. C'est la vue qui répond à "où est vraiment mon public".
+5. **Heatmap versions de jeu × loaders**, concentration des téléchargements.
+6. **Courbe de revenus**, journalière et cumulée.
+7. **Table de tous les projets**, triable, avec sparkline par ligne, badge de plateforme, indicateur de lien fragile. Clic sur une ligne : vue détaillée du mod.
+8. **Fil d'évènements**, changements de statut, publications, notifications Modrinth.
 
 Vue détaillée par mod : mêmes graphiques restreints au projet, plus la table de ses versions et l'écart de téléchargements entre plateformes.
 
@@ -236,7 +236,7 @@ Aucun token n'est journalisé. Les journaux sont actifs en développement unique
 
 ## Gestion des erreurs
 
-Un type d'erreur unifié côté Rust distingue quatre familles : configuration absente ou invalide, authentification refusée, indisponibilité réseau ou distante, et incohérence de données. Chacune se traduit par un message actionnable côté interface — « token Modrinth refusé, vérifie les réglages » plutôt qu'une trace brute.
+Un type d'erreur unifié côté Rust distingue quatre familles : configuration absente ou invalide, authentification refusée, indisponibilité réseau ou distante, et incohérence de données. Chacune se traduit par un message actionnable côté interface, "token Modrinth refusé, vérifie les réglages" plutôt qu'une trace brute.
 
 Les échecs partiels sont la norme, pas l'exception : l'interface affiche toujours ce qui a pu être chargé, avec l'âge de chaque source.
 
@@ -264,7 +264,7 @@ Clé CurseForge Core API : demanderait une validation manuelle côté CurseForge
 
 Token d'upload CurseForge : n'ouvre que le catalogue des versions de jeu, aucune statistique. Supprimé du périmètre, ce qui retire toute authentification côté CurseForge.
 
-**OAuth2 Modrinth : implémenté puis retiré.** Le flux marchait, mais il exige que chaque personne installant l'application déclare au préalable une application OAuth sur son compte Modrinth — la création par API est fermée aux tokens personnels (`401` vérifié). Faire créer une application OAuth à un utilisateur est une friction bien supérieure à un copier-coller de token. Le code correspondant a été supprimé plutôt que laissé en repli mort.
+**OAuth2 Modrinth : implémenté puis retiré.** Le flux marchait, mais il exige que chaque personne installant l'application déclare au préalable une application OAuth sur son compte Modrinth, la création par API est fermée aux tokens personnels (`401` vérifié). Faire créer une application OAuth à un utilisateur est une friction bien supérieure à un copier-coller de token. Le code correspondant a été supprimé plutôt que laissé en repli mort.
 
 Webview interne pour une page de connexion : écartée dans tous les cas. Faire saisir un mot de passe Modrinth dans une webview applicative est un anti-patron.
 

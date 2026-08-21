@@ -4,7 +4,7 @@
    *
    * Il remplace la barre d'enregistrement d'autrefois : les réglages s'écrivent
    * d'eux-mêmes, il n'y a donc plus rien à valider ni à annuler. Ne restent que
-   * deux choses à dire — que l'écriture est en cours, ou qu'elle a eu lieu — et
+   * deux choses à dire, que l'écriture est en cours, ou qu'elle a eu lieu, et
    * elles s'effacent seules.
    */
   let { text, tone = "plain" }: { text: string; tone?: "plain" | "done" | "error" } = $props();

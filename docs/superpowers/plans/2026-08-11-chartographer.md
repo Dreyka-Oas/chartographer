@@ -1,16 +1,12 @@
 # Chartographer Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** Une application de bureau qui agrège les statistiques de mods Minecraft de Modrinth et CurseForge, les croise projet par projet, et les rend sur une page de vision unique, distribuée en `.deb`, `.rpm` et `.exe`.
 
 **Architecture :** Tauri v2. Tout le réseau et toute la persistance vivent côté Rust, la webview ne voit jamais les tokens. SQLite local conserve les séries Modrinth et reconstruit l'historique CurseForge par snapshots quotidiens. Le front Svelte 5 lit un seul DTO agrégé et le rend avec Apache ECharts.
 
-**Tech Stack :** Rust 1.95, tauri 2.11, rusqlite 0.40 (bundled), reqwest 0.13, tokio 1.53, rust_decimal 1.42, strsim 0.11 — Node 24, Svelte 5.56, Vite 8.2, TypeScript 5.9, ECharts 6.1, Vitest 4.1.
+**Tech Stack :** Rust 1.95, tauri 2.11, rusqlite 0.40 (bundled), reqwest 0.13, tokio 1.53, rust_decimal 1.42, strsim 0.11, Node 24, Svelte 5.56, Vite 8.2, TypeScript 5.9, ECharts 6.1, Vitest 4.1.
 
 **Spec :** `docs/superpowers/specs/2026-08-11-chartographer-design.md`
-
----
 
 ## Structure des fichiers
 
@@ -67,8 +63,6 @@ src/
       ProjectDetail.svelte
       Settings.svelte
 ```
-
----
 
 ### Task 1 : Squelette Tauri v2 + Svelte 5
 
@@ -217,7 +211,7 @@ export default mount(App, { target: document.getElementById("app")! });
 /// <reference types="vite/client" />
 ```
 
-- [ ] **Step 5 : `src/app.css` — tokens de thème sombre**
+- [ ] **Step 5 : `src/app.css`, tokens de thème sombre**
 
 ```css
 :root {
@@ -417,8 +411,6 @@ Attendu : `svelte-check` sort sans erreur, `cargo check` sort `Finished`.
 git add -A
 git commit -m "feat: squelette Tauri v2 + Svelte 5"
 ```
-
----
 
 ### Task 2 : Type d'erreur et configuration
 
@@ -707,8 +699,6 @@ git add -A
 git commit -m "feat: type d'erreur unifie, session OAuth et reglages sur disque"
 ```
 
----
-
 ### Task 3 : Modèles partagés
 
 **Files:**
@@ -872,15 +862,13 @@ git add -A
 git commit -m "feat: modeles partages entre Rust et le front"
 ```
 
----
-
 ### Task 4 : Appariement inter-plateformes
 
 **Files:**
 - Create: `src-tauri/src/matching.rs`
 - Modify: `src-tauri/src/lib.rs`
 
-Les cas de test sont réels : Modrinth `mobsblocker` / « Mobs Blocker » face à CurseForge `mobblocker` / « Mobs Blocker », et Modrinth `colony` / « Colony » face à CurseForge « Colony Project ».
+Les cas de test sont réels : Modrinth `mobsblocker` / "Mobs Blocker" face à CurseForge `mobblocker` / "Mobs Blocker", et Modrinth `colony` / "Colony" face à CurseForge "Colony Project".
 
 - [ ] **Step 1 : écrire les tests qui échouent**
 
@@ -1063,8 +1051,6 @@ Attendu : `test result: ok. 7 passed`.
 git add -A
 git commit -m "feat: appariement Modrinth vers CurseForge par slug, titre et similarite"
 ```
-
----
 
 ### Task 5 : Schéma SQLite et migrations
 
@@ -1280,7 +1266,7 @@ impl Store {
     }
 
     /// Exécute une opération sous verrou. Le verrou est empoisonné uniquement
-    /// si une opération a paniqué, ce qui est un bug — on propage la panique.
+    /// si une opération a paniqué, ce qui est un bug, on propage la panique.
     pub fn with<T>(&self, f: impl FnOnce(&Connection) -> Result<T>) -> Result<T> {
         let guard = self.conn.lock().expect("verrou de base empoisonné");
         f(&guard)
@@ -1306,8 +1292,6 @@ Attendu : `test result: ok. 3 passed`.
 git add -A
 git commit -m "feat: schema SQLite et migrations versionnees"
 ```
-
----
 
 ### Task 6 : Accès aux projets et aux liens
 
@@ -1616,15 +1600,13 @@ git add -A
 git commit -m "feat: persistance des projets et des liens inter-plateformes"
 ```
 
----
-
 ### Task 7 : Séries, pays, snapshots, versions, évènements
 
 **Files:**
 - Create: `src-tauri/src/store/metrics.rs`
 - Modify: `src-tauri/src/store/mod.rs`
 
-Point critique : les revenus sont stockés en chaîne décimale exacte, jamais en flottant. Le delta CurseForge se calcule entre snapshots consécutifs et n'est jamais négatif — CFWidget peut renvoyer un total corrigé à la baisse, auquel cas le delta du jour vaut zéro.
+Point critique : les revenus sont stockés en chaîne décimale exacte, jamais en flottant. Le delta CurseForge se calcule entre snapshots consécutifs et n'est jamais négatif, CFWidget peut renvoyer un total corrigé à la baisse, auquel cas le delta du jour vaut zéro.
 
 - [ ] **Step 1 : écrire les tests qui échouent**
 
@@ -1996,8 +1978,6 @@ git add -A
 git commit -m "feat: persistance des series, snapshots, versions et evenements"
 ```
 
----
-
 ### Task 8 : Politique réseau commune
 
 **Files:**
@@ -2137,8 +2117,6 @@ Attendu : `test result: ok. 3 passed`.
 git add -A
 git commit -m "feat: politique reseau commune, retry borne et lots d'analyse"
 ```
-
----
 
 ### Task 9 : Client Modrinth
 
@@ -2501,8 +2479,6 @@ git add -A
 git commit -m "feat: client Modrinth v2 et v3 avec parsing teste"
 ```
 
----
-
 ### Task 10 : Client CurseForge
 
 **Files:**
@@ -2714,8 +2690,6 @@ Attendu : `test result: ok. 3 passed`.
 git add -A
 git commit -m "feat: client CurseForge public via CFWidget"
 ```
-
----
 
 ### Task 10 bis : Flux OAuth Modrinth
 
@@ -3035,8 +3009,6 @@ Attendu : `test result: ok. 7 passed`.
 git add -A
 git commit -m "feat: connexion Modrinth par OAuth avec redirection en boucle locale"
 ```
-
----
 
 ### Task 11 : Agrégations pour la page de vision
 
@@ -3440,8 +3412,6 @@ Attendu : `test result: ok. 6 passed`.
 git add -A
 git commit -m "feat: agregations SQL alimentant la page de vision"
 ```
-
----
 
 ### Task 12 : Orchestration de la synchronisation
 
@@ -3864,8 +3834,6 @@ git add -A
 git commit -m "feat: orchestration de la decouverte, du rafraichissement et des snapshots"
 ```
 
----
-
 ### Task 13 : Surface Tauri
 
 **Files:**
@@ -4106,9 +4074,7 @@ git add -A
 git commit -m "feat: commandes Tauri et etat applicatif"
 ```
 
----
-
-### Task 14 : Couche front — types, API, état, formatage
+### Task 14 : Couche front, types, API, état, formatage
 
 **Files:**
 - Create: `src/lib/types.ts`, `src/lib/api.ts`, `src/lib/format.ts`, `src/lib/state.svelte.ts`
@@ -4401,8 +4367,6 @@ npm test
 git add -A
 git commit -m "feat: couche front typee, etat en runes et formatage teste"
 ```
-
----
 
 ### Task 15 : Wrapper ECharts et constructeurs d'options
 
@@ -4803,8 +4767,6 @@ Attendu : `Test Files 2 passed`, tous les tests verts.
 git add -A
 git commit -m "feat: wrapper ECharts et constructeurs d'options testes"
 ```
-
----
 
 ### Task 16 : Composants de la page de vision
 
@@ -5319,8 +5281,6 @@ git add -A
 git commit -m "feat: page de vision et ses composants"
 ```
 
----
-
 ### Task 17 : Connexion, réglages, détail de projet, routage
 
 **Files:**
@@ -5632,8 +5592,6 @@ npm test
 git add -A
 git commit -m "feat: ecran de connexion, reglages, detail de projet et routage"
 ```
-
----
 
 ### Task 18 : Intégration continue et publication
 

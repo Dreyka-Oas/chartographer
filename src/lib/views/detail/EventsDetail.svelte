@@ -26,7 +26,7 @@
 
   /**
    * Les horodatages arrivent en ISO. Ils sont écrits comme les dates du reste
-   * de l'application — `18 août 2026`, et non `2026-08-18` — l'heure gardant sa
+   * de l'application, `18 août 2026`, et non `2026-08-18`, l'heure gardant sa
    * forme chiffrée, seule chose qui compte pour situer deux évènements du même
    * jour l'un par rapport à l'autre.
    */

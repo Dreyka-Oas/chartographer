@@ -61,7 +61,7 @@ impl Default for PlatformFilter {
 
 impl PlatformFilter {
     /// Construit le filtre depuis la liste envoyée par l'interface. Une liste
-    /// absente ou vide vaut « tout afficher » : mieux vaut trop montrer que
+    /// absente ou vide vaut "tout afficher" : mieux vaut trop montrer que
     /// présenter un écran vide sur une valeur mal formée.
     pub fn from_names(names: Option<&[String]>) -> Self {
         let Some(names) = names.filter(|n| !n.is_empty()) else {
@@ -467,8 +467,8 @@ pub fn curseforge_revenue(conn: &Connection) -> Result<crate::models::CfRevenue>
 
 /// Indicateurs de tête.
 ///
-/// Deux lectures cohabitent, et c'est voulu : les mesures d'état — cumul depuis
-/// l'origine, solde retirable, abonnés — ne dépendent que du jour, tandis que
+/// Deux lectures cohabitent, et c'est voulu : les mesures d'état, cumul depuis
+/// l'origine, solde retirable, abonnés, ne dépendent que du jour, tandis que
 /// les mesures de période suivent `from`..`to`, les bornes choisies dans la
 /// barre de filtres. L'interface bascule de l'une à l'autre ; les deux sont
 /// calculées ici, car un aller-retour de plus coûterait davantage que ces
@@ -788,7 +788,7 @@ fn valid_day(day: &str) -> bool {
 
 /// Résout la fenêtre demandée en bornes internes `(début inclus, fin exclue)`.
 ///
-/// L'interface raisonne en dates incluses : choisir « du 1er au 31 août » doit
+/// L'interface raisonne en dates incluses : choisir "du 1er au 31 août" doit
 /// contenir le 31. Les requêtes, elles, comparent avec `day < to`. La conversion
 /// se fait ici, à un seul endroit. Sans bornes explicites on retombe sur la
 /// fenêtre glissante de `range_days` jours qui se termine aujourd'hui.
@@ -835,7 +835,7 @@ pub fn available_months(conn: &Connection) -> Result<Vec<String>> {
 ///
 /// La règle est celle de la courbe : la mesure rapportée du tableau de bord
 /// prime, et l'écart entre deux snapshots CurseForge ne sert qu'aux journées
-/// qu'aucune mesure ne couvre — sans quoi elles compteraient deux fois.
+/// qu'aucune mesure ne couvre, sans quoi elles compteraient deux fois.
 fn downloads_by_project(conn: &Connection, day: &str) -> Result<HashMap<i64, i64>> {
     let mut out: HashMap<i64, i64> = HashMap::new();
     let mut stmt = conn.prepare(
@@ -911,8 +911,8 @@ pub fn day_report(
     let previous_day = shift_day(day, -1);
     let (previous_modrinth, previous_curseforge) = revenue_of(&previous_day, day)?;
 
-    // Rang du jour parmi toutes celles relevées jusqu'à lui, lui compris —
-    // la même règle que le mode « toute l'histoire antérieure » du
+    // Rang du jour parmi toutes celles relevées jusqu'à lui, lui compris,
+    // la même règle que le mode "toute l'histoire antérieure" du
     // classement, pour que les deux pages ne se contredisent jamais.
     //
     // Le classement ne regarde jamais en avant : la question est de savoir si
@@ -959,8 +959,8 @@ pub fn day_report(
     };
 
     // Projets du jour, comparés à la veille. `per_project` n'est appelée que
-    // pour le rattachement des deux plateformes — un mod publié des deux côtés
-    // tient sur une seule ligne — et pour le titre et l'icône. Les chiffres,
+    // pour le rattachement des deux plateformes, un mod publié des deux côtés
+    // tient sur une seule ligne, et pour le titre et l'icône. Les chiffres,
     // eux, viennent de la journée.
     let now = downloads_by_project(conn, day)?;
     let before = downloads_by_project(conn, &previous_day)?;
@@ -1609,7 +1609,7 @@ mod tests {
 
     /// Le bilan d'une journée se juge par ce qui l'entoure : la veille, les
     /// moyennes récentes, et le rang parmi toutes les journées relevées
-    /// jusqu'à elle — sans borne basse : une grosse journée bien plus
+    /// jusqu'à elle, sans borne basse : une grosse journée bien plus
     /// ancienne que l'ancienne fenêtre de quatre-vingt-dix jours doit quand
     /// même compter, sans quoi ce test ne prouverait rien que l'ancienne
     /// fenêtre ne prouvait déjà.

@@ -80,7 +80,7 @@
 
   <p class="note">
     CurseForge paie en points, à 0,05 $ l'unité, retirables dès qu'ils sont crédités : ce solde
-    entre donc dans « retirable maintenant » au même titre que celui de Modrinth. Les montants
+    entre donc dans "retirable maintenant" au même titre que celui de Modrinth. Les montants
     mensuels viennent de ton tableau de bord auteur, relevés à chaque synchronisation.
   </p>
 

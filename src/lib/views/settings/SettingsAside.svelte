@@ -118,7 +118,7 @@
   }
   /*
    * Chaque ligne ouvre la page publique du compte : au survol, le filet
-   * s'épaissit, la ligne glisse d'un cran et la flèche sort de sa marge —
+   * s'épaissit, la ligne glisse d'un cran et la flèche sort de sa marge,
    * assez pour annoncer un départ vers l'extérieur, sans clignoter.
    */
   .account {

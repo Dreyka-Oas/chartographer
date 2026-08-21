@@ -166,7 +166,7 @@
   <div class="grid tail">
     <div class="wide">
       <Card
-        title="CurseForge — points et revenus"
+        title="CurseForge, points et revenus"
         subtitle="Relevé automatiquement sur ton tableau de bord auteur, à chaque synchronisation"
       >
         <CurseforgeSummary />

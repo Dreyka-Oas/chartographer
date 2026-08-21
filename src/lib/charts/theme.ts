@@ -156,8 +156,8 @@ export function dayTooltipHtml(params: AxisParam[], options: DayTooltipOptions =
     // reste tel quel. Le nom du mod, lui, vient des plateformes.
     return `${entry.marker ?? ""} ${logo}${escapeHtml(name)} <b>${amount}</b>`;
   });
-  // Plusieurs séries : la question qui vient d'abord est « combien ce jour-là,
-  // en tout ». On la met au pied, séparée du détail par un filet.
+  // Plusieurs séries : la question qui vient d'abord est "combien ce jour-là,
+  // en tout". On la met au pied, séparée du détail par un filet.
   if (params.length > 1) {
     rows.push(
       `<span style="opacity:.65">──────────</span><br>Total <b>${format(sum)}</b>`,
@@ -188,7 +188,7 @@ export function axisStyle(p: Palette) {
  * Axe de valeurs, gradué comme le reste de l'application.
  *
  * Sans formateur, ECharts écrit `50,000` : la virgule y sépare les milliers,
- * alors qu'elle marque la décimale partout ailleurs sur la page — et le dernier
+ * alors qu'elle marque la décimale partout ailleurs sur la page, et le dernier
  * libellé, trop long pour la marge, se faisait couper en `200,00`, qui se lit
  * comme deux cents. `axisNumber` groupe les milliers d'une espace fine.
  *

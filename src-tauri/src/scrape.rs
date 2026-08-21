@@ -2,8 +2,8 @@
 //!
 //! Aucune interface publique n'expose ce solde : ni l'API REST, ni le jeton de
 //! dépôt. Il n'existe que sur le tableau de bord auteur, derrière une session.
-//! L'application ouvre donc une fenêtre où l'utilisateur se connecte lui-même —
-//! ses identifiants ne passent jamais par notre code — puis relit le texte de la
+//! L'application ouvre donc une fenêtre où l'utilisateur se connecte lui-même,
+//! ses identifiants ne passent jamais par notre code, puis relit le texte de la
 //! page.
 //!
 //! Le repérage se fait ici, sur du texte brut, pour être testable sans
@@ -29,15 +29,15 @@ fn parse_number(raw: &str) -> Option<i64> {
 /// Cherche un solde de points dans le texte d'une page.
 ///
 /// Deux tournures couvrent l'essentiel des mises en page : le nombre précède le
-/// mot (« 1 240 points ») ou le suit après un séparateur (« Points : 1 240 »).
-/// Les mentions du barème (« 0.05 USD per point ») ne portent pas de solde et
+/// mot ("1 240 points") ou le suit après un séparateur ("Points : 1 240").
+/// Les mentions du barème ("0.05 USD per point") ne portent pas de solde et
 /// sont écartées : un solde est entier.
 pub fn extract_points(text: &str) -> Option<i64> {
     let lower = text.to_lowercase();
     let bytes = lower.as_bytes();
 
     for (index, _) in lower.match_indices("point") {
-        // Forme « 1 240 points » : on remonte les chiffres avant le mot.
+        // Forme "1 240 points" : on remonte les chiffres avant le mot.
         let before = &lower[..index];
         let trimmed = before.trim_end();
         if trimmed.len() < before.len() || before.ends_with(' ') {
@@ -59,7 +59,7 @@ pub fn extract_points(text: &str) -> Option<i64> {
             }
         }
 
-        // Forme « Points : 1 240 » : on lit après le mot et son séparateur.
+        // Forme "Points : 1 240" : on lit après le mot et son séparateur.
         let after_word = index + "point".len();
         let rest = &lower[after_word.min(bytes.len())..];
         let rest = rest.trim_start_matches(|c: char| {
@@ -124,7 +124,7 @@ fn day_of(value: &serde_json::Value) -> Option<String> {
 }
 
 /// Cherche, dans une réponse quelconque, la plus longue série de couples
-/// « date, nombre ».
+/// "date, nombre".
 ///
 /// Le tableau de bord CurseForge n'a pas d'interface documentée : plutôt que de
 /// deviner un nom de champ qui changera, on reconnaît la forme d'une série

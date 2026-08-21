@@ -4,7 +4,7 @@ import { DARK, escapeHtml, tooltip, type Palette } from "./theme";
 
 /**
  * Infobulle d'un pays. Le format par défaut d'ECharts nomme la série, qui n'en a
- * pas ici : il affichait « série () ». On dit ce qui compte, le pays en toutes
+ * pas ici : il affichait "série ()". On dit ce qui compte, le pays en toutes
  * lettres et son compte, et on l'annonce même pour un pays sans relevé.
  */
 export function countryTooltipHtml(name: string, value: number, total: number): string {
@@ -29,7 +29,7 @@ export const ASPECT_SCALE = 1;
 /**
  * Proportions du dessin, l'Antarctique retirée, relevées sur le rendu.
  *
- * Le calcul théorique — 360° de longitude sur 143° de latitude — ne tombe pas
+ * Le calcul théorique, 360° de longitude sur 143° de latitude, ne tombe pas
  * juste : ECharts ajuste la géométrie dans son cadre avec ses propres marges.
  * C'est donc une mesure, à reprendre si le fond de carte change.
  */

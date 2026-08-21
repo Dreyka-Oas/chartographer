@@ -100,7 +100,7 @@ async fn the_published_release_is_installable() {
     println!("archive : {} octets depuis {url}", archive.len());
     assert!(
         archive.len() > 1_000_000,
-        "archive suspecte, {} octets seulement — c'est la taille d'une page \
+        "archive suspecte, {} octets seulement, c'est la taille d'une page \
          d'erreur, pas d'un installeur",
         archive.len()
     );
@@ -120,7 +120,7 @@ async fn the_published_release_is_installable() {
     println!("signature verifiee avec la cle publique de tauri.conf.json");
 
     // Contre-epreuve : un test de signature qui accepte tout passerait aussi.
-    // On abime un octet et on exige que la verification le voie — sans quoi
+    // On abime un octet et on exige que la verification le voie, sans quoi
     // rien de ce qui precede ne prouve quoi que ce soit.
     let mut altered = archive.to_vec();
     altered[archive.len() / 2] ^= 0xff;

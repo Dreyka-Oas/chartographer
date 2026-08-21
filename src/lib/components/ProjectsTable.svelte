@@ -17,8 +17,8 @@
     maxHeight?: number;
     /**
      * Ce que la table dit quand elle n'a rien à montrer. Sans cela, elle posait
-     * sa rangée d'en-têtes au-dessus du vide — six intitulés de colonnes et pas
-     * une ligne — là où les cartes voisines disent ce qui manque.
+     * sa rangée d'en-têtes au-dessus du vide, six intitulés de colonnes et pas
+     * une ligne, là où les cartes voisines disent ce qui manque.
      */
     empty?: string;
   } = $props();
@@ -95,7 +95,7 @@
           </td>
           <td class="spark">
             <!--
-              Une courbe à plat se lit comme « zéro téléchargement », alors qu'il
+              Une courbe à plat se lit comme "zéro téléchargement", alors qu'il
               s'agit le plus souvent d'un historique pas encore constitué. Le
               tiret dit l'absence de données sans rien affirmer d'autre.
             -->

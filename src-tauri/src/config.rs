@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 ///
 /// Le jeton ne s'écrit pas dans `session.json` : il va au trousseau du système,
 /// et ce fichier ne garde que ce qui l'accompagne. Le champ se lit encore, en
-/// revanche — c'est ainsi qu'une session écrite par une version antérieure se
+/// revanche, c'est ainsi qu'une session écrite par une version antérieure se
 /// laisse reprendre et déplacer, une fois, vers le trousseau.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Session {
@@ -114,14 +114,14 @@ fn write_json<T: Serialize>(app_data: &Path, path: PathBuf, value: &T) -> Result
     std::fs::write(path, raw).map_err(|e| AppError::Config(format!("écriture : {e}")))
 }
 
-/// Relit la session, jeton compris — celui-ci venant du trousseau.
+/// Relit la session, jeton compris, celui-ci venant du trousseau.
 ///
 /// Un fichier écrit par une version antérieure porte encore le jeton en clair :
 /// il est alors déplacé vers le trousseau et le fichier réécrit sans lui, une
 /// bonne fois. La migration est silencieuse à dessein ; elle ne demande rien à
 /// l'utilisateur et ne peut que retirer un secret du disque.
 ///
-/// Sans jeton — trousseau muet, ou entrée effacée par ailleurs — il n'y a pas
+/// Sans jeton, trousseau muet, ou entrée effacée par ailleurs, il n'y a pas
 /// de session : mieux vaut redemander le jeton qu'ouvrir l'application sur des
 /// appels qui échoueront tous.
 pub fn load_session(app_data: &Path) -> Option<Session> {

@@ -2,8 +2,8 @@
   /**
    * Le bilan d'une journée, et une seule.
    *
-   * Les autres pages répondent à « combien » ; celle-ci répond à « était-ce un
-   * bon jour ». La différence n'est pas de degré : un nombre de téléchargements
+   * Les autres pages répondent à "combien" ; celle-ci répond à "était-ce un
+   * bon jour". La différence n'est pas de degré : un nombre de téléchargements
    * ne veut rien dire seul, il ne prend sens que rapporté à la veille, aux
    * semaines précédentes et au reste de l'historique. Tout ce qui est montré
    * ici sert ce jugement.
@@ -116,8 +116,8 @@
     <span class="date">{formatDayLong(report.day)}</span>
     {#if report.rank !== null}
       <!-- Le rang et son exposant tiennent dans un même span : enfants directs
-           d'une boîte flex, ils étaient séparés par son `gap`, et « 4ᵉ » se
-           lisait « 4 ᵉ ». -->
+           d'une boîte flex, ils étaient séparés par son `gap`, et "4ᵉ" se
+           lisait "4 ᵉ". -->
       <button class="rank" onclick={() => dashboard.openDetail("days")}>
         <span>
           {report.rank}<sup>{report.rank === 1 ? "re" : "e"}</sup> journée sur {report.ranked_days}

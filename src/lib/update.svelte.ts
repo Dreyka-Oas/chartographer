@@ -5,12 +5,12 @@ import { isBusy, ratioOf, type UpdateProgress, type UpdateStage } from "./update
 
 /**
  * État vivant des mises à jour : ce que le socle a répondu, et où en est le
- * téléchargement. Les règles d'affichage, elles, vivent dans `update.ts` —
+ * téléchargement. Les règles d'affichage, elles, vivent dans `update.ts`,
  * pures, et éprouvées sans lancer l'application.
  *
  * Une question posée au démarrage ne coûte rien ; remplacer le binaire pendant
  * qu'on s'en sert demande un accord. Rien ne s'installe donc sans un clic, et
- * seule une archive signée avec la clé du projet est acceptée — la vérification
+ * seule une archive signée avec la clé du projet est acceptée, la vérification
  * a lieu dans le socle, avant que quoi que ce soit ne s'exécute.
  */
 class Updater {
@@ -44,7 +44,7 @@ class Updater {
    * `silent` sert au démarrage : une panne de réseau au lancement n'a pas à
    * s'afficher en rouge, l'application marche très bien sans avoir posé la
    * question. Le même appel depuis les réglages, lui, doit dire ce qui a
-   * échoué — sinon le bouton semble ne rien faire.
+   * échoué, sinon le bouton semble ne rien faire.
    *
    * Le délai d'attente est court et explicite : sans lui, un serveur qui
    * accepte la connexion puis ne répond plus laisserait la recherche pendante

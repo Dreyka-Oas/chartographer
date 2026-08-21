@@ -1,5 +1,5 @@
 <script lang="ts">
-  /** Section « Affichage » : fenêtre, cadence, devise et thème. */
+  /** Section "Affichage" : fenêtre, cadence, devise et thème. */
   import Select from "../../components/Select.svelte";
   import { formatDayLong } from "../../format";
   import { dashboard } from "../../state.svelte";

@@ -87,7 +87,7 @@ export function stackValues(rows: number[][]): number[][] {
  * entre deux cumuls comme le ferait un empilement d'ECharts. Peintes dans
  * l'ordre, les grandes recouvriraient les petites ; peintes de la plus haute à
  * la plus basse, chaque bande laisse voir la couleur de la série à laquelle
- * elle revient — le même dessin qu'un empilement.
+ * elle revient, le même dessin qu'un empilement.
  *
  * Ce rang est dit en `z` plutôt qu'en réordonnant le tableau des séries, et
  * c'est ce qui le rend fiable. Les séries portent un `id` pour qu'ECharts
@@ -121,7 +121,7 @@ export function stackedProjectsOption(
      * lieu de les refaire.
      *
      * Aucune courbe d'accélération n'est nommée ici : mesuré, `cubicOut`
-     * annule la transition dans ECharts 6 — le tracé arrive à destination dès
+     * annule la transition dans ECharts 6, le tracé arrive à destination dès
      * la première image. Le réglage par défaut, lui, glisse bien.
      *
      * Le tri du tooltip est laissé au formateur, qui seul connaît la valeur

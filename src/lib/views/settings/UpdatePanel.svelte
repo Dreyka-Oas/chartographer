@@ -1,6 +1,6 @@
 <script lang="ts">
   /**
-   * Section « Mises à jour » : version installée, recherche d'une plus récente,
+   * Section "Mises à jour" : version installée, recherche d'une plus récente,
    * téléchargement et relance.
    *
    * L'installation n'est jamais lancée toute seule. Chercher en fond ne coûte
@@ -90,7 +90,7 @@
   }
   /*
    * Taille inconnue : la barre balaie sa piste au lieu de se remplir. Le
-   * mouvement dit « en cours » sans prétendre à une proportion.
+   * mouvement dit "en cours" sans prétendre à une proportion.
    */
   .bar.unknown span {
     animation: sweep 1200ms ease-in-out infinite;
@@ -115,7 +115,7 @@
   }
   /*
    * Notes de version, telles que la release les porte : Markdown brut, sauts
-   * de ligne compris. On ne les met pas en forme — les rendre en HTML voudrait
+   * de ligne compris. On ne les met pas en forme, les rendre en HTML voudrait
    * dire faire confiance à un texte venu du réseau.
    */
   .notes {

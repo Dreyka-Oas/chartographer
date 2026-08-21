@@ -2,7 +2,7 @@
  * Ce qu'une mise à jour raconte, sans rien savoir de Tauri.
  *
  * Le module d'à côté tient l'état vivant et parle au socle ; celui-ci ne
- * contient que des fonctions pures — l'avancement, les mots affichés, ce qu'un
+ * contient que des fonctions pures, l'avancement, les mots affichés, ce qu'un
  * bouton doit faire. C'est le seul moyen d'éprouver ces règles sans lancer
  * l'application, et donc de les corriger sans avoir à installer une version
  * pour voir le résultat.
@@ -12,8 +12,8 @@ import { formatBytes } from "./format";
 /**
  * Étapes visibles d'une mise à jour, dans l'ordre où elles se présentent.
  *
- * `idle` n'est pas « rien à signaler » : c'est l'état avant toute question. Il
- * se distingue de `none`, qui est une réponse — le serveur a répondu, cette
+ * `idle` n'est pas "rien à signaler" : c'est l'état avant toute question. Il
+ * se distingue de `none`, qui est une réponse, le serveur a répondu, cette
  * version est la dernière. Confondre les deux ferait dire à l'interface qu'elle
  * est à jour alors qu'elle n'a encore rien demandé.
  */

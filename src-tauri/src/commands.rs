@@ -108,8 +108,8 @@ pub fn logout(state: State<'_, AppState>) -> Result<AuthStatus> {
     config::clear_session(&state.data_dir)?;
     // Le jeton d'envoi CurseForge part avec le reste. Le laisser derriere
     // signifierait qu'apres s'etre deconnecte, l'application garde de quoi
-    // publier des fichiers sur le compte — ce n'est pas ce que « se
-    // deconnecter » veut dire. Il se releve tout seul a la prochaine visite
+    // publier des fichiers sur le compte, ce n'est pas ce que "se
+    // deconnecter" veut dire. Il se releve tout seul a la prochaine visite
     // du tableau de bord.
     crate::secrets::clear(crate::secrets::CURSEFORGE_UPLOAD_TOKEN)?;
     Ok(status_of(&state))
@@ -234,10 +234,10 @@ pub fn day_report(
 /// classement partage son sélecteur de dates, et deux règles de fenêtre
 /// donneraient deux périodes pour un même réglage. `by` absent vaut
 /// téléchargements, `source` absent vaut les deux plateformes, `scope` absent
-/// vaut fenêtre glissante — ce qui reproduit le classement d'avant ces
+/// vaut fenêtre glissante, ce qui reproduit le classement d'avant ces
 /// réglages. `window_days` n'a de sens que pour `scope: "sliding"` ; absent
 /// dans ce cas, il retombe sur les quatre-vingt-dix jours d'avant ce réglage,
-/// sans ambiguïté possible avec « toute l'histoire antérieure » puisque
+/// sans ambiguïté possible avec "toute l'histoire antérieure" puisque
 /// celle-ci passe désormais par `scope: "all"`.
 // Une commande Tauri reçoit ses paramètres à plat : les nommer un par un est
 // ce qui rend l'appel lisible depuis la webview. Les regrouper dans une
@@ -444,7 +444,7 @@ pub fn pairing_state(state: State<'_, AppState>) -> Result<Vec<PairingEntry>> {
 #[tauri::command]
 pub fn link_manual(state: State<'_, AppState>, modrinth_id: i64, curseforge_id: i64) -> Result<()> {
     state.store.with(|conn| {
-        // Un projet rattaché à la main n'est plus « sans équivalent ».
+        // Un projet rattaché à la main n'est plus "sans équivalent".
         p::set_solo(conn, modrinth_id, false)?;
         p::set_solo(conn, curseforge_id, false)?;
         p::link_exclusive(conn, modrinth_id, curseforge_id)
@@ -525,7 +525,7 @@ fn ensure_curseforge_window(app: &tauri::AppHandle, visible: bool) -> Result<()>
     let url = tauri::Url::parse(CF_AUTHOR_PAGE)
         .map_err(|e| AppError::Config(format!("adresse CurseForge invalide : {e}")))?;
     tauri::WebviewWindowBuilder::new(app, CF_WINDOW, tauri::WebviewUrl::External(url))
-        .title("CurseForge — connexion à ton compte")
+        .title("CurseForge, connexion à ton compte")
         .inner_size(1180.0, 860.0)
         .visible(visible)
         .build()
@@ -652,7 +652,7 @@ pub struct CfSession {
 ///
 /// Le nom retenu dans les réglages ne prouve rien : il vient d'un relevé passé,
 /// et survit à l'expiration de la session. La seule réponse sûre est celle de
-/// la page elle-même — le tableau de bord auteur, ou la page d'identification
+/// la page elle-même, le tableau de bord auteur, ou la page d'identification
 /// vers laquelle il renvoie.
 #[tauri::command]
 pub async fn curseforge_session(app: tauri::AppHandle) -> Result<CfSession> {
@@ -776,8 +776,8 @@ const READ_SCRIPT: &str = r#"(function () {
 
 /// Rend la fenêtre du tableau de bord, en la créant cachée si elle manque.
 ///
-/// La collecte doit se faire seule : une fenêtre absente — jamais ouverte, ou
-/// refermée entre deux relevés — se rouvre au lieu d'interrompre le travail.
+/// La collecte doit se faire seule : une fenêtre absente, jamais ouverte, ou
+/// refermée entre deux relevés, se rouvre au lieu d'interrompre le travail.
 pub(crate) async fn cf_window(app: &tauri::AppHandle) -> Result<tauri::WebviewWindow> {
     if let Some(window) = app.get_webview_window(CF_WINDOW) {
         return Ok(window);
@@ -855,7 +855,7 @@ pub(crate) async fn navigate(
 
 /// Attend que la page cesse de grossir.
 ///
-/// `readyState` passe à « complete » avant que tout soit là : le pied de page,
+/// `readyState` passe à "complete" avant que tout soit là : le pied de page,
 /// les tableaux et les listes arrivent après. Lire à cet instant donne une page
 /// à moitié vide. On attend donc deux mesures identiques d'affilée.
 pub(crate) async fn wait_until_settled(window: &tauri::WebviewWindow) {
@@ -1004,7 +1004,7 @@ pub async fn probe_curseforge(app: tauri::AppHandle) {
     if app.get_webview_window(CF_WINDOW).is_none() {
         let mut builder =
             tauri::WebviewWindowBuilder::new(&app, CF_WINDOW, tauri::WebviewUrl::External(url))
-                .title("CurseForge — sonde")
+                .title("CurseForge, sonde")
                 .inner_size(1180.0, 860.0);
         if armed_early {
             builder = builder.initialization_script(CAPTURE_SCRIPT);
@@ -1247,7 +1247,7 @@ const FETCH_SCRIPT: &str = r#"(function () {
 ///
 /// Le site public refuse toute requête faite hors d'un navigateur : ses pages
 /// ne se lisent qu'avec la fenêtre. Le tableau de bord auteur, lui, ne compte
-/// les abonnés nulle part — ni sa liste de projets, ni ses adresses de
+/// les abonnés nulle part, ni sa liste de projets, ni ses adresses de
 /// statistiques, toutes sondées sans rien trouver.
 const PAGE_TEXT: &str = r#"(function () {
   var texte = document.body ? document.body.innerText : '';
@@ -1258,7 +1258,7 @@ const PAGE_TEXT: &str = r#"(function () {
 /// au tableau de bord.
 ///
 /// Une seule page sert les deux : l'onglet des abonnés porte la liste et, en
-/// tête, leur nombre. Deux visites — une pour compter, une pour nommer —
+/// tête, leur nombre. Deux visites, une pour compter, une pour nommer,
 /// n'apprendraient rien de plus et doubleraient les passages sur une page
 /// publique qui n'a aucune raison d'en recevoir autant.
 ///
@@ -1289,7 +1289,7 @@ async fn survey_followers(
             count = text.trim().parse::<i64>().ok();
         }
         // Un compte annoncé sans aucune vignette veut dire que la grille n'est
-        // pas encore peinte — sauf s'il n'y a personne à peindre.
+        // pas encore peinte, sauf s'il n'y a personne à peindre.
         if !seen.is_empty() || count == Some(0) {
             break;
         }
@@ -1311,7 +1311,7 @@ async fn survey_followers(
 /// Relève la liste des abonnés sur la fiche publique du compte.
 ///
 /// Chaque abonné y a sa vignette : un lien vers son profil, un avatar, et
-/// l'ancienneté de son compte — jamais la date à laquelle il s'est abonné. Le
+/// l'ancienneté de son compte, jamais la date à laquelle il s'est abonné. Le
 /// site les classe du plus récent au plus ancien ; ce rang est la seule chose
 /// qu'il dise du temps, on le garde donc tel quel.
 ///
@@ -1375,7 +1375,7 @@ const FOLLOWERS_COUNT: &str = r#"(function () {
 
 /// Solde de points affiché par le tableau de bord.
 ///
-/// Le bandeau montre « My Balance », le nombre de points puis leur contre-valeur
+/// Le bandeau montre "My Balance", le nombre de points puis leur contre-valeur
 /// en dollars. Aucune adresse ne le sert : il est lu là où il s'affiche.
 fn balance_from_text(text: &str) -> Option<i64> {
     let lower = text.to_lowercase();
@@ -1534,7 +1534,7 @@ pub async fn collect_curseforge(
     }
 
     // Abonnés : CurseForge ne les compte que sur la fiche publique du compte,
-    // et pour le compte entier — aucun décompte par projet n'existe.
+    // et pour le compte entier, aucun décompte par projet n'existe.
     let account = curseforge_account(&state)?;
     // La fiche publique n'est visitée qu'une fois par jour : le nombre d'abonnés
     // bouge de quelques unités par mois, et une visite à chaque relevé ferait

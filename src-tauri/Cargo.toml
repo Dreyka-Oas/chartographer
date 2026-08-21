@@ -34,7 +34,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [dev-dependencies]
 # Vérifie, dans `tests/verify_release.rs`, que l'archive publiée porte bien la
-# signature de la clé du projet — la même bibliothèque que celle dont se sert
+# signature de la clé du projet, la même bibliothèque que celle dont se sert
 # l'updater pour refuser tout le reste.
 minisign-verify = "0.2"
 

@@ -25,7 +25,7 @@ function iso(date: Date): string {
  * Les six semaines qui couvrent `month` (`YYYY-MM`), lundi en tête.
  *
  * Les cases des mois voisins sont rendues avec les autres : le composant les
- * grise, mais elles restent cliquables — c'est ainsi qu'on passe au mois suivant
+ * grise, mais elles restent cliquables, c'est ainsi qu'on passe au mois suivant
  * sans viser la flèche.
  */
 export function monthGrid(month: string, weekStartsOn = 1): string[][] {

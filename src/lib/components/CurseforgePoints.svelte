@@ -128,8 +128,8 @@
 <style>
   /*
    * Le chiffre d'abord, l'explication à côté : la carte n'a plus de bouton
-   * esseulé en bas, puisque le relevé se fait tout seul. Ce qui reste — le
-   * détail technique, l'historique — se déplie à la demande.
+   * esseulé en bas, puisque le relevé se fait tout seul. Ce qui reste, le
+   * détail technique, l'historique, se déplie à la demande.
    */
   .head {
     display: flex;

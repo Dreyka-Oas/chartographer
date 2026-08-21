@@ -1,5 +1,5 @@
 <script lang="ts">
-  /** Section « Compte Modrinth » : état du token et sortie de session. */
+  /** Section "Compte Modrinth" : état du token et sortie de session. */
   import { api } from "../../api";
   import Confirm from "../../components/Confirm.svelte";
   import { formatDayLong } from "../../format";

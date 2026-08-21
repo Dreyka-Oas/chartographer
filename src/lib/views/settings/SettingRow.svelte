@@ -28,7 +28,7 @@
     note?: string | null;
     /**
      * Un échec se voit. Écrite du même gris que l'explication au-dessus, une
-     * signature refusée se lisait comme une note ordinaire — c'est pourtant le
+     * signature refusée se lisait comme une note ordinaire, c'est pourtant le
      * seul message de ce panneau qui demande une réaction.
      */
     noteTone?: "plain" | "error";

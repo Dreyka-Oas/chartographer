@@ -13,8 +13,8 @@ pub struct ProjectUpsert {
     pub icon_url: Option<String>,
     pub created_at: Option<String>,
     pub total_downloads: i64,
-    /// Abonnés, quand la source les compte. `None` veut dire « je ne sais
-    /// pas » : le nombre déjà connu est alors conservé.
+    /// Abonnés, quand la source les compte. `None` veut dire "je ne sais
+    /// pas" : le nombre déjà connu est alors conservé.
     pub followers: Option<i64>,
 }
 

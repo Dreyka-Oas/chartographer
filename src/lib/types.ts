@@ -385,11 +385,11 @@ export type RankSource = "both" | "modrinth" | "curseforge";
  * À quoi une journée se compare pour obtenir son rang.
  *
  * Deux familles. `all` et `period` sont absolues : elles comparent un groupe
- * de journées à lui-même, sans égard à leur ordre — `all` sur tout
+ * de journées à lui-même, sans égard à leur ordre, `all` sur tout
  * l'historique, `period` sur la seule période affichée. `sliding` et
  * `retrospective` sont rétrospectives : une journée n'y est jugée que sur
  * celles qui la précèdent, si bien qu'un rang une fois acquis ne bouge plus
- * jamais — `sliding` sur une fenêtre de jours, `retrospective` sans borne
+ * jamais, `sliding` sur une fenêtre de jours, `retrospective` sans borne
  * basse.
  */
 export type RankScope = "sliding" | "retrospective" | "all" | "period";

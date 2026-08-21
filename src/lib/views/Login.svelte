@@ -133,7 +133,7 @@
       <p>
         Aucune clé à créer. Connecte-toi à ton compte dans la fenêtre que l'application ouvre :
         elle y lit ensuite le tableau de bord auteur, et crée toute seule le jeton d'envoi, sous
-        le nom « Chartographer », le jour où tu publies un fichier.
+        le nom "Chartographer", le jour où tu publies un fichier.
       </p>
       <div class="cf-actions">
         <button class="primary" onclick={() => api.openCurseforgeWindow()}>

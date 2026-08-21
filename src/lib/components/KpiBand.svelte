@@ -32,8 +32,8 @@
 
   /**
    * La répartition dite en toutes lettres. La barre se partage en deux moitiés
-   * quand rien n'a été relevé, mais l'écrire — « 50 % Modrinth · 50 %
-   * CurseForge » sous un total de zéro — affirmerait un partage qui n'existe
+   * quand rien n'a été relevé, mais l'écrire, "50 % Modrinth · 50 %
+   * CurseForge" sous un total de zéro, affirmerait un partage qui n'existe
    * pas : sur une base neuve, la phrase annonçait une répartition inventée.
    */
   function splitHint(modrinth: number, curseforge: number) {
@@ -54,7 +54,7 @@
    * Deux d'entre elles n'ont pas d'équivalent honnête sur une fenêtre : un
    * solde retirable et un nombre d'abonnés sont des états de l'instant, dont
    * aucun historique quotidien n'est relevé. Plutôt que d'inventer une valeur,
-   * elles changent de sujet — les revenus deviennent ceux gagnés sur la
+   * elles changent de sujet, les revenus deviennent ceux gagnés sur la
    * période, les abonnés le disent et gardent leur compte du jour.
    */
   const perDay = (value: number) => (days > 0 ? Math.round(value / days) : 0);
@@ -162,8 +162,8 @@
 
   /**
    * Chaque carte porte sa propre lecture : on veut souvent un cumul et une
-   * période côte à côte. Les abonnés font exception — aucun historique n'en est
-   * relevé, une version « période » serait le même chiffre sous un autre nom,
+   * période côte à côte. Les abonnés font exception, aucun historique n'en est
+   * relevé, une version "période" serait le même chiffre sous un autre nom,
    * la carte n'a donc pas de bascule.
    */
   const tiles = $derived(
@@ -241,7 +241,7 @@
       >
         <!-- Rien de relevé : la barre s'éteint. Peinte à pleines couleurs sur
              deux moitiés, elle affirmait un partage que le libellé venait de
-             démentir — et sur fond sombre, ces deux moitiés vives se lisaient
+             démentir, et sur fond sombre, ces deux moitiés vives se lisaient
              de loin comme des chiffres. -->
         <div class="bar" class:blank={tile.parts.modrinth + tile.parts.curseforge <= 0}>
           <span class="modrinth" style="width:{share(tile.parts)}%"></span>

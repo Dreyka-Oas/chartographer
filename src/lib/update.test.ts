@@ -59,7 +59,7 @@ describe("noteFor", () => {
     expect(noteFor("idle", null, nothing, null)).toBe("");
   });
 
-  it("distingue « pas encore demandé » de « déjà à jour »", () => {
+  it("distingue pas encore demandé de déjà à jour", () => {
     expect(noteFor("none", null, nothing, null)).toBe("Cette version est la plus récente.");
   });
 

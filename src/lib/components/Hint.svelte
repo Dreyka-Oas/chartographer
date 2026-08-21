@@ -3,7 +3,7 @@
    * Point d'interrogation posé à côté d'un intitulé, qui livre son explication
    * au survol.
    *
-   * Les précisions de méthode — d'où vient un chiffre, ce qu'il ne dit pas —
+   * Les précisions de méthode, d'où vient un chiffre, ce qu'il ne dit pas,
    * ont leur place dans l'interface, mais pas en travers du chemin : écrites en
    * clair sous chaque titre, elles prennent plus de place que ce qu'elles
    * commentent. Rangées ici, elles restent à un survol de distance.

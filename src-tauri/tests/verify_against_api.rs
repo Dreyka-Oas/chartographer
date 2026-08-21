@@ -6,7 +6,7 @@
 //!
 //! Ce qu'il éprouve : chaque journée enregistrée dans `metrics_daily` doit
 //! valoir celle que l'API rend pour la même journée. Un écart signalerait une
-//! collecte fautive — un décalage de fuseau, un jour recopié au mauvais
+//! collecte fautive, un décalage de fuseau, un jour recopié au mauvais
 //! endroit, un total pris pour un quotidien.
 
 use chartographer_lib::config;
@@ -23,7 +23,7 @@ fn data_dir() -> std::path::PathBuf {
 /// D'où vient le nombre d'abonnés Modrinth, et vaut-il ce que l'API annonce.
 ///
 /// Modrinth ne totalise rien : il donne un compte d'abonnés par projet, et
-/// c'est leur somme qui fait le chiffre affiché. Deux pièges s'y cachent — les
+/// c'est leur somme qui fait le chiffre affiché. Deux pièges s'y cachent, les
 /// projets archivés, qu'il ne faut pas compter, et ceux qui ne sont pas
 /// publics, que l'API ne rend qu'avec un token.
 #[tokio::test]
@@ -82,7 +82,7 @@ async fn local_days_match_what_modrinth_answers() {
     // lots et l'appel s'allonge sans rien apprendre de plus.
     //
     // La borne basse tombe à minuit, jamais à l'heure courante : demander
-    // « depuis il y a quinze jours » ramenait une première journée amputée de
+    // "depuis il y a quinze jours" ramenait une première journée amputée de
     // ses premières heures, qu'aucune base ne pouvait égaler.
     let end = Utc::now();
     let first: NaiveDate = end.date_naive() - Duration::days(14);

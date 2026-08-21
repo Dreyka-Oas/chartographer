@@ -91,7 +91,7 @@ impl Draft {
 /// Une entrée du catalogue des versions de jeu CurseForge.
 ///
 /// Le même catalogue porte les versions du jeu et les chargeurs de mods : les
-/// deux sont des « versions » à ses yeux, distinguées par leur type.
+/// deux sont des "versions" à ses yeux, distinguées par leur type.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub struct GameVersion {
     pub id: i64,
@@ -105,7 +105,7 @@ pub struct GameVersion {
 /// Traduit des noms lisibles en identifiants du catalogue.
 ///
 /// La comparaison ignore la casse et accepte le nom comme le raccourci, car
-/// CurseForge écrit « Fabric » là où Modrinth écrit « fabric ». Les noms sans
+/// CurseForge écrit "Fabric" là où Modrinth écrit "fabric". Les noms sans
 /// correspondance sont rendus à part : mieux vaut le dire que publier une
 /// version rattachée à la mauvaise cible.
 pub fn resolve_game_versions(

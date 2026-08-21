@@ -2,7 +2,7 @@
 //!
 //! Un jeton Modrinth ouvre le compte de l'auteur, et celui de CurseForge y
 //! publie des fichiers. Ecrits en clair dans le dossier de données, ils sont
-//! lisibles par n'importe quel programme lancé sous la même session — les
+//! lisibles par n'importe quel programme lancé sous la même session, les
 //! droits du fichier n'y changent rien, puisque ce programme est cet
 //! utilisateur. Le trousseau du système, lui, les chiffre avec les
 //! identifiants du compte : le gestionnaire d'identifiants sous Windows, le
@@ -30,7 +30,7 @@ pub fn store(name: &str, value: &str) -> Result<()> {
     backend::store(name, value)
 }
 
-/// Relit un jeton. `None` quand il n'y en a pas — ce qui n'est pas une erreur :
+/// Relit un jeton. `None` quand il n'y en a pas, ce qui n'est pas une erreur :
 /// c'est l'état d'une application qu'on n'a pas encore reliée.
 pub fn load(name: &str) -> Result<Option<String>> {
     backend::load(name)
@@ -53,7 +53,7 @@ pub fn present(name: &str) -> bool {
 #[cfg(not(test))]
 fn unavailable(name: &str, detail: impl std::fmt::Display) -> crate::error::AppError {
     crate::error::AppError::Config(format!(
-        "le trousseau du système n'a pas répondu pour « {name} » ({detail}). \
+        "le trousseau du système n'a pas répondu pour {name} ({detail}). \
          Les jetons n'y sont pas conservés en clair ailleurs : il faudra les \
          redonner une fois le trousseau accessible."
     ))
@@ -98,7 +98,7 @@ mod backend {
 /// Deux raisons de ne pas éprouver le vrai trousseau ici. Il appartient à la
 /// machine et non au dossier de données : des tests qui y écriraient sous le
 /// nom de production effaceraient les jetons de l'application installée sur le
-/// poste — c'est arrivé une fois, et un jeton perdu se recrée à la main. Et le
+/// poste, c'est arrivé une fois, et un jeton perdu se recrée à la main. Et le
 /// gestionnaire d'identifiants de Windows ne rend pas toujours une suppression
 /// visible aussitôt : les tests devenaient instables sans rien dire du code.
 ///

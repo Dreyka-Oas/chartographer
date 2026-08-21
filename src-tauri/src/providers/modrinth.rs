@@ -55,7 +55,7 @@ pub struct ModrinthVersion {
 }
 
 /// Solde de reversement Modrinth. `available` est retirable immédiatement,
-/// `pending` mûrit encore, et `dates` est l'échéancier mensuel — les entrées
+/// `pending` mûrit encore, et `dates` est l'échéancier mensuel, les entrées
 /// postérieures à aujourd'hui sont donc des revenus à venir.
 #[derive(Debug, Clone, Default, Deserialize, serde::Serialize)]
 pub struct PayoutBalance {
@@ -220,7 +220,7 @@ impl ModrinthClient {
     ///
     /// La réponse est rendue telle quelle, corps et état : l'appelant sait mieux
     /// que ce client ce qu'un refus signifie pour lui. Une seule tentative,
-    /// contrairement aux lectures — un envoi rejoué déposerait deux fois le même
+    /// contrairement aux lectures, un envoi rejoué déposerait deux fois le même
     /// fichier, et le refus se lit dans le corps plutôt que dans une erreur
     /// d'authentification muette.
     async fn post_multipart(

@@ -60,7 +60,7 @@
 
   <!--
     Un seul jour de snapshots CurseForge : le dire vaut mieux que de laisser
-    croire à une courbe plate. Le pourquoi, lui, tient dans l'infobulle — il ne
+    croire à une courbe plate. Le pourquoi, lui, tient dans l'infobulle, il ne
     se lit qu'une fois.
   -->
   {#if dashboard.platforms.curseforge && overview.curseforge_history_days < 2}
@@ -208,7 +208,7 @@
      */
     /* `minmax(0, …)` et non `1fr` seul : le minimum implicite d'une piste est
      * la largeur de son contenu, et un graphique la poussait au-delà de la
-     * fenêtre — la carte débordait sur une fenêtre étroite. */
+     * fenêtre, la carte débordait sur une fenêtre étroite. */
     grid-template-columns: minmax(0, 1fr);
     /*
      * Hauteur commune et bornée : le contenu s'étire pour la remplir, et une

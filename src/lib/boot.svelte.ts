@@ -5,14 +5,14 @@ import type { SyncReport, SyncStep } from "./types";
  * Avancement du démarrage, tel que l'écran d'ouverture le montre.
  *
  * L'application relève tout avant de s'afficher : les chiffres d'une page qui
- * paraît d'abord vide, puis se remplit par morceaux, se lisent mal — on ne sait
+ * paraît d'abord vide, puis se remplit par morceaux, se lisent mal, on ne sait
  * jamais si un total est bas ou seulement pas encore arrivé.
  */
 class Boot {
   steps = $state<BootStep[]>(freshSteps());
   /**
    * Vrai quand la page peut paraître : mise en route terminée, ou comptes
-   * manquants — c'est alors l'écran de connexion qui prend la suite.
+   * manquants, c'est alors l'écran de connexion qui prend la suite.
    */
   done = $state(false);
 

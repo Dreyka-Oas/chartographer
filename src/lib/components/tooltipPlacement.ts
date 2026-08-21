@@ -43,7 +43,7 @@ export function placeBubble(
 /**
  * Abscisse du point d'ancrage : le milieu de l'élément, écarté des bords de la
  * moitié de la bulle. Sans cette garde, une bulle collée au bord droit se
- * voyait rognée — le décalage de moitié n'intervenant qu'après la mise en page.
+ * voyait rognée, le décalage de moitié n'intervenant qu'après la mise en page.
  */
 export function anchorX(middle: number, width: number, viewport: number): number {
   const half = Math.min(width, viewport - 2 * EDGE) / 2;

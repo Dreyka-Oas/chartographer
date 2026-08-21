@@ -4,7 +4,7 @@
 //! abonnement. Ce que l'application peut en tirer, elle le tire du temps :
 //! d'un relevé à l'autre, un nom qui apparaît est un nouvel abonné, un nom qui
 //! disparaît est un départ. La date d'abonnement reste inconnue pour ceux qui
-//! étaient déjà là au premier relevé — c'est une limite du site, pas un oubli,
+//! étaient déjà là au premier relevé, c'est une limite du site, pas un oubli,
 //! et l'interface le dit plutôt que de la masquer.
 
 use crate::error::Result;
@@ -14,7 +14,7 @@ use rusqlite::{params, Connection};
 pub struct Follower {
     pub name: String,
     pub avatar_url: Option<String>,
-    /// Ancienneté du compte telle que le site l'écrit (« Member for 2 years »).
+    /// Ancienneté du compte telle que le site l'écrit ("Member for 2 years").
     pub seniority: Option<String>,
     /// Jour du premier relevé où ce nom est apparu.
     pub first_seen: String,
@@ -99,7 +99,7 @@ pub fn record(conn: &Connection, day: &str, owner: &str, seen: &[Seen]) -> Resul
     }
 
     // Ce qui ne figure plus dans le relevé du jour a été perdu. Un relevé vide
-    // ne prouve rien — une page mal chargée en donnerait autant : on ne marque
+    // ne prouve rien, une page mal chargée en donnerait autant : on ne marque
     // aucun départ dans ce cas.
     let lost = if seen.is_empty() {
         0
@@ -137,7 +137,7 @@ pub fn record_count(conn: &Connection, day: &str, platform: &str, count: i64) ->
 /// La courbe, du plus ancien relevé au plus récent.
 ///
 /// Les jours sans relevé ne sont pas inventés : ils manquent, tout simplement.
-/// Une plateforme absente d'un jour donné y vaut zéro, faute de mieux — c'est
+/// Une plateforme absente d'un jour donné y vaut zéro, faute de mieux, c'est
 /// le seul endroit où l'on écrit un chiffre qu'on n'a pas mesuré, et il ne
 /// concerne que l'affichage.
 pub fn history(conn: &Connection) -> Result<Vec<FollowerDay>> {

@@ -3,10 +3,10 @@
    * Le classement des journées.
    *
    * La page Journée juge une journée à la fois ; celle-ci les met en rang. Le
-   * classement se règle plutôt que de s'imposer : sur quoi il porte — une
+   * classement se règle plutôt que de s'imposer : sur quoi il porte, une
    * métrique (téléchargements ou revenus) croisée avec une source (les deux
-   * plateformes, Modrinth seule, ou CurseForge seule) — et à quoi chaque
-   * journée se compare — tout l'historique ou la période affichée, comparés
+   * plateformes, Modrinth seule, ou CurseForge seule), et à quoi chaque
+   * journée se compare, tout l'historique ou la période affichée, comparés
    * entre eux, ou une fenêtre glissante ou tout ce qui précède, jugés sans
    * jamais regarder en avant. Deux filtres plutôt que deux colonnes figées :
    * ils laissent choisir la question, là où des rangs côte à côte auraient
@@ -34,8 +34,8 @@
   let order = $state<"rang" | "date">("rang");
 
   /**
-   * Les six entrées de « Classer sur » sont le produit de deux axes
-   * indépendants — la métrique et la plateforme qui l'alimente — plutôt que
+   * Les six entrées de "Classer sur" sont le produit de deux axes
+   * indépendants, la métrique et la plateforme qui l'alimente, plutôt que
    * six lignes écrites à la main : même principe que les paliers de
    * `RANGES`, construits une fois et déclinés partout où il en faut.
    */
@@ -68,7 +68,7 @@
   /**
    * À quoi chaque journée se compare, tel que choisi dans le filtre. Par
    * défaut, toutes les journées relevées, comparées entre elles : la
-   * première place y signifie « meilleure journée jamais relevée », plutôt
+   * première place y signifie "meilleure journée jamais relevée", plutôt
    * qu'un dénominateur qui varie d'une ligne à l'autre comme le ferait une
    * comparaison rétrospective sans fenêtre.
    *
@@ -79,7 +79,7 @@
   let windowChoice = $state<string>("all");
 
   /**
-   * `scope` et `windowDays` transmis à la commande. « La période affichée »
+   * `scope` et `windowDays` transmis à la commande. "La période affichée"
    * est un mode à part côté backend, pas une fenêtre glissante de la longueur
    * de la période : celle-ci referait toujours de la première journée la
    * première, sans jamais laisser une journée en dépasser une autre qui la
@@ -144,7 +144,7 @@
   const total = $derived(measured.reduce((sum, r) => sum + r.total, 0));
   const average = $derived(measured.length ? Math.round(total / measured.length) : 0);
   /**
-   * Journées premières dans leur propre comparaison : ce que « record » veut
+   * Journées premières dans leur propre comparaison : ce que "record" veut
    * dire suit donc le réglage choisi, une fenêtre glissante n'y voyant pas la
    * même chose qu'une comparaison à toute l'histoire.
    */
@@ -159,7 +159,7 @@
   const WINDOW_HINT =
     "À quoi chaque journée est comparée pour obtenir son rang. Sur toutes les journées relevées ou sur la période affichée, les journées se classent entre elles : la première place veut dire la meilleure de tout le groupe, et une journée peut y reculer quand une meilleure arrive ensuite. Sur une fenêtre glissante ou sur toutes celles qui la précèdent, une journée n'est jugée que sur ce qui la précède : le rang qu'elle avait le jour même, et que rien de ce qui arrive ensuite ne peut plus changer.";
   const BY_HINT =
-    "Ce qui décide du rang : la métrique — téléchargements ou revenus — et la plateforme qui l'alimente — les deux réunies, Modrinth seule, ou CurseForge seule. Classer sur une plateforme masquée par le filtre du haut ne rend rien : la colonne est vide, un rang là-dessus ne voudrait rien dire. Les revenus CurseForge sont les plus rares des six : n'étant reconstruits que par l'écart entre deux soldes de points relevés au passage, la plupart des journées n'en portent aucun, et classer dessus laisse le tableau presque vide.";
+    "Ce qui décide du rang : la métrique, téléchargements ou revenus, et la plateforme qui l'alimente, les deux réunies, Modrinth seule, ou CurseForge seule. Classer sur une plateforme masquée par le filtre du haut ne rend rien : la colonne est vide, un rang là-dessus ne voudrait rien dire. Les revenus CurseForge sont les plus rares des six : n'étant reconstruits que par l'écart entre deux soldes de points relevés au passage, la plupart des journées n'en portent aucun, et classer dessus laisse le tableau presque vide.";
   const REVENUE =
     "Modrinth relève ses revenus jour par jour. CurseForge n'en publie aucun : ce qui apparaît ici vient de l'écart entre deux soldes de points, relevés au passage seulement, si bien que la plupart des journées n'en portent aucun.";
   const coverage = $derived(
@@ -288,8 +288,8 @@
 <style>
   /*
    * Les deux listes restent côte à côte. Autorisées à se replier, elles
-   * prenaient chacune une ligne entière — le bouton de `<Select>` est en
-   * `width: 100%`, et un flex qui replie lui donne toute la largeur — ce qui
+   * prenaient chacune une ligne entière, le bouton de `<Select>` est en
+   * `width: 100%`, et un flex qui replie lui donne toute la largeur, ce qui
    * ajoutait une rangée à l'en-tête.
    */
   .filters {
@@ -297,9 +297,9 @@
     gap: 8px;
   }
   /*
-   * Assez large pour le plus long des intitulés — « toutes celles qui la
-   * précèdent », mesuré à 166 pixels, marges et chevron en plus. À 168px, le
-   * bouton coupait le sien en « toutes les journées rele… », qui ne dit plus à
+   * Assez large pour le plus long des intitulés, "toutes celles qui la
+   * précèdent", mesuré à 166 pixels, marges et chevron en plus. À 168px, le
+   * bouton coupait le sien en "toutes les journées rele…", qui ne dit plus à
    * quoi les journées se comparent : c'est pourtant là toute la question que ce
    * réglage tranche. Pas davantage non plus : les deux boutons et leur écart
    * doivent tenir côte à côte dans la barre, faute de quoi le second passe à la

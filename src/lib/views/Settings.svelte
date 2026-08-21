@@ -1,12 +1,12 @@
 <script lang="ts">
   /**
-   * Page des réglages : elle ne dessine rien elle-même. Elle tient l'état —
-   * ce qui est enregistré, ce qui vient d'être modifié — et distribue le reste
+   * Page des réglages : elle ne dessine rien elle-même. Elle tient l'état,
+   * ce qui est enregistré, ce qui vient d'être modifié, et distribue le reste
    * aux panneaux. Chaque section vit dans son propre fichier, et la mise en
    * page d'une rangée est décidée une seule fois, dans `SettingRow`.
    *
    * Rien ne se valide à la main : un réglage changé s'écrit tout seul, une
-   * demi-seconde après la dernière frappe. Ce délai n'est pas du confort — il
+   * demi-seconde après la dernière frappe. Ce délai n'est pas du confort, il
    * évite d'écrire un fichier à chaque caractère d'un champ numérique.
    */
   import { api } from "../api";
@@ -85,7 +85,7 @@
 
   /**
    * Un champ numérique vidé rend `null`, et une valeur hors bornes serait
-   * ramenée dans celles-ci par le backend — le champ afficherait alors autre
+   * ramenée dans celles-ci par le backend, le champ afficherait alors autre
    * chose que ce qui a été enregistré. On attend donc une valeur tenable.
    */
   function usable(value: Editable): boolean {

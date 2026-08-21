@@ -37,7 +37,7 @@ const DEFAULT_AUTO_SYNC_MINUTES = 10;
  * Dispersion appliquée à chaque attente, en fraction de la cadence.
  *
  * Un relevé qui tombe à la seconde près, indéfiniment, est la signature d'un
- * automate — et CurseForge ne se lit qu'à travers une session de navigateur,
+ * automate, et CurseForge ne se lit qu'à travers une session de navigateur,
  * donc sous les mêmes yeux qu'un visiteur. L'attente varie de plus ou moins un
  * quart, ce qui suffit à casser la régularité sans changer la fréquence
  * moyenne demandée.
@@ -58,7 +58,7 @@ class Dashboard {
   platforms = $state({ modrinth: true, curseforge: true });
   /**
    * Lecture de chaque indicateur de tête, carte par carte. Faux, la carte dit
-   * l'état du compte — cumul depuis l'origine, solde retirable. Vrai, elle se
+   * l'état du compte, cumul depuis l'origine, solde retirable. Vrai, elle se
    * rapporte à la période choisie dans la barre de filtres.
    *
    * Le réglage est propre à chaque carte : comparer un cumul et une période
@@ -116,7 +116,7 @@ class Dashboard {
       this.curseforgeSession = (await api.curseforgeSession()).connected;
     } catch (e) {
       // Une fenêtre qui n'a pas pu s'ouvrir ne prouve pas une session absente,
-      // mais elle ne la prouve pas non plus : on reste sur « pas connecté ».
+      // mais elle ne la prouve pas non plus : on reste sur "pas connecté".
       this.curseforgeSession = false;
       this.error = message(e);
     } finally {
@@ -128,7 +128,7 @@ class Dashboard {
 
   /**
    * Démarrage : on établit l'état des deux comptes, et la suite s'enchaîne
-   * d'elle-même dès qu'ils sont tous les deux reliés — au lancement comme
+   * d'elle-même dès qu'ils sont tous les deux reliés, au lancement comme
    * après une connexion faite depuis l'écran d'accueil.
    *
    * Rien n'est rendu tant que ce chemin n'a pas abouti : l'écran d'ouverture
@@ -138,8 +138,8 @@ class Dashboard {
     boot.reset();
     boot.open("comptes");
     // Les jalons du cycle Rust arrivent par événement. Hors de la fenêtre de
-    // l'application — une page ouverte dans un navigateur, le temps d'un
-    // essai — il n'y a rien à écouter : les comptes rendus finaux suffiront.
+    // l'application, une page ouverte dans un navigateur, le temps d'un
+    // essai, il n'y a rien à écouter : les comptes rendus finaux suffiront.
     void api.onSyncStep((step) => boot.fromSync(step)).catch(() => {});
     try {
       await this.refreshAuth();
@@ -190,7 +190,7 @@ class Dashboard {
 
     // Tout est relevé avant d'ouvrir, sans regarder l'âge des données : une
     // page qui paraît d'abord sur les chiffres d'hier, puis se corrige d'un
-    // coup quelques secondes plus tard, ne se lit pas — on ignore, devant un
+    // coup quelques secondes plus tard, ne se lit pas, on ignore, devant un
     // total bas, s'il est faible ou seulement pas encore arrivé.
     await this.sync();
     boot.release();
@@ -240,7 +240,7 @@ class Dashboard {
   }
 
   /**
-   * Synchronise si — et seulement si — les données le méritent : base vide,
+   * Synchronise si, et seulement si, les données le méritent : base vide,
    * échéancier de reversement jamais relevé, ou dernier cycle trop ancien.
    * Rend vrai quand un cycle a réellement eu lieu.
    */
@@ -259,7 +259,7 @@ class Dashboard {
 
   /**
    * Valide le token côté Rust avant de l'enregistrer, puis passe la main à la
-   * mise en route — qui n'aura lieu que si CurseForge répond aussi présent.
+   * mise en route, qui n'aura lieu que si CurseForge répond aussi présent.
    */
   async connect(token: string) {
     this.connecting = true;

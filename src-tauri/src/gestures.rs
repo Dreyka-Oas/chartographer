@@ -2,7 +2,7 @@
 //!
 //! Son interface publique d'envoi ne sait que déposer un fichier : ni créer un
 //! projet, ni retirer quoi que ce soit. Son tableau de bord, lui, fait les deux
-//! — par une interface interne que personne ne documente et dont les corps
+//!, par une interface interne que personne ne documente et dont les corps
 //! attendus ne se devinent pas : un envoi incomplet ne récolte qu'une erreur
 //! serveur muette.
 //!
@@ -94,8 +94,8 @@ pub fn fill(pattern: &str, values: &[i64]) -> String {
 
 /// Réécrit le corps appris pour un autre projet.
 ///
-/// Seules les clés nommées changent ; tout le reste — les champs obligatoires
-/// dont on ignore le rôle, et il y en a — est reconduit tel que le site l'avait
+/// Seules les clés nommées changent ; tout le reste, les champs obligatoires
+/// dont on ignore le rôle, et il y en a, est reconduit tel que le site l'avait
 /// envoyé. C'est là tout l'intérêt d'avoir regardé plutôt que deviné.
 pub fn adapt_body(body: &str, changes: &[(&str, serde_json::Value)]) -> String {
     let Ok(mut value) = serde_json::from_str::<serde_json::Value>(body) else {

@@ -30,9 +30,9 @@
     };
     /*
      * L'Antarctique est retirée du fond de carte. Elle occupe toute la largeur
-     * du bas — la projection l'étire démesurément — et ne porte jamais de
+     * du bas, la projection l'étire démesurément, et ne porte jamais de
      * relevé : la garder tassait le monde habité dans la moitié haute du
-     * panneau et offrait au survol une bulle « aucun téléchargement ».
+     * panneau et offrait au survol une bulle "aucun téléchargement".
      */
     collection.features = collection.features.filter(
       (item) => String(item.id ?? "").padStart(3, "0") !== ANTARCTICA,
@@ -62,7 +62,7 @@
 </script>
 
 <!-- Une carte sans un seul pays coloré ne dit rien, et son échelle graduée
-     « 0 — 1 » laisse croire à un relevé plutôt qu'à son absence. -->
+     "0, 1" laisse croire à un relevé plutôt qu'à son absence. -->
 {#if empty}
   <p class="empty">Aucune origine relevée. Modrinth les publie une fois les téléchargements comptés.</p>
 {:else}

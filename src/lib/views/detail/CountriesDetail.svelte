@@ -30,7 +30,7 @@
   const leader = $derived(known[0]);
 
   /**
-   * Le titre compte ce que le graphique montre vraiment. « Top 15 » écrit
+   * Le titre compte ce que le graphique montre vraiment. "Top 15" écrit
    * au-dessus de quatre barres promet onze lignes qui ne viendront pas, et
    * laisse croire à un chargement inabouti.
    */

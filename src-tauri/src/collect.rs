@@ -112,7 +112,7 @@ pub fn parse_downloads_query(raw: &str) -> Vec<DailyDownload> {
 pub struct MonthlyRevenue {
     /// Mois `YYYY-MM`.
     pub month: String,
-    /// Montant en dollars : la page l'affiche « 5 $US ».
+    /// Montant en dollars : la page l'affiche "5 $US".
     pub amount: f64,
 }
 
@@ -194,7 +194,7 @@ pub fn parse_account_name(raw: &str) -> Option<String> {
 ///
 /// Le tableau de bord auteur ne les compte nulle part : ni sa liste de projets,
 /// ni ses adresses de statistiques. Le site public, lui, les affiche sur la
-/// fiche du compte — « 6 Followers », juste avant le total de téléchargements.
+/// fiche du compte, "6 Followers", juste avant le total de téléchargements.
 /// C'est donc là qu'on les lit, et au niveau du compte : CurseForge ne publie
 /// pas de compte par projet.
 pub fn parse_author_followers(text: &str) -> Option<i64> {
@@ -258,8 +258,8 @@ pub fn match_column(column: &str, known: &[(i64, String, String)]) -> Option<i64
 ///
 /// Constaté sur place : le tableau de bord renvoie vers `sso.curseforge.com`,
 /// une page d'identification déléguée qui ne propose que des fournisseurs
-/// tiers — Google, Discord, GitHub, Twitch, WeChat. Son adresse ne contient ni
-/// « login » ni « signin », d'où cette reconnaissance explicite.
+/// tiers, Google, Discord, GitHub, Twitch, WeChat. Son adresse ne contient ni
+/// "login" ni "signin", d'où cette reconnaissance explicite.
 pub fn is_login_page(url: &str, text: &str) -> bool {
     let url = url.to_lowercase();
     if url.contains("sso.curseforge.com")

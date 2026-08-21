@@ -76,10 +76,10 @@ pub struct Kpis {
 
 /// Bilan d'une seule journée.
 ///
-/// La question n'est pas « combien », mais « était-ce un bon jour » : un
+/// La question n'est pas "combien", mais "était-ce un bon jour" : un
 /// chiffre seul n'y répond pas, il lui faut ceux d'à côté. On rend donc la
 /// journée, celle qui la précède, les moyennes récentes et le rang du jour
-/// parmi les précédents — de quoi juger sans avoir à chercher ailleurs.
+/// parmi les précédents, de quoi juger sans avoir à chercher ailleurs.
 #[derive(Debug, Clone, Serialize)]
 pub struct DayReport {
     pub day: String,
@@ -185,7 +185,7 @@ pub enum RankBy {
 /// Croisé avec `RankBy`, cet axe donne les six classements que l'interface
 /// propose sans qu'il faille les écrire un par un : deux métriques, trois
 /// sources. Classer sur une plateforme que le filtre de la barre du haut a
-/// masquée ne rend rien plutôt qu'un rang bâti sur des zéros — ce réglage
+/// masquée ne rend rien plutôt qu'un rang bâti sur des zéros, ce réglage
 /// choisit sur quoi classer *parmi ce qui est visible*, il ne remplace pas
 /// ce filtre.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
@@ -203,10 +203,10 @@ pub enum RankSource {
 /// Deux familles, qui ne répondent pas à la même question. `All` et `Period`
 /// sont absolues : elles comparent un groupe de journées à lui-même, sans
 /// égard à leur ordre, si bien qu'une journée peut y être dépassée par une
-/// autre qui la suit — `All` sur tout l'historique, `Period` sur la seule
+/// autre qui la suit, `All` sur tout l'historique, `Period` sur la seule
 /// période affichée. `Sliding` et `Retrospective` sont rétrospectives : une
 /// journée n'y est jugée que sur celles qui la précèdent, si bien qu'un rang
-/// une fois acquis ne bouge plus jamais — `Sliding` sur les `window_days`
+/// une fois acquis ne bouge plus jamais, `Sliding` sur les `window_days`
 /// journées qui précèdent, `Retrospective` sans borne basse.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
 #[serde(rename_all = "lowercase")]

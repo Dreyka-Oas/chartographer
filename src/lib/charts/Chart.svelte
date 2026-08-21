@@ -18,7 +18,7 @@
      * formes avec : basculer d'un empilement à des courbes superposées sautait
      * à l'image d'arrivée. En remplaçant les seules séries et légendes,
      * ECharts retrouve l'ancienne série par son `id` et interpole entre les
-     * deux tracés — ce qui suppose que les options passées portent un `id`
+     * deux tracés, ce qui suppose que les options passées portent un `id`
      * stable, sans quoi la série est traitée comme neuve et paraît en fondu.
      *
      * Le reste (axes, zoom) est fusionné, ce qui a le mérite de conserver la

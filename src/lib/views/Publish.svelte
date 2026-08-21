@@ -146,7 +146,7 @@
 
   // --- Gestes CurseForge -------------------------------------------------
   // Son interface publique d'envoi ne sait que déposer un fichier. Son tableau
-  // de bord, lui, crée et retire — sans rien documenter, et un corps deviné
+  // de bord, lui, crée et retire, sans rien documenter, et un corps deviné
   // n'obtient qu'une erreur serveur muette. L'application regarde donc le geste
   // une fois, puis sait le refaire.
   let gestures = $state<CfGesture[]>([]);
@@ -178,7 +178,7 @@
       await api.watchCurseforge();
       watching = true;
       gestureNote =
-        "La fenêtre CurseForge est ouverte. Fais le geste une fois — créer un projet, retirer un fichier — puis reviens ici.";
+        "La fenêtre CurseForge est ouverte. Fais le geste une fois, créer un projet, retirer un fichier, puis reviens ici.";
     } catch (e) {
       report(e);
     }
@@ -358,7 +358,7 @@
             {missing}
           {:else}
             Une version Modrinth se supprime d'ici. Côté CurseForge, le retrait passe par un geste
-            appris — voir la carte ci-dessous.
+            appris, voir la carte ci-dessous.
           {/if}
         </span>
       </div>
@@ -369,8 +369,8 @@
             <div class="result" class:ko={!outcome.ok}>
               <!-- Le nom de la plateforme est écrit comme elle l'écrit
                    elle-même : `outcome.platform` porte la clé interne, et
-                   « modrinth » en gras minuscules détonnait au milieu d'une
-                   page qui dit « Modrinth » partout ailleurs. -->
+                   "modrinth" en gras minuscules détonnait au milieu d'une
+                   page qui dit "Modrinth" partout ailleurs. -->
               <b>{BRANDS[outcome.platform as PlatformName]?.label ?? outcome.platform}</b>
               <span>{outcome.detail}</span>
               {#if outcome.ok && outcome.id && outcome.platform === "modrinth"}
@@ -387,7 +387,7 @@
 
   <div class="wide">
     <Card
-      title="CurseForge — créer et retirer"
+      title="CurseForge, créer et retirer"
       subtitle="Ce que son interface d'envoi ne sait pas faire, son tableau de bord le fait"
     >
       <p class="hint block">

@@ -6,7 +6,7 @@
    * rendue par Windows, hors de la page, et n'obéit ni aux couleurs du thème ni
    * à une hauteur maximale. On refait donc le déroulé : même comportement au
    * clavier, mais aux couleurs de la carte, et jamais plus de cinq entrées
-   * visibles — au-delà, la liste défile.
+   * visibles, au-delà, la liste défile.
    *
    * Le panneau est posé en `fixed` d'après la position du bouton : il échappe
    * ainsi aux colonnes qui défilent, qui l'auraient rogné.
@@ -261,7 +261,7 @@
     background-color: var(--surface-2);
     /* Le contour est une ombre intérieure, jamais une bordure : une bordure se
      * peint sur le bord de la boîte, qui peut tomber entre deux pixels
-     * physiques une fois la mise à l'échelle de Windows appliquée — le trait du
+     * physiques une fois la mise à l'échelle de Windows appliquée, le trait du
      * bas disparaissait alors. L'ombre est peinte à l'intérieur, donc toujours
      * sur un pixel plein. */
     border: 0;
